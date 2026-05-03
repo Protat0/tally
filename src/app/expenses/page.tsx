@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
-  useApp, fmt, Category, BudgetLine, BudgetType, Bill, ShopeePayment,
+  useApp, fmt, Category, BudgetLine, BudgetType, Bill, ShopeePayment, currentYYYYMM,
 } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import ProgressBar from '@/components/ProgressBar';
@@ -14,7 +14,7 @@ import {
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function uid() { return Math.random().toString(36).slice(2); }
+function uid() { return crypto.randomUUID(); }
 
 function paceColor(pct: number): 'green' | 'amber' | 'red' {
   if (pct <= 80) return 'green';
@@ -87,6 +87,7 @@ export default function BudgetPage() {
     shopeeNewPurchaseLock, setShopeeNewPurchaseLock,
     addShopeePayment, updateShopeePayment, deleteShopeePayment,
     emergencyFund, addEmergencyFundEntry,
+    toggleBillPaid,
   } = useApp();
 
   const { currency, bills, budgetLines, monthlyIncome, monthlySavingsTarget } = settings;
@@ -217,7 +218,7 @@ export default function BudgetPage() {
 
   const handleAddBill = () => {
     if (!newBillName.trim() || !newBillAmt) return;
-    const bill: Bill = { id: uid(), name: newBillName.trim(), amount: parseFloat(newBillAmt) };
+    const bill: Bill = { id: uid(), name: newBillName.trim(), amount: parseFloat(newBillAmt), paidMonths: [] };
     updateSettings({ bills: [...bills, bill] });
     setAddBillOpen(false);
     setNewBillName(''); setNewBillAmt('');
@@ -326,17 +327,32 @@ export default function BudgetPage() {
                       <p className="text-sm text-slate-500">No recurring bills yet.</p>
                     </div>
                   )}
-                  {bills.map(b => (
-                    <div key={b.id} className="flex items-center gap-3 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 text-sm shrink-0">💡</div>
-                      <p className="flex-1 text-sm text-white">{b.name}</p>
-                      <p className="text-sm font-medium text-slate-300">{fmt(b.amount, currency)}</p>
-                      <button onClick={() => removeBill(b.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors">
-                        <TrashIcon className="w-4 h-4 text-red-400/60 hover:text-red-400" />
-                      </button>
-                    </div>
-                  ))}
+                  {bills.map(b => {
+                    const isPaid = b.paidMonths.includes(currentYYYYMM());
+                    return (
+                      <div key={b.id} className={`flex items-center gap-2 rounded-xl border px-4 py-3 transition-colors ${isPaid ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-[#111827] border-[#1e2d40]'}`}>
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 text-sm shrink-0">💡</div>
+                        <p className={`flex-1 text-sm min-w-0 truncate ${isPaid ? 'text-slate-500' : 'text-white'}`}>{b.name}</p>
+                        <p className="text-sm font-medium text-slate-300 shrink-0">{fmt(b.amount, currency)}</p>
+                        {isPaid && (
+                          <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/15 rounded-full px-2 py-0.5 shrink-0">
+                            Paid
+                          </span>
+                        )}
+                        <button
+                          onClick={() => toggleBillPaid(b.id)}
+                          title={isPaid ? 'Mark unpaid' : 'Mark as paid'}
+                          className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors shrink-0 ${isPaid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-500 hover:text-slate-200 hover:bg-white/10'}`}
+                        >
+                          <CheckIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => removeBill(b.id)}
+                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
+                          <TrashIcon className="w-3.5 h-3.5 text-red-400/60 hover:text-red-400" />
+                        </button>
+                      </div>
+                    );
+                  })}
                   {addBillOpen && (
                     <div className="rounded-xl bg-[#1a2332] border border-blue-500/30 p-4 space-y-3">
                       <div className="flex gap-2">

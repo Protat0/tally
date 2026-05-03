@@ -21,6 +21,7 @@ export interface Expense {
 
 export interface Bill {
   id: string; name: string; amount: number;
+  paidMonths: string[]; // 'YYYY-MM' strings — resets each month naturally
 }
 
 export interface BudgetLine {
@@ -100,6 +101,7 @@ interface AppContextValue extends Computed {
   toggleAppliance: (id: string) => Promise<void>;
   logApplianceUsage: (id: string, minutes: number) => Promise<void>;
   setAppliancePinned: (id: string, pinned: boolean) => void;
+  toggleBillPaid: (id: string) => Promise<void>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -172,7 +174,10 @@ function toDBSettings(s: Partial<Settings>): Row {
 }
 
 const fromDBWallet     = (r: Row): Wallet     => ({ id: r.id, name: r.name, icon: r.icon, balance: Number(r.balance) });
-const fromDBBill       = (r: Row): Bill       => ({ id: r.id, name: r.name, amount: Number(r.amount) });
+const fromDBBill       = (r: Row): Bill       => ({
+  id: r.id, name: r.name, amount: Number(r.amount),
+  paidMonths: (r.paid_months as string[]) || [],
+});
 const fromDBBudgetLine = (r: Row): BudgetLine => ({
   id: r.id, name: r.name, icon: r.icon,
   monthlyLimit: Number(r.monthly_limit), type: r.type as BudgetType,
@@ -374,7 +379,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       if (bills.length > current.length) {
         const added = bills.filter(b => !current.some(c => c.id === b.id));
         for (const b of added) {
-          await supabase.from('bills').insert({ id: b.id, user_id: userId, name: b.name, amount: b.amount });
+          await supabase.from('bills').insert({ id: b.id, user_id: userId, name: b.name, amount: b.amount, paid_months: b.paidMonths ?? [] });
         }
       } else {
         const removed = current.filter(c => !bills.some(b => b.id === c.id));
@@ -521,6 +526,21 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     }));
   };
 
+  const toggleBillPaid = async (id: string) => {
+    const month = currentYYYYMM();
+    const bill = settings.bills.find(b => b.id === id);
+    if (!bill) return;
+    const isPaid = bill.paidMonths.includes(month);
+    const newPaidMonths = isPaid
+      ? bill.paidMonths.filter(m => m !== month)
+      : [...bill.paidMonths, month];
+    setSettings(prev => ({
+      ...prev,
+      bills: prev.bills.map(b => b.id === id ? { ...b, paidMonths: newPaidMonths } : b),
+    }));
+    await supabase.from('bills').update({ paid_months: newPaidMonths }).eq('id', id);
+  };
+
   const logApplianceUsage = async (id: string, minutes: number) => {
     const month = currentYYYYMM();
     const appl = settings.appliances.find(a => a.id === id);
@@ -548,7 +568,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       setShopeeNewPurchaseLock,
       addEmergencyFundEntry,
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
-      toggleAppliance, logApplianceUsage, setAppliancePinned,
+      toggleAppliance, logApplianceUsage, setAppliancePinned, toggleBillPaid,
     }}>
       {children}
     </AppContext.Provider>

@@ -9,7 +9,7 @@ import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import { PlusIcon, TrashIcon, BoltIcon, PencilIcon, CheckIcon, XIcon, HomeIcon } from '@/components/Icons';
 
-function uid() { return Math.random().toString(36).slice(2); }
+function uid() { return crypto.randomUUID(); }
 
 function formatDuration(minutes: number): string {
   if (minutes < 1) return '< 1m';
