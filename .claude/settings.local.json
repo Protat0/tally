@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ngjam\\\\Desktop\\\\tally\" -Recurse -Force)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "PowerShell(head *)",
+      "PowerShell(Get-ChildItem *)",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)",
+      "Bash(node -e ' *)",
+      "Bash(node *)"
+    ]
+  }
+}
