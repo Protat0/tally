@@ -100,7 +100,8 @@ interface AppContextValue extends Computed {
   deleteBudgetLine: (id: string) => Promise<void>;
   toggleAppliance: (id: string) => Promise<void>;
   logApplianceUsage: (id: string, minutes: number) => Promise<void>;
-  setAppliancePinned: (id: string, pinned: boolean) => void;
+  refundApplianceUsage: (id: string, minutes: number) => Promise<void>;
+  setAppliancePinned: (id: string, pinned: boolean) => Promise<void>;
   toggleBillPaid: (id: string) => Promise<void>;
 }
 
@@ -518,12 +519,12 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('appliances').update(db).eq('id', id);
   };
 
-  // Pin/unpin — local only until DB column is added
-  const setAppliancePinned = (id: string, pinned: boolean) => {
+  const setAppliancePinned = async (id: string, pinned: boolean) => {
     setSettings(prev => ({
       ...prev,
       appliances: prev.appliances.map(a => a.id === id ? { ...a, pinnedToHome: pinned } : a),
     }));
+    await supabase.from('appliances').update({ pinned_to_home: pinned }).eq('id', id);
   };
 
   const toggleBillPaid = async (id: string) => {
@@ -556,6 +557,21 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('appliances').update({ total_minutes_this_month: newTotal, last_reset_month: month }).eq('id', id);
   };
 
+  const refundApplianceUsage = async (id: string, minutes: number) => {
+    const month = currentYYYYMM();
+    const appl = settings.appliances.find(a => a.id === id);
+    if (!appl) return;
+    const base = appl.lastResetMonth === month ? appl.totalMinutesThisMonth : 0;
+    const newTotal = Math.max(0, base - minutes);
+    setSettings(prev => ({
+      ...prev,
+      appliances: prev.appliances.map(a =>
+        a.id === id ? { ...a, totalMinutesThisMonth: newTotal, lastResetMonth: month } : a
+      ),
+    }));
+    await supabase.from('appliances').update({ total_minutes_this_month: newTotal, last_reset_month: month }).eq('id', id);
+  };
+
   return (
     <AppContext.Provider value={{
       wallets, expenses, settings, shopeeSchedule, shopeeNewPurchaseLock,
@@ -568,7 +584,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       setShopeeNewPurchaseLock,
       addEmergencyFundEntry,
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
-      toggleAppliance, logApplianceUsage, setAppliancePinned, toggleBillPaid,
+      toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, toggleBillPaid,
     }}>
       {children}
     </AppContext.Provider>

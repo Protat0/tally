@@ -52,7 +52,7 @@ function ExpenseForm() {
       <div className="w-full h-full md:h-auto md:max-h-[92vh] md:w-[460px] md:rounded-3xl md:overflow-hidden bg-[#0b0f1a] md:bg-[#111827] md:border md:border-[#1e2d40] flex flex-col">
 
         {/* ── Top bar ── */}
-        <div className="flex items-center justify-between px-5 pt-12 md:pt-6 pb-3 shrink-0">
+        <div className="flex items-center justify-between px-5 pt-8 md:pt-6 pb-2 shrink-0">
           <button
             onClick={() => router.back()}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 active:bg-white/10"
@@ -64,9 +64,9 @@ function ExpenseForm() {
         </div>
 
         {/* ── Amount ── */}
-        <div className="flex flex-col items-center py-5 shrink-0">
+        <div className="flex flex-col items-center py-2 md:py-5 shrink-0">
           <p className="text-xs text-slate-500 mb-1.5 uppercase tracking-widest">Amount</p>
-          <p className="text-5xl font-bold text-white tabular-nums">
+          <p className="text-4xl md:text-5xl font-bold text-white tabular-nums">
             {settings.currency}{input === '0' ? '0' : parseFloat(input).toLocaleString('en-PH', {
               minimumFractionDigits: input.includes('.') ? input.split('.')[1].length : 0,
               maximumFractionDigits: 2,
@@ -75,7 +75,7 @@ function ExpenseForm() {
         </div>
 
         {/* ── Wallet strip — always visible ── */}
-        <div className="px-5 pb-3 shrink-0">
+        <div className="px-5 pb-2 shrink-0">
           {wallets.length === 0 ? (
             <p className="text-xs text-slate-500 text-center py-2">
               No wallets yet — add one in Wallets.
@@ -148,14 +148,14 @@ function ExpenseForm() {
         </div>
 
         {/* ── Keypad ── */}
-        <div className="px-4 pt-2 pb-4 shrink-0">
+        <div className="px-4 pt-1 pb-3 shrink-0">
           {KEYS.map((row, ri) => (
-            <div key={ri} className="flex gap-2 mb-2">
+            <div key={ri} className="flex gap-2 mb-1.5">
               {row.map(k => (
                 <button
                   key={k}
                   onClick={() => handleKey(k)}
-                  className="flex-1 flex items-center justify-center rounded-2xl bg-[#111827] md:bg-white/5 border border-[#1e2d40] h-14 text-lg font-semibold text-white active:bg-[#1a2332] transition-colors"
+                  className="flex-1 flex items-center justify-center rounded-2xl bg-[#111827] md:bg-white/5 border border-[#1e2d40] h-12 md:h-14 text-lg font-semibold text-white active:bg-[#1a2332] transition-colors"
                 >
                   {k}
                 </button>

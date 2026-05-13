@@ -10,19 +10,20 @@ const HIDDEN = ['/auth', '/expenses/new'];
 
 export default function GlobalFAB() {
   const pathname = usePathname();
-  const { settings, logApplianceUsage } = useApp();
+  const { settings, logApplianceUsage, refundApplianceUsage } = useApp();
   const { appliances } = settings;
 
-  const [open, setOpen]       = useState(false);
+  const [open, setOpen]         = useState(false);
   const [electric, setElectric] = useState(false);
-  const [appId, setAppId]     = useState('');
-  const [hrs, setHrs]         = useState('');
-  const [mins, setMins]       = useState('');
+  const [refund, setRefund]     = useState(false);
+  const [appId, setAppId]       = useState('');
+  const [hrs, setHrs]           = useState('');
+  const [mins, setMins]         = useState('');
 
   if (HIDDEN.includes(pathname)) return null;
 
   const closeAll = () => {
-    setOpen(false); setElectric(false);
+    setOpen(false); setElectric(false); setRefund(false);
     setAppId(''); setHrs(''); setMins('');
   };
 
@@ -32,6 +33,12 @@ export default function GlobalFAB() {
   const handleLog = () => {
     if (!canLog) return;
     logApplianceUsage(appId, totalMinutes);
+    closeAll();
+  };
+
+  const handleRefund = () => {
+    if (!canLog) return;
+    refundApplianceUsage(appId, totalMinutes);
     closeAll();
   };
 
@@ -46,6 +53,13 @@ export default function GlobalFAB() {
         {/* Action pills — slide up when open */}
         {open && (
           <>
+            <button
+              onClick={() => { setOpen(false); setRefund(true); }}
+              className="flex items-center gap-2.5 rounded-full bg-[#0e1420]/95 backdrop-blur border border-[#1e2d40] pl-4 pr-5 py-2.5 shadow-xl"
+            >
+              <BoltIcon className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="text-sm font-medium text-white whitespace-nowrap">Refund Electric Usage</span>
+            </button>
             <button
               onClick={() => { setOpen(false); setElectric(true); }}
               className="flex items-center gap-2.5 rounded-full bg-[#0e1420]/95 backdrop-blur border border-[#1e2d40] pl-4 pr-5 py-2.5 shadow-xl"
@@ -76,6 +90,101 @@ export default function GlobalFAB() {
           <PlusIcon className="w-7 h-7 text-white" />
         </button>
       </div>
+
+      {/* Refund electric usage modal */}
+      {refund && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
+          onClick={closeAll}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 md:hidden" />
+
+            <div className="flex items-start justify-between mb-1">
+              <p className="font-semibold text-white text-lg">Refund Electric Usage</p>
+              <button onClick={closeAll} className="text-slate-500 hover:text-slate-300 transition-colors">
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-5">
+              Logged too much by mistake? Remove the time manually.
+            </p>
+
+            {appliances.length === 0 ? (
+              <div className="py-4 text-center">
+                <p className="text-sm text-slate-500 mb-3">No appliances set up yet.</p>
+                <Link href="/electric" onClick={closeAll}
+                  className="text-sm text-blue-400 underline underline-offset-2">
+                  Set up appliances →
+                </Link>
+              </div>
+            ) : (
+              <>
+                {/* Appliance picker */}
+                <p className="text-xs text-slate-500 mb-2">Which appliance?</p>
+                <div className="grid grid-cols-2 gap-2 mb-5">
+                  {appliances.map(a => (
+                    <button
+                      key={a.id}
+                      onClick={() => setAppId(a.id)}
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                        appId === a.id
+                          ? 'border-rose-500/50 bg-rose-500/10'
+                          : 'border-[#1e2d40] bg-white/5 hover:bg-white/8'
+                      }`}
+                    >
+                      <BoltIcon className={`w-4 h-4 shrink-0 ${appId === a.id ? 'text-rose-400' : 'text-slate-500'}`} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{a.name}</p>
+                        <p className="text-[10px] text-slate-500">{a.wattage}W</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Duration */}
+                <p className="text-xs text-slate-500 mb-2">How much time to remove?</p>
+                <div className="flex gap-3 mb-5">
+                  <div className="flex-1 flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={hrs}
+                      onChange={e => setHrs(e.target.value)}
+                      placeholder="0"
+                      min="0" max="24"
+                      className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none focus:border-rose-500/50"
+                    />
+                    <span className="text-sm text-slate-500 shrink-0">hr</span>
+                  </div>
+                  <div className="flex-1 flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={mins}
+                      onChange={e => setMins(e.target.value)}
+                      placeholder="0"
+                      min="0" max="59"
+                      className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none focus:border-rose-500/50"
+                    />
+                    <span className="text-sm text-slate-500 shrink-0">min</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleRefund}
+                  disabled={!canLog}
+                  className="w-full rounded-xl bg-rose-600 py-3.5 font-semibold text-white disabled:opacity-30 hover:bg-rose-500 transition-colors"
+                >
+                  Remove Usage
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Electric usage modal */}
       {electric && (
