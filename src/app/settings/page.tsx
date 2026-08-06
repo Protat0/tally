@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { useApp, PaydayCycle } from '@/components/AppContext';
+import { useApp, PaydayCycle, fmt } from '@/components/AppContext';
 import { useAuth } from '@/components/AuthContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
-import { PlusIcon, LogOutIcon, BoltIcon, ChevronRightIcon } from '@/components/Icons';
+import NumberField from '@/components/NumberField';
+import { PlusIcon, LogOutIcon, BoltIcon, ChevronLeftIcon, ChevronRightIcon, AlertIcon, XIcon } from '@/components/Icons';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -29,23 +30,187 @@ function SettingRow({ label, sub, children }: { label: string; sub?: string; chi
   );
 }
 
-function NumInput({ value, onChange, placeholder = '0' }: { value: number; onChange: (v: number) => void; placeholder?: string }) {
+function NumInput({ value, onChange, step = 1, placeholder = '0' }: { value: number; onChange: (v: number) => void; step?: number; placeholder?: string }) {
   return (
-    <input
-      type="number"
-      value={value || ''}
-      onChange={e => onChange(parseFloat(e.target.value) || 0)}
+    <NumberField
+      value={value}
+      onChange={onChange}
+      step={step}
+      min={0}
       placeholder={placeholder}
-      className="w-32 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-1.5 text-right text-sm text-white outline-none focus:border-blue-500/50"
+      inputClassName="w-24 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-1.5 text-right text-sm text-white outline-none focus:border-blue-500/50"
     />
   );
 }
 
+function ResetModal({ onClose }: { onClose: () => void }) {
+  const { wallets, settings, resetBalances } = useApp();
+  // Prefill each input with the wallet's current balance so untouched wallets keep their value.
+  const [balances, setBalances] = useState<Record<string, string>>(
+    () => Object.fromEntries(wallets.map(w => [w.id, String(w.balance)]))
+  );
+  const [index, setIndex] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const touchX = useRef(0);
+
+  const count = wallets.length;
+  const isLast = index >= count - 1;
+  const clamp = (i: number) => Math.max(0, Math.min(count - 1, i));
+  const go = (i: number) => setIndex(clamp(i));
+
+  const onTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - touchX.current;
+    if (dx > 40) go(index - 1);
+    else if (dx < -40) go(index + 1);
+  };
+
+  const confirm = async () => {
+    setBusy(true);
+    const parsed = Object.fromEntries(
+      wallets.map(w => [w.id, parseFloat(balances[w.id]) || 0])
+    );
+    await resetBalances(parsed);
+    onClose();
+  };
+
+  const current = wallets[index];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4" onClick={onClose}>
+      <div
+        className="w-full md:max-w-md rounded-t-2xl md:rounded-2xl bg-[#111827] border border-[#1e2d40] max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 pt-5 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/15 shrink-0">
+              <AlertIcon className="w-5 h-5 text-red-400" />
+            </div>
+            <h2 className="text-base font-semibold text-white">Reset balances</h2>
+          </div>
+          <button onClick={onClose} className="text-slate-500 hover:text-white p-1">
+            <XIcon className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-5 pb-4">
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Enter each wallet&apos;s current real balance. This will also{' '}
+            <span className="text-red-300">delete this month&apos;s expenses</span> and{' '}
+            <span className="text-red-300">reset electric usage</span> to zero. This can&apos;t be undone.
+          </p>
+        </div>
+
+        {count === 0 ? (
+          <p className="text-sm text-slate-500 py-8 text-center">No wallets to reset.</p>
+        ) : (
+          <>
+            {/* Carousel — one wallet card at a time */}
+            <div className="px-5">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => go(index - 1)}
+                  disabled={index === 0}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5 text-slate-300 disabled:opacity-25 active:bg-white/10 transition-colors"
+                  aria-label="Previous wallet"
+                >
+                  <ChevronLeftIcon className="w-5 h-5" />
+                </button>
+
+                <div
+                  className="flex-1 rounded-2xl bg-[#0b0f1a] border border-[#1e2d40] px-5 py-6"
+                  onTouchStart={onTouchStart}
+                  onTouchEnd={onTouchEnd}
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/15 text-3xl mb-3">
+                      {current.icon}
+                    </div>
+                    <p className="text-base font-semibold text-white">{current.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Current: {fmt(current.balance, settings.currency)}
+                    </p>
+
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 mt-5 mb-2">
+                      New balance
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-lg text-slate-500">{settings.currency}</span>
+                      <input
+                        type="number"
+                        value={balances[current.id] ?? ''}
+                        onChange={e => setBalances(prev => ({ ...prev, [current.id]: e.target.value }))}
+                        className="w-40 rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-2 text-center text-2xl font-bold text-white outline-none focus:border-blue-500/50"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => go(index + 1)}
+                  disabled={isLast}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5 text-slate-300 disabled:opacity-25 active:bg-white/10 transition-colors"
+                  aria-label="Next wallet"
+                >
+                  <ChevronRightIcon className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Dots + position */}
+              <div className="flex items-center justify-center gap-1.5 mt-4">
+                {wallets.map((w, i) => (
+                  <button
+                    key={w.id}
+                    onClick={() => go(i)}
+                    aria-label={`Go to ${w.name}`}
+                    className={`h-1.5 rounded-full transition-all ${i === index ? 'w-5 bg-blue-500' : 'w-1.5 bg-slate-600'}`}
+                  />
+                ))}
+              </div>
+              <p className="text-center text-[11px] text-slate-500 mt-2">
+                Wallet {index + 1} of {count}
+              </p>
+            </div>
+
+            <div className="flex gap-3 p-5">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-xl bg-white/5 border border-[#1e2d40] py-3 text-sm font-medium text-slate-300 active:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              {isLast ? (
+                <button
+                  onClick={confirm}
+                  disabled={busy}
+                  className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white active:bg-red-700 disabled:opacity-50 transition-colors"
+                >
+                  {busy ? 'Resetting…' : 'Reset'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => go(index + 1)}
+                  className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white active:bg-blue-700 transition-colors"
+                >
+                  Next
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const { settings, updateSettings } = useApp();
+  const { settings, updateSettings, totalBalance } = useApp();
   const { signOut, user } = useAuth();
 
   const [customPayday, setCustomPayday] = useState('');
+  const [resetOpen, setResetOpen] = useState(false);
 
   const addCustomPayday = () => {
     const d = parseInt(customPayday);
@@ -72,11 +237,8 @@ export default function SettingsPage() {
 
           <PageHeader title="Settings" />
 
-          {/* Income */}
-          <Section title="Income">
-            <SettingRow label="Monthly Income" sub="Your take-home pay each month">
-              <NumInput value={settings.monthlyIncome} onChange={v => updateSettings({ monthlyIncome: v })} />
-            </SettingRow>
+          {/* General */}
+          <Section title="General">
             <SettingRow label="Currency symbol">
               <input
                 type="text"
@@ -133,7 +295,7 @@ export default function SettingsPage() {
           {/* Emergency fund */}
           <Section title="Emergency Fund">
             <SettingRow label="Target amount" sub="Your total savings goal">
-              <NumInput value={settings.emergencyFundTarget} onChange={v => updateSettings({ emergencyFundTarget: v })} />
+              <NumInput value={settings.emergencyFundTarget} onChange={v => updateSettings({ emergencyFundTarget: v })} step={500} />
             </SettingRow>
           </Section>
 
@@ -158,6 +320,28 @@ export default function SettingsPage() {
             </Link>
           </Section>
 
+          {/* Danger zone */}
+          <Section title="Reset">
+            <button
+              onClick={() => setResetOpen(true)}
+              className="flex w-full items-center gap-4 rounded-xl bg-[#111827] border border-red-500/20 px-4 py-3.5 text-left hover:bg-[#1a2332] transition-colors"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/15 shrink-0">
+                <AlertIcon className="w-5 h-5 text-red-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">Reset balances</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Re-enter wallet balances · clears this month&apos;s expenses &amp; electric usage
+                </p>
+              </div>
+              <ChevronRightIcon className="w-4 h-4 text-slate-600 shrink-0" />
+            </button>
+            <p className="text-xs text-slate-600 px-1">
+              Current total across wallets: {fmt(totalBalance, settings.currency)}
+            </p>
+          </Section>
+
           {/* Account — mobile sign-out */}
           <div className="mt-2 md:hidden">
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3 px-1">Account</p>
@@ -173,6 +357,8 @@ export default function SettingsPage() {
 
         </div>
       </div>
+
+      {resetOpen && <ResetModal onClose={() => setResetOpen(false)} />}
     </div>
   );
 }

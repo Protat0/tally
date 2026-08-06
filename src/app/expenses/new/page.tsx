@@ -18,6 +18,14 @@ const KEYS = [['7','8','9'],['4','5','6'],['1','2','3'],['.','0','⌫']];
 
 function ExpenseForm() {
   const { wallets, addExpense, settings } = useApp();
+  // Built-in categories plus any user-defined custom ones (given a neutral color).
+  const categories = [
+    ...CATEGORIES,
+    ...settings.customCategories.map(c => ({
+      key: c.key, label: c.label, icon: c.icon,
+      color: 'bg-slate-500/15 border-slate-500/40',
+    })),
+  ];
   const router = useRouter();
   const searchParams = useSearchParams();
   const presetWalletId = searchParams.get('walletId') ?? '';
@@ -117,7 +125,7 @@ function ExpenseForm() {
           <div>
             <p className="text-xs text-slate-500 mb-2">Category</p>
             <div className="grid grid-cols-3 gap-2">
-              {CATEGORIES.map(c => (
+              {categories.map(c => (
                 <button
                   key={c.key}
                   onClick={() => setCategory(c.key)}

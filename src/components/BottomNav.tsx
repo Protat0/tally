@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HomeIcon, WalletIcon, TrendingUpIcon, BoltIcon, CogIcon, LogOutIcon } from './Icons';
+import { HomeIcon, WalletIcon, TrendingUpIcon, ReceiptIcon, BoltIcon, CogIcon, LogOutIcon } from './Icons';
 import { useAuth } from './AuthContext';
 
 const links = [
   { href: '/', label: 'Dashboard', Icon: HomeIcon },
   { href: '/wallets', label: 'Wallets', Icon: WalletIcon },
   { href: '/expenses', label: 'Budget', Icon: TrendingUpIcon },
+  { href: '/transactions', label: 'Activity', Icon: ReceiptIcon },
   { href: '/electric', label: 'Electric', Icon: BoltIcon },
   { href: '/settings', label: 'Settings', Icon: CogIcon },
 ];

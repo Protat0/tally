@@ -5,7 +5,12 @@ import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type Category = 'food' | 'transport' | 'bills' | 'shopping' | 'health' | 'other';
+// Built-in keys keep autocomplete; `(string & {})` also allows user-defined custom category keys.
+export type Category = 'food' | 'transport' | 'bills' | 'shopping' | 'health' | 'other' | (string & {});
+
+export interface CustomCategory {
+  key: string; label: string; icon: string;
+}
 export type PaydayCycle = '1st-15th' | 'monthly' | 'custom';
 export type ShopeeStatus = 'paid' | 'pending' | 'upcoming';
 export type BudgetType = 'needs' | 'wants' | 'savings';
@@ -57,6 +62,8 @@ export interface Settings {
   appliances: Appliance[];
   electricityRate: number;
   currency: string;
+  categoryBudgets: Partial<Record<Category, number>>;
+  customCategories: CustomCategory[];
 }
 
 interface EmergencyFund {
@@ -103,6 +110,8 @@ interface AppContextValue extends Computed {
   refundApplianceUsage: (id: string, minutes: number) => Promise<void>;
   setAppliancePinned: (id: string, pinned: boolean) => Promise<void>;
   toggleBillPaid: (id: string) => Promise<void>;
+  updateBill: (id: string, updates: { name?: string; amount?: number }) => Promise<void>;
+  resetBalances: (walletBalances: Record<string, number>) => Promise<void>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -159,6 +168,8 @@ function fromDBSettings(r: Row): Partial<Settings> {
     emergencyFundTarget: Number(r.emergency_fund_target) || 0,
     monthlySavingsTarget: Number(r.monthly_savings_target) || 0,
     electricityRate:    Number(r.electricity_rate)     || 11.8,
+    categoryBudgets:    (r.category_budgets || {}) as Partial<Record<Category, number>>,
+    customCategories:   (r.custom_categories || []) as CustomCategory[],
   };
 }
 
@@ -171,6 +182,8 @@ function toDBSettings(s: Partial<Settings>): Row {
   if ('emergencyFundTarget' in s) m.emergency_fund_target  = s.emergencyFundTarget;
   if ('monthlySavingsTarget' in s) m.monthly_savings_target = s.monthlySavingsTarget;
   if ('electricityRate'     in s) m.electricity_rate      = s.electricityRate;
+  if ('categoryBudgets'     in s) m.category_budgets      = s.categoryBudgets;
+  if ('customCategories'    in s) m.custom_categories     = s.customCategories;
   return m;
 }
 
@@ -210,6 +223,8 @@ const defaultSettings: Settings = {
   emergencyFundTarget: 0, monthlySavingsTarget: 0,
   bills: [], budgetLines: [], appliances: [],
   electricityRate: 11.8, currency: '₱',
+  categoryBudgets: {},
+  customCategories: [],
 };
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -542,6 +557,17 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('bills').update({ paid_months: newPaidMonths }).eq('id', id);
   };
 
+  const updateBill = async (id: string, updates: { name?: string; amount?: number }) => {
+    setSettings(prev => ({
+      ...prev,
+      bills: prev.bills.map(b => b.id === id ? { ...b, ...updates } : b),
+    }));
+    const db: Row = {};
+    if ('name'   in updates) db.name   = updates.name;
+    if ('amount' in updates) db.amount = updates.amount;
+    await supabase.from('bills').update(db).eq('id', id);
+  };
+
   const logApplianceUsage = async (id: string, minutes: number) => {
     const month = currentYYYYMM();
     const appl = settings.appliances.find(a => a.id === id);
@@ -555,6 +581,44 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       ),
     }));
     await supabase.from('appliances').update({ total_minutes_this_month: newTotal, last_reset_month: month }).eq('id', id);
+  };
+
+  // ── Reset ─────────────────────────────────────────────────────────────────
+  // Fresh start: overwrite wallet balances, wipe this month's expenses, and
+  // zero out this month's appliance usage (stopping any running appliance).
+  const resetBalances = async (walletBalances: Record<string, number>) => {
+    if (!userId) return;
+    const month = currentYYYYMM();
+    const monthStart = `${month}-01T00:00:00.000Z`;
+    const [y, m] = month.split('-').map(Number);
+    const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+    const nextStart = `${nextMonth}-01T00:00:00.000Z`;
+
+    // Optimistic local updates
+    setWallets(prev => prev.map(w => w.id in walletBalances ? { ...w, balance: walletBalances[w.id] } : w));
+    setExpenses(prev => prev.filter(e => !(e.date >= monthStart && e.date < nextStart)));
+    setSettings(prev => ({
+      ...prev,
+      appliances: prev.appliances.map(a => ({
+        ...a, enabled: false, startedAt: null,
+        totalMinutesThisMonth: 0, lastResetMonth: month,
+      })),
+    }));
+
+    // Persist
+    await Promise.all([
+      ...Object.entries(walletBalances).map(([id, balance]) =>
+        supabase.from('wallets').update({ balance }).eq('id', id)
+      ),
+      supabase.from('expenses').delete()
+        .eq('user_id', userId).gte('date', monthStart).lt('date', nextStart),
+      ...settings.appliances.map(a =>
+        supabase.from('appliances').update({
+          enabled: false, started_at: null,
+          total_minutes_this_month: 0, last_reset_month: month,
+        }).eq('id', a.id)
+      ),
+    ]);
   };
 
   const refundApplianceUsage = async (id: string, minutes: number) => {
@@ -585,6 +649,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       addEmergencyFundEntry,
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
       toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, toggleBillPaid,
+      updateBill,
+      resetBalances,
     }}>
       {children}
     </AppContext.Provider>

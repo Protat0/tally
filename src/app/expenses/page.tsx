@@ -3,13 +3,14 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import {
-  useApp, fmt, Category, BudgetLine, BudgetType, Bill, ShopeePayment, currentYYYYMM,
+  useApp, fmt, Category, Bill, ShopeePayment, currentYYYYMM,
 } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import ProgressBar from '@/components/ProgressBar';
+import NumberField from '@/components/NumberField';
 import {
-  PlusIcon, TrashIcon, PencilIcon, CheckIcon, XIcon,
-  AlertIcon, ReceiptIcon, BagIcon, ShieldIcon,
+  PlusIcon, TrashIcon, PencilIcon, CheckIcon,
+  AlertIcon, BagIcon, ShieldIcon,
 } from '@/components/Icons';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -34,20 +35,17 @@ const STATUS_STYLE: Record<ShopeePayment['status'], string> = {
   upcoming: 'bg-slate-500/15   text-slate-400   border-slate-700',
 };
 
-const TYPE_LABELS: Record<BudgetType, string> = {
-  needs: 'Needs', wants: 'Wants', savings: 'Savings',
-};
-const TYPE_COLOR: Record<BudgetType, string> = {
-  needs:   'bg-blue-500/15   text-blue-400   border-blue-500/30',
-  wants:   'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  savings: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-};
+const CATEGORY_ICON_OPTIONS = ['🎯','🐶','🎮','📚','☕','🏠','📱','💰','🌱','🎁','✈️','🍿','💪','🚿','👕','🎵'];
 
-const CATEGORY_ICONS: Record<Category, string> = {
-  food: '🍜', transport: '🚗', bills: '💡', shopping: '🛍️', health: '💊', other: '✦',
-};
-
-const ICON_OPTIONS = ['🍜','💧','🚗','💡','🛍️','💊','✨','🎮','📚','☕','🏠','📱','💰','🎯','🌱'];
+// The fixed expense categories logged against, each user-budgetable.
+const EXPENSE_CATEGORIES: { key: Category; label: string; icon: string }[] = [
+  { key: 'food',      label: 'Food',      icon: '🍜' },
+  { key: 'transport', label: 'Transport', icon: '🚗' },
+  { key: 'bills',     label: 'Bills',     icon: '💡' },
+  { key: 'shopping',  label: 'Shopping',  icon: '🛍️' },
+  { key: 'health',    label: 'Health',    icon: '💊' },
+  { key: 'other',     label: 'Other',     icon: '✦' },
+];
 
 // ─── small components ─────────────────────────────────────────────────────────
 
@@ -82,15 +80,66 @@ function InlineAmountInput({
 export default function BudgetPage() {
   const {
     settings, expenses, updateSettings,
-    addBudgetLine, updateBudgetLine, deleteBudgetLine,
     shopeeSchedule, shopeeRemainingBalance, shopeeDebtFreeDate,
     shopeeNewPurchaseLock, setShopeeNewPurchaseLock,
     addShopeePayment, updateShopeePayment, deleteShopeePayment,
     emergencyFund, addEmergencyFundEntry,
-    toggleBillPaid,
+    toggleBillPaid, updateBill,
   } = useApp();
 
-  const { currency, bills, budgetLines, monthlyIncome, monthlySavingsTarget } = settings;
+  const { currency, bills, budgetLines, monthlyIncome, monthlySavingsTarget, categoryBudgets, customCategories } = settings;
+
+  // Built-in categories plus any the user has added.
+  const allCategories = [
+    ...EXPENSE_CATEGORIES,
+    ...customCategories.map(c => ({ key: c.key, label: c.label, icon: c.icon })),
+  ];
+
+  const setCategoryBudget = (cat: Category, v: number) =>
+    updateSettings({ categoryBudgets: { ...categoryBudgets, [cat]: v } });
+
+  // ── category budget edit sheet ──
+  const [editCat,       setEditCat]       = useState<Category | null>(null);
+  const [editCatBudget, setEditCatBudget] = useState('');
+
+  const openCatEdit = (cat: Category) => {
+    setEditCat(cat);
+    const current = categoryBudgets[cat] ?? 0;
+    setEditCatBudget(current > 0 ? String(current) : '');
+  };
+
+  const saveCatEdit = () => {
+    if (!editCat) return;
+    setCategoryBudget(editCat, parseFloat(editCatBudget) || 0);
+    setEditCat(null);
+  };
+
+  // ── add category sheet ──
+  const [addCatOpen, setAddCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatIcon, setNewCatIcon] = useState('🎯');
+  const [newCatBudget, setNewCatBudget] = useState('');
+
+  const handleAddCategory = () => {
+    if (!newCatName.trim()) return;
+    const key = 'c_' + uid();
+    const budgetVal = parseFloat(newCatBudget) || 0;
+    updateSettings({
+      customCategories: [...customCategories, { key, label: newCatName.trim(), icon: newCatIcon }],
+      categoryBudgets: budgetVal > 0 ? { ...categoryBudgets, [key]: budgetVal } : categoryBudgets,
+    });
+    setAddCatOpen(false);
+    setNewCatName(''); setNewCatIcon('🎯'); setNewCatBudget('');
+  };
+
+  const deleteCategory = (key: string) => {
+    const restBudgets = { ...categoryBudgets };
+    delete restBudgets[key];
+    updateSettings({
+      customCategories: customCategories.filter(c => c.key !== key),
+      categoryBudgets: restBudgets,
+    });
+  };
   const now = new Date();
   const monthLabel = now.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
 
@@ -118,28 +167,15 @@ export default function BudgetPage() {
   const unallocated      = monthlyIncome - totalAllocated;
   const allocatedPct     = monthlyIncome > 0 ? (totalAllocated / monthlyIncome) * 100 : 0;
 
-  // ── needs / wants / savings breakdown ──
-  const needsAmt    = totalBills + shopeeMonthly + budgetLines.filter(b => b.type === 'needs').reduce((s, b) => s + b.monthlyLimit, 0);
-  const wantsAmt    = budgetLines.filter(b => b.type === 'wants').reduce((s, b) => s + b.monthlyLimit, 0);
-  const savingsAmt  = budgetLines.filter(b => b.type === 'savings').reduce((s, b) => s + b.monthlyLimit, 0) + monthlySavingsTarget;
-  const breakdownTotal = needsAmt + wantsAmt + savingsAmt;
-
-  // ── budget-line edit sheet ──
-  const [editLine, setEditLine]   = useState<BudgetLine | null>(null);
-  const [editLimit, setEditLimit] = useState('');
-  const [editType, setEditType]   = useState<BudgetType>('needs');
-
-  // ── add budget-line sheet ──
-  const [addLineOpen, setAddLineOpen]   = useState(false);
-  const [newLineName, setNewLineName]   = useState('');
-  const [newLineIcon, setNewLineIcon]   = useState('🎯');
-  const [newLineLimit, setNewLineLimit] = useState('');
-  const [newLineType, setNewLineType]   = useState<BudgetType>('wants');
-
   // ── bill inline form ──
   const [addBillOpen, setAddBillOpen] = useState(false);
   const [newBillName, setNewBillName] = useState('');
   const [newBillAmt,  setNewBillAmt]  = useState('');
+
+  // ── bill edit sheet ──
+  const [editBill,     setEditBill]     = useState<Bill | null>(null);
+  const [editBillName, setEditBillName] = useState('');
+  const [editBillAmt,  setEditBillAmt]  = useState('');
 
   // ── shopee inline form ──
   const [addShopeeOpen,  setAddShopeeOpen]  = useState(false);
@@ -186,36 +222,7 @@ export default function BudgetPage() {
     ? [0.25, 0.5, 0.75, 1].map(f => ({ pct: f, amt: efTarget * f, reached: efCurrent >= efTarget * f }))
     : [];
 
-  // ── recent expenses toggle ──
-  const [showAllExpenses, setShowAllExpenses] = useState(false);
-
   // ── handlers ──
-  const openEdit = (line: BudgetLine) => {
-    setEditLine(line);
-    setEditLimit(line.monthlyLimit > 0 ? String(line.monthlyLimit) : '');
-    setEditType(line.type);
-  };
-
-  const saveEdit = () => {
-    if (!editLine) return;
-    updateBudgetLine(editLine.id, {
-      monthlyLimit: parseFloat(editLimit) || 0,
-      type: editType,
-    });
-    setEditLine(null);
-  };
-
-  const handleAddLine = () => {
-    if (!newLineName.trim()) return;
-    addBudgetLine({
-      name: newLineName.trim(), icon: newLineIcon,
-      monthlyLimit: parseFloat(newLineLimit) || 0,
-      type: newLineType,
-    });
-    setAddLineOpen(false);
-    setNewLineName(''); setNewLineLimit(''); setNewLineIcon('🎯'); setNewLineType('wants');
-  };
-
   const handleAddBill = () => {
     if (!newBillName.trim() || !newBillAmt) return;
     const bill: Bill = { id: uid(), name: newBillName.trim(), amount: parseFloat(newBillAmt), paidMonths: [] };
@@ -226,6 +233,18 @@ export default function BudgetPage() {
 
   const removeBill = (id: string) =>
     updateSettings({ bills: bills.filter(b => b.id !== id) });
+
+  const openBillEdit = (bill: Bill) => {
+    setEditBill(bill);
+    setEditBillName(bill.name);
+    setEditBillAmt(String(bill.amount));
+  };
+
+  const saveBillEdit = () => {
+    if (!editBill || !editBillName.trim() || !editBillAmt) return;
+    updateBill(editBill.id, { name: editBillName.trim(), amount: parseFloat(editBillAmt) || 0 });
+    setEditBill(null);
+  };
 
   const handleAddEF = () => {
     const amt = parseFloat(efAmount);
@@ -243,10 +262,6 @@ export default function BudgetPage() {
 
   const sortedShopee = [...shopeeSchedule].sort((a, b) => a.month.localeCompare(b.month));
   const visibleShopee = shopeeExpanded ? sortedShopee : sortedShopee.filter(p => p.status !== 'paid').slice(0, 3);
-
-  const recentExpenses = [...expenses]
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, showAllExpenses ? 50 : 8);
 
   return (
     <div className="min-h-screen bg-[#0b0f1a]">
@@ -277,11 +292,24 @@ export default function BudgetPage() {
 
               {/* ── Budget Health ── */}
               <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
-                {monthlyIncome === 0 ? (
-                  <div className="text-center py-2">
-                    <p className="text-sm text-slate-400 mb-2">Set your monthly income to start budgeting.</p>
-                    <Link href="/settings" className="text-sm text-blue-400 underline underline-offset-2">Go to Settings →</Link>
+                <div className="flex items-center justify-between gap-4 pb-4 mb-4 border-b border-[#1e2d40]">
+                  <div>
+                    <p className="text-xs text-slate-500 uppercase tracking-widest">Monthly Income</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">Your take-home pay each month</p>
                   </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-lg text-slate-500">{currency}</span>
+                    <NumberField
+                      value={monthlyIncome}
+                      onChange={v => updateSettings({ monthlyIncome: v })}
+                      step={500}
+                      min={0}
+                      inputClassName="w-28 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-1.5 text-right text-lg font-bold text-white outline-none focus:border-blue-500/50"
+                    />
+                  </div>
+                </div>
+                {monthlyIncome === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-1">Enter your monthly income above to start budgeting.</p>
                 ) : (
                   <>
                     <div className="flex items-end justify-between mb-3">
@@ -345,6 +373,11 @@ export default function BudgetPage() {
                           className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors shrink-0 ${isPaid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-500 hover:text-slate-200 hover:bg-white/10'}`}
                         >
                           <CheckIcon className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => openBillEdit(b)}
+                          title="Edit bill"
+                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
+                          <PencilIcon className="w-3.5 h-3.5 text-slate-500 hover:text-slate-200" />
                         </button>
                         <button onClick={() => removeBill(b.id)}
                           className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
@@ -684,154 +717,73 @@ export default function BudgetPage() {
             {/* ══ RIGHT COLUMN ═════════════════════════════════════════════ */}
             <div className="space-y-6 mt-6 md:mt-0">
 
-              {/* ── Variable Budget Lines ── */}
+              {/* ── Category Budgets ── */}
               <div>
                 <SectionHeader
-                  title="Budget Categories"
+                  title="Category Budgets"
                   action={
-                    <button onClick={() => setAddLineOpen(true)}
+                    <button onClick={() => setAddCatOpen(true)}
                       className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
                       <PlusIcon className="w-3.5 h-3.5" /> Add
                     </button>
                   }
                 />
                 <div className="space-y-2">
-                  {budgetLines.map(line => {
-                    const spent = line.expenseCategory ? (spentByCategory[line.expenseCategory] ?? 0) : 0;
-                    const hasLimit = line.monthlyLimit > 0;
-                    const pct = hasLimit ? (spent / line.monthlyLimit) * 100 : 0;
-                    const remaining = line.monthlyLimit - spent;
-                    const over = hasLimit && spent > line.monthlyLimit;
+                  {allCategories.map(({ key, label, icon }) => {
+                    const isCustom = customCategories.some(c => c.key === key);
+                    const budget = categoryBudgets[key] ?? 0;
+                    const spent = spentByCategory[key] ?? 0;
+                    const hasBudget = budget > 0;
+                    const remaining = budget - spent;
+                    const pct = hasBudget ? (spent / budget) * 100 : 0;
+                    const over = hasBudget && spent > budget;
 
                     return (
-                      <div key={line.id} className="rounded-xl bg-[#111827] border border-[#1e2d40] p-4">
-                        <div className="flex items-start gap-3">
+                      <div key={key} className="rounded-xl bg-[#111827] border border-[#1e2d40] p-4">
+                        <div className="flex items-center gap-3 mb-2">
                           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-lg shrink-0">
-                            {line.icon}
+                            {icon}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2 mb-0.5">
-                              <p className="text-sm font-medium text-white truncate">{line.name}</p>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${TYPE_COLOR[line.type]}`}>
-                                  {TYPE_LABELS[line.type]}
-                                </span>
-                                <button onClick={() => openEdit(line)}
-                                  className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
-                                  <PencilIcon className="w-3.5 h-3.5 text-slate-500" />
-                                </button>
-                                <button onClick={() => deleteBudgetLine(line.id)}
-                                  className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
-                                  <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
-                                </button>
-                              </div>
-                            </div>
-                            {hasLimit ? (
-                              <>
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <p className="text-xs text-slate-500">
-                                    {fmt(spent, currency)} <span className="text-slate-600">/ {fmt(line.monthlyLimit, currency)}</span>
-                                  </p>
-                                  <p className={`text-xs font-medium ${over ? 'text-red-400' : 'text-slate-400'}`}>
-                                    {over ? `${fmt(Math.abs(remaining), currency)} over` : `${fmt(remaining, currency)} left`}
-                                  </p>
-                                </div>
-                                <ProgressBar value={spent} max={line.monthlyLimit} color={paceColor(pct)} />
-                              </>
-                            ) : (
-                              <button onClick={() => openEdit(line)}
-                                className="mt-1 text-xs text-blue-400/70 hover:text-blue-400 underline underline-offset-2">
-                                Set monthly limit
+                          <p className="flex-1 text-sm font-medium text-white">{label}</p>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <p className="text-sm font-medium text-white">
+                              {hasBudget ? fmt(budget, currency) : <span className="text-slate-500">Not set</span>}
+                            </p>
+                            <button onClick={() => openCatEdit(key)}
+                              title="Edit budget"
+                              className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
+                              <PencilIcon className="w-3.5 h-3.5 text-slate-500 hover:text-slate-200" />
+                            </button>
+                            {isCustom && (
+                              <button onClick={() => deleteCategory(key)}
+                                title="Delete category"
+                                className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
+                                <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
                               </button>
                             )}
                           </div>
                         </div>
+                        {hasBudget ? (
+                          <>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <p className="text-xs text-slate-500">
+                                {fmt(spent, currency)} <span className="text-slate-600">/ {fmt(budget, currency)}</span>
+                              </p>
+                              <p className={`text-xs font-medium ${over ? 'text-red-400' : 'text-slate-400'}`}>
+                                {over ? `${fmt(Math.abs(remaining), currency)} over` : `${fmt(remaining, currency)} left`}
+                              </p>
+                            </div>
+                            <ProgressBar value={spent} max={budget} color={paceColor(pct)} />
+                          </>
+                        ) : (
+                          <p className="text-xs text-slate-600">
+                            No budget set · {fmt(spent, currency)} spent this month
+                          </p>
+                        )}
                       </div>
                     );
                   })}
                 </div>
-              </div>
-
-              {/* ── Needs / Wants / Savings Breakdown ── */}
-              <div>
-                <SectionHeader title="Allocation Breakdown" />
-                <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] overflow-hidden">
-                  <div className="grid grid-cols-3 divide-x divide-[#1e2d40]">
-                    {[
-                      { label: 'Needs',   amt: needsAmt,   ref: 50, color: 'text-blue-400',    bar: 'bg-blue-500' },
-                      { label: 'Wants',   amt: wantsAmt,   ref: 30, color: 'text-purple-400',  bar: 'bg-purple-500' },
-                      { label: 'Savings', amt: savingsAmt, ref: 20, color: 'text-emerald-400', bar: 'bg-emerald-500' },
-                    ].map(({ label, amt, ref, color }) => {
-                      const pct = breakdownTotal > 0 ? Math.round((amt / breakdownTotal) * 100) : 0;
-                      const onTrack = Math.abs(pct - ref) <= 5;
-                      return (
-                        <div key={label} className="flex flex-col items-center px-3 py-4 gap-1">
-                          <p className="text-[10px] uppercase tracking-widest text-slate-500">{label}</p>
-                          <p className={`text-lg font-bold ${color}`}>{pct}%</p>
-                          <p className="text-xs text-slate-400">{fmt(amt, currency)}</p>
-                          <div className="mt-1 flex items-center gap-1">
-                            <div className={`h-1.5 w-1.5 rounded-full ${onTrack ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                            <p className="text-[10px] text-slate-600">goal {ref}%</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex h-1.5 mx-4 mb-4 rounded-full overflow-hidden gap-0.5">
-                    {breakdownTotal > 0 && [
-                      { pct: (needsAmt  / breakdownTotal) * 100, cls: 'bg-blue-500' },
-                      { pct: (wantsAmt  / breakdownTotal) * 100, cls: 'bg-purple-500' },
-                      { pct: (savingsAmt / breakdownTotal) * 100, cls: 'bg-emerald-500' },
-                    ].map((s, i) => (
-                      <div key={i} className={`h-full rounded-full ${s.cls} transition-all`} style={{ width: `${s.pct}%` }} />
-                    ))}
-                  </div>
-                  <div className="px-4 pb-3">
-                    <p className="text-[10px] text-slate-600">Based on the 50/30/20 rule</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Recent Transactions ── */}
-              <div>
-                <SectionHeader
-                  title="Recent Transactions"
-                  action={
-                    expenses.length > 8 ? (
-                      <button onClick={() => setShowAllExpenses(v => !v)}
-                        className="text-xs text-blue-400 hover:text-blue-300">
-                        {showAllExpenses ? 'Show less' : `Show all (${expenses.length})`}
-                      </button>
-                    ) : null
-                  }
-                />
-                {expenses.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-8 text-center">
-                    <ReceiptIcon className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-                    <p className="text-sm text-slate-500 mb-1">No expenses logged yet.</p>
-                    <Link href="/expenses/new" className="text-xs text-blue-400 underline underline-offset-2">
-                      Log your first expense
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {recentExpenses.map(e => (
-                      <div key={e.id} className="flex items-center gap-3 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3">
-                        <div className="text-base shrink-0">{CATEGORY_ICONS[e.category]}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white capitalize">{e.category}</p>
-                          {e.note && <p className="text-xs text-slate-500 truncate">{e.note}</p>}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-medium text-red-400">-{fmt(e.amount, currency)}</p>
-                          <p className="text-[10px] text-slate-600">
-                            {new Date(e.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
             </div>{/* end right col */}
@@ -839,71 +791,93 @@ export default function BudgetPage() {
         </div>
       </div>
 
-      {/* ── Edit Budget Line Sheet ── */}
-      {editLine && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setEditLine(null)}>
+      {/* ── Edit Bill Sheet ── */}
+      {editBill && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setEditBill(null)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
             onClick={e => e.stopPropagation()}>
             <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
             <div className="flex items-center gap-3 mb-5">
-              <span className="text-2xl">{editLine.icon}</span>
-              <p className="font-semibold text-white">{editLine.name}</p>
+              <span className="text-2xl">💡</span>
+              <p className="font-semibold text-white">Edit Bill</p>
             </div>
-            <InlineAmountInput label="Monthly limit" value={editLimit} onChange={setEditLimit} />
-            <p className="text-xs text-slate-500 mt-4 mb-2">Category type</p>
-            <div className="flex gap-2 mb-5">
-              {(['needs', 'wants', 'savings'] as BudgetType[]).map(t => (
-                <button key={t} onClick={() => setEditType(t)}
-                  className={`flex-1 rounded-xl py-2.5 text-sm font-medium border transition-colors ${editType === t ? TYPE_COLOR[t] : 'bg-white/5 border-[#1e2d40] text-slate-400'}`}>
-                  {TYPE_LABELS[t]}
-                </button>
-              ))}
-            </div>
-            <button onClick={saveEdit} className="w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white">
+            <p className="text-xs text-slate-500 mb-1">Name</p>
+            <input
+              type="text"
+              value={editBillName}
+              onChange={e => setEditBillName(e.target.value)}
+              placeholder="Bill name"
+              className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
+            />
+            <InlineAmountInput label="Amount" value={editBillAmt} onChange={setEditBillAmt} />
+            <button
+              onClick={saveBillEdit}
+              disabled={!editBillName.trim() || !editBillAmt}
+              className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
+            >
               Save
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Add Budget Line Sheet ── */}
-      {addLineOpen && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setAddLineOpen(false)}>
+      {/* ── Edit Category Budget Sheet ── */}
+      {editCat && (() => {
+        const meta = allCategories.find(c => c.key === editCat) ?? { icon: '✦', label: 'Category' };
+        return (
+          <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setEditCat(null)}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
+              onClick={e => e.stopPropagation()}>
+              <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
+              <div className="flex items-center gap-3 mb-5">
+                <span className="text-2xl">{meta.icon}</span>
+                <p className="font-semibold text-white">{meta.label} Budget</p>
+              </div>
+              <InlineAmountInput label="Monthly budget" value={editCatBudget} onChange={setEditCatBudget} />
+              <button onClick={saveCatEdit} className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white">
+                Save
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Add Category Sheet ── */}
+      {addCatOpen && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setAddCatOpen(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
             onClick={e => e.stopPropagation()}>
             <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
-            <p className="font-semibold text-white text-lg mb-5">New Budget Category</p>
+            <p className="font-semibold text-white text-lg mb-5">New Category</p>
             <p className="text-xs text-slate-500 mb-2">Icon</p>
             <div className="flex flex-wrap gap-2 mb-4">
-              {ICON_OPTIONS.map(ico => (
-                <button key={ico} onClick={() => setNewLineIcon(ico)}
-                  className={`h-10 w-10 rounded-xl text-xl border transition-colors ${newLineIcon === ico ? 'border-blue-500 bg-blue-500/15' : 'border-[#1e2d40] bg-white/5'}`}>
+              {CATEGORY_ICON_OPTIONS.map(ico => (
+                <button key={ico} onClick={() => setNewCatIcon(ico)}
+                  className={`h-10 w-10 rounded-xl text-xl border transition-colors ${newCatIcon === ico ? 'border-blue-500 bg-blue-500/15' : 'border-[#1e2d40] bg-white/5'}`}>
                   {ico}
                 </button>
               ))}
             </div>
-            <div className="space-y-3 mb-4">
-              <InlineAmountInput label="Name" value={newLineName} onChange={setNewLineName} placeholder="e.g. Groceries" />
-              <InlineAmountInput label="Monthly limit" value={newLineLimit} onChange={setNewLineLimit} />
-            </div>
-            <p className="text-xs text-slate-500 mb-2">Type</p>
-            <div className="flex gap-2 mb-5">
-              {(['needs', 'wants', 'savings'] as BudgetType[]).map(t => (
-                <button key={t} onClick={() => setNewLineType(t)}
-                  className={`flex-1 rounded-xl py-2.5 text-sm font-medium border transition-colors ${newLineType === t ? TYPE_COLOR[t] : 'bg-white/5 border-[#1e2d40] text-slate-400'}`}>
-                  {TYPE_LABELS[t]}
-                </button>
-              ))}
-            </div>
-            <button onClick={handleAddLine} disabled={!newLineName.trim()}
-              className="w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40">
+            <p className="text-xs text-slate-500 mb-1">Name</p>
+            <input
+              type="text"
+              value={newCatName}
+              onChange={e => setNewCatName(e.target.value)}
+              placeholder="e.g. Pets"
+              className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
+            />
+            <InlineAmountInput label="Monthly budget (optional)" value={newCatBudget} onChange={setNewCatBudget} />
+            <button onClick={handleAddCategory} disabled={!newCatName.trim()}
+              className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40">
               Add Category
             </button>
           </div>
         </div>
       )}
+
     </div>
   );
 }
