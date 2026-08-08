@@ -10,12 +10,15 @@ interface Props {
   spentFor: (key: string) => number;
   budgets: Partial<Record<string, number>>;
   currency: string;
+  /** Pencil — opens the budget editor. */
   onSelect: (key: string) => void;
+  /** Card body — opens the category's details. */
+  onOpen: (key: string) => void;
   onAdd: () => void;
 }
 
 export default function CategoryGrid({
-  categories, spentFor, budgets, currency, onSelect, onAdd,
+  categories, spentFor, budgets, currency, onSelect, onOpen, onAdd,
 }: Props) {
   return (
     <div>
@@ -31,7 +34,8 @@ export default function CategoryGrid({
             spent={spentFor(c.key)}
             budget={budgets[c.key] ?? 0}
             currency={currency}
-            onClick={() => onSelect(c.key)}
+            onEdit={() => onSelect(c.key)}
+            onOpen={() => onOpen(c.key)}
           />
         ))}
         <button

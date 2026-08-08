@@ -11,6 +11,7 @@ import BudgetTile from '@/components/BudgetTile';
 import BillsSheet from '@/components/BillsSheet';
 import BudgetHero from '@/components/BudgetHero';
 import CategoryGrid from '@/components/CategoryGrid';
+import CategoryDetailSheet from '@/components/CategoryDetailSheet';
 import ElectricSheet from '@/components/ElectricSheet';
 import SavingsSheet from '@/components/SavingsSheet';
 import { PlusIcon } from '@/components/Icons';
@@ -89,6 +90,9 @@ export default function BudgetPage() {
 
   const setCategoryBudget = (cat: Category, v: number) =>
     updateSettings({ categoryBudgets: { ...categoryBudgets, [cat]: v } });
+
+  // ── category detail sheet ──
+  const [detailCat, setDetailCat] = useState<Category | null>(null);
 
   // ── category budget edit sheet ──
   const [editCat,       setEditCat]       = useState<Category | null>(null);
@@ -332,6 +336,7 @@ export default function BudgetPage() {
               budgets={categoryBudgets}
               currency={currency}
               onSelect={key => openCatEdit(key as Category)}
+              onOpen={key => setDetailCat(key as Category)}
               onAdd={() => setAddCatOpen(true)}
             />
 
@@ -415,6 +420,23 @@ export default function BudgetPage() {
           </button>
         </BottomSheet>
       )}
+
+      {/* ── Category Detail Sheet ── */}
+      {detailCat && (() => {
+        const meta = catMetaFor(detailCat);
+        return (
+          <CategoryDetailSheet
+            categoryKey={detailCat}
+            icon={meta.icon}
+            label={meta.label}
+            budget={categoryBudgets[detailCat] ?? 0}
+            spent={spentFor(detailCat)}
+            currency={currency}
+            metered={detailCat === ELECTRIC_CATEGORY.key}
+            onClose={() => setDetailCat(null)}
+          />
+        );
+      })()}
 
       {/* ── Edit Category Budget Sheet ── */}
       {editCat && (() => {

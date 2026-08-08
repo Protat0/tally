@@ -1,7 +1,8 @@
 'use client';
 
 import { fmt } from './AppContext';
-import ProgressBar from './ProgressBar';
+import HalfCircleProgress from './HalfCircleProgress';
+import { PencilIcon } from './Icons';
 
 function paceColor(pct: number): 'green' | 'amber' | 'red' {
   if (pct <= 80) return 'green';
@@ -15,39 +16,71 @@ interface Props {
   spent: number;
   budget: number;
   currency: string;
-  onClick: () => void;
+  onEdit: () => void;
+  onOpen: () => void;
 }
 
-export default function CategoryCard({ icon, label, spent, budget, currency, onClick }: Props) {
+export default function CategoryCard({
+  icon, label, spent, budget, currency, onEdit, onOpen,
+}: Props) {
   const hasBudget = budget > 0;
   const remaining = budget - spent;
   const pct = hasBudget ? (spent / budget) * 100 : 0;
   const over = hasBudget && spent > budget;
 
   return (
-    <button
-      onClick={onClick}
-      className="flex flex-col rounded-2xl bg-[#111827] border border-[#1e2d40] p-4 text-left hover:border-slate-600 hover:bg-[#141d2e] transition-colors"
-    >
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-lg mb-2.5 shrink-0">
-        {icon}
-      </div>
-      <p className="w-full text-sm font-medium text-white truncate">{label}</p>
-      <p className="mt-1 text-lg font-bold text-white tabular-nums">{fmt(spent, currency)}</p>
+    // The pencil is a sibling of the card button, not a child — buttons cannot
+    // nest, and this way its click never has to be stopped from propagating.
+    <div className="relative">
+      <button
+        onClick={onEdit}
+        title={`Edit ${label} budget`}
+        aria-label={`Edit ${label} budget`}
+        className="absolute top-2.5 right-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-full text-slate-500 hover:bg-white/10 hover:text-slate-200 transition-colors"
+      >
+        <PencilIcon className="w-3.5 h-3.5" />
+      </button>
 
-      {hasBudget ? (
-        <>
-          <p className="mt-0.5 mb-2.5 w-full text-[11px] text-slate-500 truncate">
+      <button
+        onClick={onOpen}
+        aria-label={`${label} details`}
+        className="flex w-full flex-col rounded-2xl bg-[#111827] border border-[#1e2d40] p-4 text-left hover:border-slate-600 hover:bg-[#141d2e] transition-colors"
+      >
+        {/* The gauge sits alongside the icon/label/spent stack rather than under
+            it, so the card stays short and the dead space to the right is used.
+            Bottom-aligned, which keeps the top-right corner clear for the pencil. */}
+        <div className="flex w-full items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-lg mb-2.5 shrink-0">
+              {icon}
+            </div>
+            <p className="w-full text-sm font-medium text-white truncate">{label}</p>
+            <p className="mt-1 text-lg font-bold text-white tabular-nums truncate">
+              {fmt(spent, currency)}
+            </p>
+          </div>
+
+          {hasBudget && (
+            <HalfCircleProgress
+              value={spent}
+              max={budget}
+              color={paceColor(pct)}
+              className="w-[88px] sm:w-[104px] lg:w-[120px]"
+            />
+          )}
+        </div>
+
+        {hasBudget ? (
+          <p className="mt-2 w-full text-[11px] text-slate-500 truncate">
             of {fmt(budget, currency)} ·{' '}
             <span className={over ? 'text-red-400' : 'text-slate-400'}>
               {over ? `${fmt(Math.abs(remaining), currency)} over` : `${fmt(remaining, currency)} left`}
             </span>
           </p>
-          <ProgressBar value={spent} max={budget} color={paceColor(pct)} className="mt-auto" />
-        </>
-      ) : (
-        <p className="mt-0.5 text-[11px] text-slate-600">No budget set</p>
-      )}
-    </button>
+        ) : (
+          <p className="mt-2 text-[11px] text-slate-600">No budget set</p>
+        )}
+      </button>
+    </div>
   );
 }

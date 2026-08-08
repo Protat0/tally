@@ -22,6 +22,42 @@ wallet Add/Withdraw/Transfer records write to `money_moves`.
 
 ---
 
+## Done 2026-08-08 — Category card refinements
+
+Follow-on polish after the simplification plan, driven by review of the live page.
+
+- **Half-circle gauges replace the linear bars on category cards.** New
+  `HalfCircleProgress.tsx` — a 180° SVG arc using `pathLength={100}`, so the
+  dash maths is exact and stays correct if the arc geometry is ever changed.
+  Same `paceColor` thresholds as before (green ≤80%, amber ≤100%, red over).
+  The gauge is size-agnostic; the caller passes the width.
+  **The hero keeps its linear bar**, as do both bars on the home page.
+- **The gauge sits beside the icon/label/spent stack**, not under it, bottom-
+  aligned. Cards got noticeably shorter. Sized `88px` / `104px` at `sm` /
+  `120px` at `lg`, stepped because card width varies a lot across the grid.
+- **The card is no longer one big edit button.** A pencil in the top-right
+  corner opens the budget editor; pressing the card body opens the new detail
+  sheet. The pencil is a **sibling** of the card button, not a child — buttons
+  cannot nest, and as siblings no `stopPropagation` is needed.
+- **New `CategoryDetailSheet.tsx`** — hero (icon, label, this month's spend,
+  budget, gauge) above every expense ever logged in that category, newest first,
+  grouped by month with per-month totals and an all-time count/sum. Electric
+  explains it is metered rather than logged; other empty categories link to
+  Log Expense.
+
+Month grouping uses **local** date parts, not `date.slice(0, 7)` — in PH
+(UTC+8) an expense logged late evening on the last of the month would otherwise
+sort into the next month.
+
+**Decision — delete stays out of the card grid.** Deleting a category remains
+inside the edit sheet (reached via the pencil). Putting a delete button next to
+the pencil would mean two sub-44px touch targets side by side on mobile, one of
+them destructive. If it ever needs to be reachable from the grid, the preferred
+option is an explicit "Edit" toggle on the Categories header that reveals delete
+badges — opting in, rather than a permanent mis-tap risk.
+
+---
+
 ## Done 2026-08-08 — Budget page simplification (all 9 tasks)
 
 Plan: `docs/superpowers/plans/2026-08-08-budget-page-simplification.md`.
@@ -151,9 +187,8 @@ Left as-is deliberately — see "Ideas / not yet done" for the alternatives.
 ## Ideas / not yet done
 
 - **Rename custom categories** — currently you can edit a custom category's *budget* and *delete* it, but not rename it or change its icon. (Add name/icon editing to the category edit flow.)
-- **Budget page right column** still has empty space above Category Budgets (from the removed sections) — decide what, if anything, fills it.
 - **Restore or drop budget lines / allocation breakdown** — data layer is still there if we want them back.
-- **Editing / deleting activity rows** — `deleteMoneyMove` exists in `AppContext` and correctly reverses wallet balances, but nothing in the UI calls it yet. Same for expenses (`deleteExpense`). A swipe or long-press on a Transactions row would wire both up.
+- **Editing / deleting activity rows** — `deleteMoneyMove` exists in `AppContext` and correctly reverses wallet balances, but nothing in the UI calls it yet. Same for expenses (`deleteExpense`). A swipe or long-press on a Transactions row would wire both up — and the rows in the new Category Detail sheet are now a second natural home for it.
 - **Income sources are fixed** — Salary/Freelance/Gift/Refund/Other are hardcoded in `INCOME_SOURCES`. Make them user-editable if the list starts chafing.
 - **Bills double-count in Allocated** — a budget on the built-in Bills category adds on top of Recurring Bills. Options: exclude the `bills` category from `totalCategoryBudgets`, or count whichever of the two is larger.
 
