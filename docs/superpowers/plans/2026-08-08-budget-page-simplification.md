@@ -438,7 +438,7 @@ git commit -m "refactor: collapse recurring bills into a tile and sheet"
 - Consumes: `BottomSheet` (Task 1), `BudgetTile` (Task 2), existing `ElectricSection`.
 - Produces: `ElectricSheet({ onClose })` — default export.
 
-- [ ] **Step 1: Create the wrapper**
+- [x] **Step 1: Create the wrapper**
 
 ```tsx
 'use client';
@@ -461,7 +461,7 @@ export default function ElectricSheet({ onClose }: Props) {
 }
 ```
 
-- [ ] **Step 2: Replace the section with a tile**
+- [x] **Step 2: Replace the section with a tile**
 
 In `src/app/expenses/page.tsx`:
 
@@ -489,7 +489,7 @@ In `src/app/expenses/page.tsx`:
 
 The page-level 10s tick added alongside `liveElectric` already keeps the tile's figure current; leave it in place.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 npm run build
@@ -500,7 +500,7 @@ Expected: build succeeds; lint at baseline.
 
 Manual check — the Electric tile shows the live cost and `1 running` when an appliance is on. Tap it: the full appliance UI opens in a sheet. Toggle an appliance, close the sheet, and confirm the tile's value keeps ticking up (wait ~10s).
 
-- [ ] **Step 4: Commit (optional checkpoint)**
+- [x] **Step 4: Commit (optional checkpoint)**
 
 ```bash
 git add src/components/ElectricSheet.tsx src/app/expenses/page.tsx
@@ -519,7 +519,7 @@ git commit -m "refactor: collapse electric into a tile and sheet"
 - Consumes: `BottomSheet` (Task 1), `BudgetTile` (Task 2).
 - Produces: `SavingsSheet({ onClose })` — default export; reads and writes `monthlySavingsTarget` via `useApp()`.
 
-- [ ] **Step 1: Create the sheet**
+- [x] **Step 1: Create the sheet**
 
 ```tsx
 'use client';
@@ -562,7 +562,7 @@ export default function SavingsSheet({ onClose }: Props) {
 }
 ```
 
-- [ ] **Step 2: Replace the section with a tile**
+- [x] **Step 2: Replace the section with a tile**
 
 1. Import `SavingsSheet`; add `const [savingsOpen, setSavingsOpen] = useState(false);`
 2. Delete the Savings Target section (~663-684) and put in its place:
@@ -577,7 +577,7 @@ export default function SavingsSheet({ onClose }: Props) {
 ```
 3. Render `{savingsOpen && <SavingsSheet onClose={() => setSavingsOpen(false)} />}` with the other sheets.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 npm run build
@@ -586,7 +586,7 @@ npm run lint
 
 Manual check — the Savings tile reads `Not set` at zero. Tap, type `3000`, close. Tile reads `₱3,000.00/mo`, and the hero's Allocated total rises by 3000.
 
-- [ ] **Step 4: Commit (optional checkpoint)**
+- [x] **Step 4: Commit (optional checkpoint)**
 
 ```bash
 git add src/components/SavingsSheet.tsx src/app/expenses/page.tsx
@@ -605,7 +605,7 @@ Deletes ~150 lines of editor duplicated from `/shopee`.
 **Interfaces:**
 - Consumes: `BudgetTile` (Task 2).
 
-- [ ] **Step 1: Replace the section with a linking tile**
+- [x] **Step 1: Replace the section with a linking tile**
 
 Delete the whole Shopee Pay Later section and put in its place:
 
@@ -624,7 +624,7 @@ Delete the whole Shopee Pay Later section and put in its place:
 />
 ```
 
-- [ ] **Step 2: Delete now-unused page state, handlers and imports**
+- [x] **Step 2: Delete now-unused page state, handlers and imports**
 
 Remove from the page anything only the deleted section used. Check and remove as applicable:
 
@@ -635,7 +635,7 @@ Remove from the page anything only the deleted section used. Check and remove as
 
 **Keep:** `shopeeSchedule`, `shopeeRemainingBalance`, `shopeeDebtFreeDate`, `nextShopee`, `shopeeMonthly`, `formatMonth` — the tile and the allocation total still use them.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 npm run build
@@ -646,7 +646,7 @@ Expected: build succeeds; lint at baseline, **no new unused-variable warnings** 
 
 Manual check — the Shopee tile shows the next payment and remaining balance, and tapping it navigates to `/shopee`. Confirm the hero's Allocated total is unchanged from before this task (the tile is display-only; `shopeeMonthly` still feeds `totalAllocated`).
 
-- [ ] **Step 4: Commit (optional checkpoint)**
+- [x] **Step 4: Commit (optional checkpoint)**
 
 ```bash
 git add src/app/expenses/page.tsx
@@ -665,7 +665,7 @@ Deletes ~117 lines duplicated from `/emergency-fund`.
 **Interfaces:**
 - Consumes: `BudgetTile` (Task 2).
 
-- [ ] **Step 1: Replace the section with a linking tile**
+- [x] **Step 1: Replace the section with a linking tile**
 
 ```tsx
 <BudgetTile
@@ -688,11 +688,11 @@ Deletes ~117 lines duplicated from `/emergency-fund`.
 
 Guard note: the percentage is only computed inside the `emergencyFundTarget > 0` branch, so there is no divide-by-zero.
 
-- [ ] **Step 2: Delete now-unused page state, handlers and imports**
+- [x] **Step 2: Delete now-unused page state, handlers and imports**
 
 Remove `addEmergencyFundEntry` from the `useApp()` destructure, any emergency-fund form state, and the `ShieldIcon` import if unused elsewhere. **Keep** `emergencyFund`.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 npm run build
@@ -701,7 +701,7 @@ npm run lint
 
 Manual check — the Emergency tile shows `₱18,000.00 of ₱50,000.00 · 36% funded` and navigates to `/emergency-fund`. With the target at 0 it reads `no target set` and does not show `NaN` or `Infinity`.
 
-- [ ] **Step 4: Commit (optional checkpoint)**
+- [x] **Step 4: Commit (optional checkpoint)**
 
 ```bash
 git add src/app/expenses/page.tsx
@@ -731,7 +731,7 @@ BudgetHero({
 ```
 `parts` is the page's existing `allocationParts`. The component reads `monthlyIncome` and `currency` from `useApp()` and writes income back through `updateSettings`.
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```tsx
 'use client';
@@ -864,7 +864,7 @@ export default function BudgetHero({
 }
 ```
 
-- [ ] **Step 2: Replace the section in the page**
+- [x] **Step 2: Replace the section in the page**
 
 1. Import `BudgetHero`.
 2. Delete the Budget Health section (~349-426) **and** the page `<header>` block (~330-342) — the hero now carries the month label. Keep the "Log Expense" link by moving it above the hero:
@@ -890,7 +890,7 @@ export default function BudgetHero({
 ```
 3. Remove `NumberField` and `ProgressBar` imports from the page if nothing else there uses them (`ProgressBar` is still used by category rows until Task 8 — check before removing).
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 npm run build
@@ -899,7 +899,7 @@ npm run lint
 
 Manual check — hero shows month, income field, Allocated/Unallocated, bar. Editing income updates the bar and persists across refresh. "Breakdown →" opens a sheet listing each allocation part, a total that equals the hero's Allocated figure, and the Received block. With income at 0 the hero shows the empty-state line and no Breakdown link.
 
-- [ ] **Step 4: Commit (optional checkpoint)**
+- [x] **Step 4: Commit (optional checkpoint)**
 
 ```bash
 git add src/components/BudgetHero.tsx src/app/expenses/page.tsx
@@ -927,7 +927,7 @@ CategoryGrid({ categories, spentFor, budgets, currency, onSelect, onAdd })
 // budgets: Partial<Record<string, number>>
 ```
 
-- [ ] **Step 1: Create `CategoryCard`**
+- [x] **Step 1: Create `CategoryCard`**
 
 ```tsx
 'use client';
@@ -985,7 +985,7 @@ export default function CategoryCard({ icon, label, spent, budget, currency, onC
 }
 ```
 
-- [ ] **Step 2: Create `CategoryGrid`**
+- [x] **Step 2: Create `CategoryGrid`**
 
 ```tsx
 'use client';
@@ -1037,7 +1037,7 @@ export default function CategoryGrid({
 }
 ```
 
-- [ ] **Step 3: Swap the section for the grid**
+- [x] **Step 3: Swap the section for the grid**
 
 In `src/app/expenses/page.tsx`, delete the Category Budgets section (~810-897, including the "Removed" restore strip) and put in its place:
 
@@ -1054,7 +1054,7 @@ In `src/app/expenses/page.tsx`, delete the Category Budgets section (~810-897, i
 
 Import `CategoryGrid`. Delete the page's `paceColor` helper (~21-25) — `CategoryCard` owns it now and nothing else on the page uses it. Remove the `ProgressBar` import if now unused.
 
-- [ ] **Step 4: Move Delete into the Edit Category Budget sheet**
+- [x] **Step 4: Move Delete into the Edit Category Budget sheet**
 
 The per-card trash icon is gone, so the edit sheet becomes the only route to deletion. Add a delete button below Save inside that sheet:
 
@@ -1069,7 +1069,7 @@ The per-card trash icon is gone, so the edit sheet becomes the only route to del
 
 Closing the edit sheet before opening the confirm dialog keeps one overlay on screen at a time.
 
-- [ ] **Step 5: Move the restore list into the Add Category sheet**
+- [x] **Step 5: Move the restore list into the Add Category sheet**
 
 Inside the Add Category sheet, below the existing form, add:
 
@@ -1095,7 +1095,7 @@ Inside the Add Category sheet, below the existing form, add:
 )}
 ```
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```bash
 npm run build
@@ -1111,7 +1111,7 @@ Manual check, end to end:
 6. Tap a card → `Remove category` → confirm. The card disappears **and survives a refresh** (this is the path that was broken by the missing `hidden_categories` column).
 7. Tap `Add` → the sheet shows the new-category form and, underneath, the removed built-ins. Restore one; it reappears as a card.
 
-- [ ] **Step 7: Commit (optional checkpoint)**
+- [x] **Step 7: Commit (optional checkpoint)**
 
 ```bash
 git add src/components/CategoryCard.tsx src/components/CategoryGrid.tsx src/app/expenses/page.tsx
@@ -1127,7 +1127,7 @@ Every section is now a tile, a hero, or the card grid. This task drops the two-c
 **Files:**
 - Modify: `src/app/expenses/page.tsx`
 
-- [ ] **Step 1: Replace the two-column wrapper**
+- [x] **Step 1: Replace the two-column wrapper**
 
 Delete the `<div className="md:grid md:grid-cols-2 md:gap-6">` wrapper and both `{/* ══ LEFT COLUMN ══ */}` / `{/* ══ RIGHT COLUMN ══ */}` `<div>`s. Lay the page out as three bands:
 
@@ -1168,11 +1168,11 @@ Delete the `<div className="md:grid md:grid-cols-2 md:gap-6">` wrapper and both 
 
 Move the five `<BudgetTile>` elements written in Tasks 2-6 into the tile grid in that order, replacing the comment placeholders above with the actual elements.
 
-- [ ] **Step 2: Check the page's remaining bottom padding**
+- [x] **Step 2: Check the page's remaining bottom padding**
 
 The page ends with `<BottomNav />`; keep whatever bottom padding class the outer container already applies so the last card is not hidden behind the mobile nav bar.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 npm run build
@@ -1188,7 +1188,7 @@ Manual check:
 4. **Every capability still reachable:** bills add/edit/delete/paid-toggle; appliance add/edit/delete/toggle/pin and the kWh rate; savings target; category budget edit; category add/delete/restore; Shopee and Emergency Fund via their tiles.
 5. The last category card is not obscured by the bottom nav.
 
-- [ ] **Step 4: Commit (optional checkpoint)**
+- [x] **Step 4: Commit (optional checkpoint)**
 
 ```bash
 git add src/app/expenses/page.tsx

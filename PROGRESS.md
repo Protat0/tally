@@ -22,20 +22,40 @@ wallet Add/Withdraw/Transfer records write to `money_moves`.
 
 ---
 
-## In progress — Budget page simplification
+## Done 2026-08-08 — Budget page simplification (all 9 tasks)
 
-Plan: `docs/superpowers/plans/2026-08-08-budget-page-simplification.md` (9 tasks).
+Plan: `docs/superpowers/plans/2026-08-08-budget-page-simplification.md`.
 Spec: `docs/superpowers/specs/2026-08-08-budget-page-simplification-design.md`.
 
-Collapses the Budget page's seven always-open sections into a hero band, a tile
-grid whose tiles open bottom sheets, and a category card grid. Presentational
-refactor only — no `AppContext` or database changes.
+The Budget page's seven always-open sections are now a hero band, a five-tile
+grid, and a category card grid. **`src/app/expenses/page.tsx`: 933 → 496 lines.**
+Presentational only — `AppContext` and the database were not touched, and every
+derived total (`totalAllocated`, `unallocated`, `allocatedPct`) is unchanged.
 
-| Task | Status |
+**New components** (all under `src/components/`):
+
+| File | Role |
 | --- | --- |
-| 1. `BottomSheet` primitive | ✅ Done (`9a4f2e8`) |
-| 2. `BudgetTile` + Bills tile/sheet | ⏳ In progress |
-| 3–9 (Electric, Savings, Shopee, Emergency, Hero, Category cards, layout) | ⬜ Not started |
+| `BottomSheet.tsx` | The app's one sheet chrome; tall sheets now scroll (`max-h-[85vh]`) |
+| `BudgetTile.tsx` | Collapsed tile — renders a `<button>` or a `<Link>` |
+| `BudgetHero.tsx` | Hero band + "Breakdown →" detail sheet |
+| `BillsSheet.tsx` | Full recurring-bills management |
+| `ElectricSheet.tsx` | Wraps `ElectricSection` in a sheet |
+| `SavingsSheet.tsx` | Monthly savings target input |
+| `CategoryCard.tsx` / `CategoryGrid.tsx` | Category cards + trailing "Add" card |
+
+**Behaviour changes worth remembering:**
+
+- **Shopee and Emergency Fund no longer have editors on the Budget page.** Their
+  tiles link to `/shopee` and `/emergency-fund`, deleting ~270 lines that were
+  duplicated from those routes. Their figures still feed `totalAllocated`.
+- **Category delete moved** from a per-row trash icon into the Edit Budget sheet
+  ("Delete category" for custom, "Remove category" for built-ins).
+- **The restore strip for removed built-ins moved** into the Add Category sheet.
+- **The electric ticker only runs while its sheet is open**; the page-level 10s
+  tick keeps the tile's live figure current.
+- The page `<header>` is gone — the hero carries the month label, and Log Expense
+  sits above it.
 
 ---
 

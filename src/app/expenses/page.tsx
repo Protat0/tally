@@ -9,23 +9,15 @@ import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
 import BudgetTile from '@/components/BudgetTile';
 import BillsSheet from '@/components/BillsSheet';
-import ProgressBar from '@/components/ProgressBar';
-import NumberField from '@/components/NumberField';
+import BudgetHero from '@/components/BudgetHero';
+import CategoryGrid from '@/components/CategoryGrid';
 import ElectricSheet from '@/components/ElectricSheet';
 import SavingsSheet from '@/components/SavingsSheet';
-import {
-  PlusIcon, TrashIcon, PencilIcon,
-} from '@/components/Icons';
+import { PlusIcon } from '@/components/Icons';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function uid() { return crypto.randomUUID(); }
-
-function paceColor(pct: number): 'green' | 'amber' | 'red' {
-  if (pct <= 80) return 'green';
-  if (pct <= 100) return 'amber';
-  return 'red';
-}
 
 function formatMonth(m: string): string {
   const [y, mo] = m.split('-');
@@ -52,15 +44,6 @@ const ELECTRIC_CATEGORY = { key: 'electric' as Category, label: 'Electric', icon
 const BUDGETABLE_CATEGORIES = [...EXPENSE_CATEGORIES, ELECTRIC_CATEGORY];
 
 // ─── small components ─────────────────────────────────────────────────────────
-
-function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{title}</p>
-      {action}
-    </div>
-  );
-}
 
 function InlineAmountInput({
   label, value, onChange, placeholder = '0.00',
@@ -248,12 +231,8 @@ export default function BudgetPage() {
       <div className="md:pl-64">
         <div className="mx-auto max-w-5xl px-4 md:px-8 pb-28 md:pb-12">
 
-          {/* ── Header ── */}
-          <header className="flex items-center justify-between pt-14 pb-5 md:pt-10 md:pb-6">
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-widest">Monthly Budget</p>
-              <p className="text-2xl font-bold text-white mt-0.5">{monthLabel}</p>
-            </div>
+          {/* ── Log Expense ── */}
+          <div className="flex justify-end pt-14 pb-4 md:pt-10">
             <Link
               href="/expenses/new"
               className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
@@ -261,93 +240,23 @@ export default function BudgetPage() {
               <PlusIcon className="w-4 h-4" />
               <span className="hidden sm:inline">Log Expense</span>
             </Link>
-          </header>
+          </div>
 
-          <div className="md:grid md:grid-cols-2 md:gap-6">
+          <div className="space-y-6">
 
-            {/* ══ LEFT COLUMN ══════════════════════════════════════════════ */}
-            <div className="space-y-6">
+            {/* ── Hero — always open ── */}
+            <BudgetHero
+              monthLabel={monthLabel}
+              allocated={totalAllocated}
+              unallocated={unallocated}
+              allocatedPct={allocatedPct}
+              parts={allocationParts}
+              receivedThisMonth={receivedThisMonth}
+            />
 
-              {/* ── Budget Health ── */}
-              <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
-                <div className="flex items-center justify-between gap-4 pb-4 mb-4 border-b border-[#1e2d40]">
-                  <div>
-                    <p className="text-xs text-slate-500 uppercase tracking-widest">Monthly Income</p>
-                    <p className="text-[11px] text-slate-600 mt-0.5">Your take-home pay each month</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-lg text-slate-500">{currency}</span>
-                    <NumberField
-                      value={monthlyIncome}
-                      onChange={v => updateSettings({ monthlyIncome: v })}
-                      step={500}
-                      min={0}
-                      inputClassName="w-28 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-1.5 text-right text-lg font-bold text-white outline-none focus:border-blue-500/50"
-                    />
-                  </div>
-                </div>
+            {/* ── Collapsed sections ── */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
 
-                {/* Actual money received, from wallet top-ups. Deliberately does not
-                    feed the allocation maths below — that stays based on the plan. */}
-                {(monthlyIncome > 0 || receivedThisMonth > 0) && (
-                  <div className="flex items-baseline justify-between gap-3 pb-4 mb-4 border-b border-[#1e2d40]">
-                    <div>
-                      <p className="text-xs text-slate-500">Received this month</p>
-                      <p className="text-[11px] text-slate-600 mt-0.5">Actual top-ups logged to your wallets</p>
-                    </div>
-                    <p className="text-right shrink-0">
-                      <span className={`text-lg font-bold ${receivedThisMonth > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                        {fmt(receivedThisMonth, currency)}
-                      </span>
-                      {monthlyIncome > 0 && (
-                        <span className="block text-[11px] text-slate-600">
-                          of {fmt(monthlyIncome, currency)} expected
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                )}
-
-                {monthlyIncome === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-1">Enter your monthly income above to start budgeting.</p>
-                ) : (
-                  <>
-                    <div className="flex items-end justify-between mb-3">
-                      <div>
-                        <p className="text-xs text-slate-500 mb-0.5">Allocated</p>
-                        <p className="text-2xl font-bold text-white">{fmt(totalAllocated, currency)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500 mb-0.5">
-                          {unallocated >= 0 ? 'Unallocated' : 'Over budget'}
-                        </p>
-                        <p className={`text-lg font-bold ${unallocated >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {fmt(Math.abs(unallocated), currency)}
-                        </p>
-                      </div>
-                    </div>
-                    <ProgressBar
-                      value={totalAllocated}
-                      max={monthlyIncome}
-                      color={allocatedPct <= 80 ? 'green' : allocatedPct <= 100 ? 'amber' : 'red'}
-                    />
-                    <p className="mt-2 text-xs text-slate-500">
-                      {allocatedPct.toFixed(0)}% of {fmt(monthlyIncome, currency)} income
-                    </p>
-                    {allocationParts.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                        {allocationParts.map(p => (
-                          <span key={p.label} className="text-[11px] text-slate-600">
-                            {p.label} <span className="text-slate-400">{fmt(p.value, currency)}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* ── Recurring Bills ── */}
               <BudgetTile
                 icon="💡"
                 label="Bills"
@@ -363,7 +272,27 @@ export default function BudgetPage() {
                 onClick={() => setBillsOpen(true)}
               />
 
-              {/* ── Shopee Pay Later ── */}
+              <BudgetTile
+                icon="⚡"
+                label="Electric"
+                value={fmt(liveElectric, currency)}
+                status={
+                  settings.appliances.filter(a => a.enabled).length > 0
+                    ? `${settings.appliances.filter(a => a.enabled).length} running`
+                    : 'nothing running'
+                }
+                statusTone={settings.appliances.filter(a => a.enabled).length > 0 ? 'warn' : 'default'}
+                onClick={() => setElectricOpen(true)}
+              />
+
+              <BudgetTile
+                icon="🌱"
+                label="Savings"
+                value={monthlySavingsTarget > 0 ? `${fmt(monthlySavingsTarget, currency)}/mo` : 'Not set'}
+                status={monthlySavingsTarget > 0 ? 'set aside each month' : 'tap to set a target'}
+                onClick={() => setSavingsOpen(true)}
+              />
+
               <BudgetTile
                 icon="🛍️"
                 label="Shopee"
@@ -377,16 +306,6 @@ export default function BudgetPage() {
                 href="/shopee"
               />
 
-              {/* ── Savings Target ── */}
-              <BudgetTile
-                icon="🌱"
-                label="Savings"
-                value={monthlySavingsTarget > 0 ? `${fmt(monthlySavingsTarget, currency)}/mo` : 'Not set'}
-                status={monthlySavingsTarget > 0 ? 'set aside each month' : 'tap to set a target'}
-                onClick={() => setSavingsOpen(true)}
-              />
-
-              {/* ── Emergency Fund ── */}
               <BudgetTile
                 icon="🛡️"
                 label="Emergency"
@@ -404,115 +323,18 @@ export default function BudgetPage() {
                 href="/emergency-fund"
               />
 
-            </div>{/* end left col */}
+            </div>
 
-            {/* ══ RIGHT COLUMN ═════════════════════════════════════════════ */}
-            <div className="space-y-6 mt-6 md:mt-0">
+            {/* ── Categories ── */}
+            <CategoryGrid
+              categories={allCategories}
+              spentFor={spentFor}
+              budgets={categoryBudgets}
+              currency={currency}
+              onSelect={key => openCatEdit(key as Category)}
+              onAdd={() => setAddCatOpen(true)}
+            />
 
-              {/* ── Electric ── */}
-              <BudgetTile
-                icon="⚡"
-                label="Electric"
-                value={fmt(liveElectric, currency)}
-                status={
-                  settings.appliances.filter(a => a.enabled).length > 0
-                    ? `${settings.appliances.filter(a => a.enabled).length} running`
-                    : 'nothing running'
-                }
-                statusTone={settings.appliances.filter(a => a.enabled).length > 0 ? 'warn' : 'default'}
-                onClick={() => setElectricOpen(true)}
-              />
-
-              {/* ── Category Budgets ── */}
-              <div>
-                <SectionHeader
-                  title="Category Budgets"
-                  action={
-                    <button onClick={() => setAddCatOpen(true)}
-                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
-                      <PlusIcon className="w-3.5 h-3.5" /> Add
-                    </button>
-                  }
-                />
-                <div className="space-y-2">
-                  {allCategories.map(({ key, label, icon }) => {
-                    const budget = categoryBudgets[key] ?? 0;
-                    const spent = spentFor(key);
-                    const hasBudget = budget > 0;
-                    const remaining = budget - spent;
-                    const pct = hasBudget ? (spent / budget) * 100 : 0;
-                    const over = hasBudget && spent > budget;
-
-                    return (
-                      <div key={key} className="rounded-xl bg-[#111827] border border-[#1e2d40] p-4">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-lg shrink-0">
-                            {icon}
-                          </div>
-                          <p className="flex-1 text-sm font-medium text-white">{label}</p>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <p className="text-sm font-medium text-white">
-                              {hasBudget ? fmt(budget, currency) : <span className="text-slate-500">Not set</span>}
-                            </p>
-                            <button onClick={() => openCatEdit(key)}
-                              title="Edit budget"
-                              className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
-                              <PencilIcon className="w-3.5 h-3.5 text-slate-500 hover:text-slate-200" />
-                            </button>
-                            <button onClick={() => setConfirmDeleteCat(key)}
-                              title="Delete category"
-                              className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
-                              <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
-                            </button>
-                          </div>
-                        </div>
-                        {hasBudget ? (
-                          <>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <p className="text-xs text-slate-500">
-                                {fmt(spent, currency)} <span className="text-slate-600">/ {fmt(budget, currency)}</span>
-                              </p>
-                              <p className={`text-xs font-medium ${over ? 'text-red-400' : 'text-slate-400'}`}>
-                                {over ? `${fmt(Math.abs(remaining), currency)} over` : `${fmt(remaining, currency)} left`}
-                              </p>
-                            </div>
-                            <ProgressBar value={spent} max={budget} color={paceColor(pct)} />
-                          </>
-                        ) : (
-                          <p className="text-xs text-slate-600">
-                            No budget set · {fmt(spent, currency)} spent this month
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Removed built-ins — restorable, since they can't be truly deleted. */}
-                {hiddenBuiltIns.length > 0 && (
-                  <div className="mt-4 rounded-xl border border-dashed border-[#1e2d40] p-3">
-                    <p className="mb-2 text-[11px] uppercase tracking-widest text-slate-600">
-                      Removed
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {hiddenBuiltIns.map(({ key, label, icon }) => (
-                        <button
-                          key={key}
-                          onClick={() => restoreCategory(key)}
-                          title={`Restore ${label}`}
-                          className="flex items-center gap-1.5 rounded-lg border border-[#1e2d40] bg-white/5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
-                        >
-                          <span className="opacity-50">{icon}</span>
-                          {label}
-                          <span className="text-slate-600">· restore</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-            </div>{/* end right col */}
           </div>
         </div>
       </div>
@@ -607,6 +429,14 @@ export default function BudgetPage() {
             <button onClick={saveCatEdit} className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white">
               Save
             </button>
+            {/* The per-card trash icon is gone, so this sheet is the only route
+                to deletion. Close it first, so one overlay shows at a time. */}
+            <button
+              onClick={() => { const k = editCat; setEditCat(null); setConfirmDeleteCat(k); }}
+              className="mt-3 w-full rounded-xl bg-white/5 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              {customCategories.some(c => c.key === editCat) ? 'Delete category' : 'Remove category'}
+            </button>
           </BottomSheet>
         );
       })()}
@@ -637,6 +467,27 @@ export default function BudgetPage() {
             className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40">
             Add Category
           </button>
+
+          {/* Removed built-ins — restorable, since they can't be truly deleted. */}
+          {hiddenBuiltIns.length > 0 && (
+            <div className="mt-6 border-t border-[#1e2d40] pt-4">
+              <p className="mb-2 text-[11px] uppercase tracking-widest text-slate-600">Removed</p>
+              <div className="flex flex-wrap gap-2">
+                {hiddenBuiltIns.map(({ key, label, icon }) => (
+                  <button
+                    key={key}
+                    onClick={() => restoreCategory(key)}
+                    title={`Restore ${label}`}
+                    className="flex items-center gap-1.5 rounded-lg border border-[#1e2d40] bg-white/5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
+                  >
+                    <span className="opacity-50">{icon}</span>
+                    {label}
+                    <span className="text-slate-600">· restore</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </BottomSheet>
       )}
 
