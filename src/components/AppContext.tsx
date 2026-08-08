@@ -24,6 +24,28 @@ export interface Expense {
   walletId: string; note: string; date: string;
 }
 
+// Money that moves in or out of a wallet without being a categorised expense.
+//   earned    — money in.  walletId is the destination. `source` is set.
+//   withdrawn — money out. walletId is the source.
+//   moved     — wallet-to-wallet. walletId → toWalletId. Net-zero overall,
+//               so it is deliberately excluded from earned/spent totals.
+export type MoneyMoveKind = 'earned' | 'withdrawn' | 'moved';
+export type IncomeSource = 'salary' | 'freelance' | 'gift' | 'refund' | 'other';
+
+export const INCOME_SOURCES: { key: IncomeSource; label: string; icon: string }[] = [
+  { key: 'salary',    label: 'Salary',    icon: '💼' },
+  { key: 'freelance', label: 'Freelance', icon: '💻' },
+  { key: 'gift',      label: 'Gift',      icon: '🎁' },
+  { key: 'refund',    label: 'Refund',    icon: '↩️' },
+  { key: 'other',     label: 'Other',     icon: '✦'  },
+];
+
+export interface MoneyMove {
+  id: string; kind: MoneyMoveKind; amount: number;
+  walletId: string; toWalletId: string | null;
+  source: IncomeSource | null; note: string; date: string;
+}
+
 export interface Bill {
   id: string; name: string; amount: number;
   paidMonths: string[]; // 'YYYY-MM' strings — resets each month naturally
@@ -74,6 +96,7 @@ interface EmergencyFund {
 interface Computed {
   totalBalance: number;
   totalExpensesThisMonth: number;
+  receivedThisMonth: number;
   projectedSavings: number;
   spendingPacePercent: number;
   daysUntilPayday: number;
@@ -86,6 +109,7 @@ interface Computed {
 interface AppContextValue extends Computed {
   wallets: Wallet[];
   expenses: Expense[];
+  moneyMoves: MoneyMove[];
   settings: Settings;
   shopeeSchedule: ShopeePayment[];
   shopeeNewPurchaseLock: boolean;
@@ -96,6 +120,10 @@ interface AppContextValue extends Computed {
   deleteWallet: (id: string) => Promise<void>;
   addExpense: (e: Omit<Expense, 'id' | 'date'>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
+  addIncome: (m: { walletId: string; amount: number; source: IncomeSource; note: string }) => Promise<void>;
+  addWithdrawal: (m: { walletId: string; amount: number; note: string }) => Promise<void>;
+  addTransfer: (m: { fromWalletId: string; toWalletId: string; amount: number; note: string }) => Promise<void>;
+  deleteMoneyMove: (id: string) => Promise<void>;
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
   addShopeePayment: (p: Omit<ShopeePayment, 'id'>) => Promise<void>;
   updateShopeePayment: (id: string, updates: Partial<ShopeePayment>) => Promise<void>;
@@ -208,6 +236,12 @@ const fromDBExpense    = (r: Row): Expense    => ({
   id: r.id, amount: Number(r.amount), category: r.category as Category,
   walletId: r.wallet_id, note: r.note || '', date: r.date,
 });
+const fromDBMoneyMove  = (r: Row): MoneyMove  => ({
+  id: r.id, kind: r.kind as MoneyMoveKind, amount: Number(r.amount),
+  walletId: r.wallet_id, toWalletId: r.to_wallet_id ?? null,
+  source: (r.source ?? null) as IncomeSource | null,
+  note: r.note || '', date: r.date,
+});
 const fromDBShopee     = (r: Row): ShopeePayment => ({
   id: r.id, month: String(r.month || '').slice(0, 7),
   amount: Number(r.amount), status: r.status as ShopeeStatus,
@@ -236,6 +270,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 export function AppProvider({ children, userId }: { children: ReactNode; userId: string | null }) {
   const [wallets,              setWallets]              = useState<Wallet[]>([]);
   const [expenses,             setExpenses]             = useState<Expense[]>([]);
+  const [moneyMoves,           setMoneyMoves]           = useState<MoneyMove[]>([]);
   const [settings,             setSettings]             = useState<Settings>(defaultSettings);
   const [shopeeSchedule,       setShopeeSchedule]       = useState<ShopeePayment[]>([]);
   const [shopeeNewPurchaseLock, setLock]                = useState(false);
@@ -245,7 +280,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // ── Load / clear on auth change ──────────────────────────────────────────
   useEffect(() => {
     if (!userId) {
-      setWallets([]); setExpenses([]); setSettings(defaultSettings);
+      setWallets([]); setExpenses([]); setMoneyMoves([]); setSettings(defaultSettings);
       setShopeeSchedule([]); setLock(false);
       setEmergencyFund({ entries: [], currentAmount: 0 });
       return;
@@ -256,10 +291,11 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
   async function loadAll(uid: string) {
     setDataLoading(true);
-    const [sRes, wRes, eRes, bRes, blRes, aRes, spRes, efRes] = await Promise.all([
+    const [sRes, wRes, eRes, mmRes, bRes, blRes, aRes, spRes, efRes] = await Promise.all([
       supabase.from('settings').select('*').eq('user_id', uid).single(),
       supabase.from('wallets').select('*').eq('user_id', uid).order('created_at'),
       supabase.from('expenses').select('*').eq('user_id', uid).order('date', { ascending: false }),
+      supabase.from('money_moves').select('*').eq('user_id', uid).order('date', { ascending: false }),
       supabase.from('bills').select('*').eq('user_id', uid),
       supabase.from('budget_lines').select('*').eq('user_id', uid).order('sort_order'),
       supabase.from('appliances').select('*').eq('user_id', uid),
@@ -280,6 +316,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
     if (wRes.data)  setWallets(wRes.data.map(fromDBWallet));
     if (eRes.data)  setExpenses(eRes.data.map(fromDBExpense));
+    if (mmRes.data) setMoneyMoves(mmRes.data.map(fromDBMoneyMove));
     if (spRes.data) setShopeeSchedule(spRes.data.map(fromDBShopee));
     if (efRes.data) {
       const entries = efRes.data.map(fromDBEFEntry);
@@ -297,6 +334,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
     });
     const totalExpensesThisMonth = monthExpenses.reduce((s, e) => s + e.amount, 0);
+    // Actual money received this month. Kept separate from settings.monthlyIncome
+    // (the planned figure) — no budget formula below reads this.
+    const receivedThisMonth = moneyMoves
+      .filter(mm => {
+        if (mm.kind !== 'earned') return false;
+        const d = new Date(mm.date);
+        return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+      })
+      .reduce((s, mm) => s + mm.amount, 0);
     const totalBills = settings.bills.reduce((s, b) => s + b.amount, 0);
     const daysElapsed = today.getDate();
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
@@ -308,14 +354,14 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const nextPaydayDate = computeNextPayday(settings);
     const pending = shopeeSchedule.filter(p => p.status !== 'paid');
     return {
-      totalBalance, totalExpensesThisMonth, projectedSavings, spendingPacePercent,
+      totalBalance, totalExpensesThisMonth, receivedThisMonth, projectedSavings, spendingPacePercent,
       daysUntilPayday: daysUntil(nextPaydayDate ? new Date(nextPaydayDate) : null),
       nextPaydayDate,
       electricBillEstimate: calcElectric(settings),
       shopeeRemainingBalance: pending.reduce((s, p) => s + p.amount, 0),
       shopeeDebtFreeDate: pending.length > 0 ? pending[pending.length - 1].month : null,
     };
-  }, [wallets, expenses, settings, shopeeSchedule]);
+  }, [wallets, expenses, moneyMoves, settings, shopeeSchedule]);
 
   // ── Wallets ───────────────────────────────────────────────────────────────
   const addWallet = async (w: Omit<Wallet, 'id'>) => {
@@ -373,6 +419,84 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await Promise.all([
       supabase.from('expenses').delete().eq('id', id),
       supabase.from('wallets').update({ balance: newBalance }).eq('id', found.walletId),
+    ]);
+  };
+
+  // ── Money moves (top-ups, withdrawals, transfers) ─────────────────────────
+  // Every balance change outside of expenses goes through here so it leaves a
+  // record. Balances are applied optimistically, then persisted alongside the row.
+  const recordMove = async (
+    move: Omit<MoneyMove, 'id' | 'date'>,
+    balanceUpdates: Record<string, number>,
+  ) => {
+    if (!userId) return;
+    const now = new Date().toISOString();
+    const tempId = crypto.randomUUID();
+
+    setMoneyMoves(prev => [{ ...move, id: tempId, date: now }, ...prev]);
+    setWallets(prev => prev.map(w => w.id in balanceUpdates ? { ...w, balance: balanceUpdates[w.id] } : w));
+
+    const [moveRes] = await Promise.all([
+      supabase.from('money_moves').insert({
+        user_id: userId, kind: move.kind, amount: move.amount,
+        wallet_id: move.walletId, to_wallet_id: move.toWalletId,
+        source: move.source, note: move.note, date: now,
+      }).select().single(),
+      ...Object.entries(balanceUpdates).map(([id, balance]) =>
+        supabase.from('wallets').update({ balance }).eq('id', id)
+      ),
+    ]);
+    if (moveRes.data) {
+      setMoneyMoves(prev => prev.map(m => m.id === tempId ? fromDBMoneyMove(moveRes.data) : m));
+    }
+  };
+
+  const balanceOf = (id: string) => wallets.find(w => w.id === id)?.balance ?? 0;
+
+  const addIncome = async (m: { walletId: string; amount: number; source: IncomeSource; note: string }) =>
+    recordMove(
+      { kind: 'earned', amount: m.amount, walletId: m.walletId, toWalletId: null, source: m.source, note: m.note },
+      { [m.walletId]: balanceOf(m.walletId) + m.amount },
+    );
+
+  const addWithdrawal = async (m: { walletId: string; amount: number; note: string }) =>
+    recordMove(
+      { kind: 'withdrawn', amount: m.amount, walletId: m.walletId, toWalletId: null, source: null, note: m.note },
+      { [m.walletId]: balanceOf(m.walletId) - m.amount },
+    );
+
+  const addTransfer = async (m: { fromWalletId: string; toWalletId: string; amount: number; note: string }) =>
+    recordMove(
+      { kind: 'moved', amount: m.amount, walletId: m.fromWalletId, toWalletId: m.toWalletId, source: null, note: m.note },
+      {
+        [m.fromWalletId]: balanceOf(m.fromWalletId) - m.amount,
+        [m.toWalletId]:   balanceOf(m.toWalletId)   + m.amount,
+      },
+    );
+
+  const deleteMoneyMove = async (id: string) => {
+    const found = moneyMoves.find(m => m.id === id);
+    if (!found) return;
+
+    // Undo whatever the move did to the wallets it touched.
+    const updates: Record<string, number> = {};
+    if (found.kind === 'earned') {
+      updates[found.walletId] = balanceOf(found.walletId) - found.amount;
+    } else if (found.kind === 'withdrawn') {
+      updates[found.walletId] = balanceOf(found.walletId) + found.amount;
+    } else if (found.toWalletId) {
+      updates[found.walletId]   = balanceOf(found.walletId)   + found.amount;
+      updates[found.toWalletId] = balanceOf(found.toWalletId) - found.amount;
+    }
+
+    setMoneyMoves(prev => prev.filter(m => m.id !== id));
+    setWallets(prev => prev.map(w => w.id in updates ? { ...w, balance: updates[w.id] } : w));
+
+    await Promise.all([
+      supabase.from('money_moves').delete().eq('id', id),
+      ...Object.entries(updates).map(([wid, balance]) =>
+        supabase.from('wallets').update({ balance }).eq('id', wid)
+      ),
     ]);
   };
 
@@ -597,6 +721,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // Optimistic local updates
     setWallets(prev => prev.map(w => w.id in walletBalances ? { ...w, balance: walletBalances[w.id] } : w));
     setExpenses(prev => prev.filter(e => !(e.date >= monthStart && e.date < nextStart)));
+    setMoneyMoves(prev => prev.filter(m => !(m.date >= monthStart && m.date < nextStart)));
     setSettings(prev => ({
       ...prev,
       appliances: prev.appliances.map(a => ({
@@ -611,6 +736,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
         supabase.from('wallets').update({ balance }).eq('id', id)
       ),
       supabase.from('expenses').delete()
+        .eq('user_id', userId).gte('date', monthStart).lt('date', nextStart),
+      supabase.from('money_moves').delete()
         .eq('user_id', userId).gte('date', monthStart).lt('date', nextStart),
       ...settings.appliances.map(a =>
         supabase.from('appliances').update({
@@ -638,11 +765,12 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
   return (
     <AppContext.Provider value={{
-      wallets, expenses, settings, shopeeSchedule, shopeeNewPurchaseLock,
+      wallets, expenses, moneyMoves, settings, shopeeSchedule, shopeeNewPurchaseLock,
       emergencyFund, dataLoading,
       ...computed,
       addWallet, updateWallet, deleteWallet,
       addExpense, deleteExpense,
+      addIncome, addWithdrawal, addTransfer, deleteMoneyMove,
       updateSettings,
       addShopeePayment, updateShopeePayment, deleteShopeePayment,
       setShopeeNewPurchaseLock,

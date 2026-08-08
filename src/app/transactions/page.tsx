@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useApp, fmt, Category } from '@/components/AppContext';
+import { useApp, fmt, Category, INCOME_SOURCES } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, ReceiptIcon } from '@/components/Icons';
@@ -24,8 +24,20 @@ function abbrev(n: number): string {
   return String(Math.round(n));
 }
 
+// One row in the unified activity feed. Expenses and money moves are different
+// tables, so they get normalised into this shape before display.
+//   spent — expenses and wallet withdrawals
+//   earned — wallet top-ups
+//   moved — wallet-to-wallet transfers. Net-zero, so excluded from both totals.
+type Flow = 'spent' | 'earned' | 'moved';
+
+interface FeedItem {
+  id: string; date: string; flow: Flow;
+  icon: string; label: string; sub: string; amount: number;
+}
+
 export default function TransactionsPage() {
-  const { expenses, wallets, settings } = useApp();
+  const { expenses, moneyMoves, wallets, settings } = useApp();
   const { currency } = settings;
 
   const today = new Date();
@@ -45,20 +57,68 @@ export default function TransactionsPage() {
     return { icon: CATEGORY_ICONS[key] ?? '✦', label: key };
   };
 
-  // Expenses within the displayed month, plus per-day totals.
-  const { monthExpenses, totals, monthTotal } = useMemo(() => {
-    const inMonth = expenses.filter(e => {
-      const d = new Date(e.date);
+  // Join a note and a wallet name into the one-line subtitle, skipping blanks.
+  const subtitle = (note: string, wallet: string) => [note, wallet].filter(Boolean).join(' · ');
+
+  // Everything in the displayed month, normalised and bucketed by day.
+  const { monthItems, totals, monthSpent, monthEarned } = useMemo(() => {
+    const inMonth = (iso: string) => {
+      const d = new Date(iso);
       return d.getFullYear() === y && d.getMonth() === m;
-    });
-    const totals: Record<string, number> = {};
-    for (const e of inMonth) {
-      const k = dayKey(new Date(e.date));
-      totals[k] = (totals[k] ?? 0) + e.amount;
+    };
+
+    const items: FeedItem[] = [
+      ...expenses.filter(e => inMonth(e.date)).map((e): FeedItem => ({
+        id: e.id, date: e.date, flow: 'spent',
+        icon: catMeta(e.category).icon,
+        label: catMeta(e.category).label,
+        sub: subtitle(e.note, walletName(e.walletId)),
+        amount: e.amount,
+      })),
+      ...moneyMoves.filter(mm => inMonth(mm.date)).map((mm): FeedItem => {
+        if (mm.kind === 'earned') {
+          const src = INCOME_SOURCES.find(s => s.key === mm.source);
+          return {
+            id: mm.id, date: mm.date, flow: 'earned',
+            icon: src?.icon ?? '✦', label: src?.label ?? 'Income',
+            sub: subtitle(mm.note, walletName(mm.walletId)),
+            amount: mm.amount,
+          };
+        }
+        if (mm.kind === 'withdrawn') {
+          return {
+            id: mm.id, date: mm.date, flow: 'spent',
+            icon: '🏧', label: 'Withdrawal',
+            sub: subtitle(mm.note, walletName(mm.walletId)),
+            amount: mm.amount,
+          };
+        }
+        return {
+          id: mm.id, date: mm.date, flow: 'moved',
+          icon: '🔄', label: 'Transfer',
+          sub: subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId ?? '')}`),
+          amount: mm.amount,
+        };
+      }),
+    ];
+
+    // Per-day spent/earned. Transfers move money between your own wallets, so
+    // counting them either way would misreport the month.
+    const totals: Record<string, { spent: number; earned: number }> = {};
+    for (const it of items) {
+      if (it.flow === 'moved') continue;
+      const k = dayKey(new Date(it.date));
+      (totals[k] ??= { spent: 0, earned: 0 })[it.flow] += it.amount;
     }
-    const monthTotal = inMonth.reduce((s, e) => s + e.amount, 0);
-    return { monthExpenses: inMonth, totals, monthTotal };
-  }, [expenses, y, m]);
+
+    return {
+      monthItems: items,
+      totals,
+      monthSpent:  items.filter(i => i.flow === 'spent').reduce((s, i) => s + i.amount, 0),
+      monthEarned: items.filter(i => i.flow === 'earned').reduce((s, i) => s + i.amount, 0),
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenses, moneyMoves, wallets, settings.customCategories, y, m]);
 
   // Calendar cells: leading blanks then each day of the month.
   const cells = useMemo(() => {
@@ -69,24 +129,24 @@ export default function TransactionsPage() {
     return arr;
   }, [y, m]);
 
-  // Transactions grouped by day (newest first), filtered to the selected date if any.
+  // Grouped by day (newest first), filtered to the selected date if any.
   const groups = useMemo(() => {
     const source = selectedKey
-      ? monthExpenses.filter(e => dayKey(new Date(e.date)) === selectedKey)
-      : monthExpenses;
-    const byDay: Record<string, typeof source> = {};
-    for (const e of source) {
-      const k = dayKey(new Date(e.date));
-      (byDay[k] ??= []).push(e);
+      ? monthItems.filter(i => dayKey(new Date(i.date)) === selectedKey)
+      : monthItems;
+    const byDay: Record<string, FeedItem[]> = {};
+    for (const it of source) {
+      (byDay[dayKey(new Date(it.date))] ??= []).push(it);
     }
     return Object.keys(byDay)
       .sort((a, b) => b.localeCompare(a))
       .map(k => ({
         key: k,
-        total: byDay[k].reduce((s, e) => s + e.amount, 0),
+        spent:  byDay[k].filter(i => i.flow === 'spent').reduce((s, i) => s + i.amount, 0),
+        earned: byDay[k].filter(i => i.flow === 'earned').reduce((s, i) => s + i.amount, 0),
         items: byDay[k].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       }));
-  }, [monthExpenses, selectedKey]);
+  }, [monthItems, selectedKey]);
 
   const todayKey = dayKey(today);
 
@@ -122,7 +182,11 @@ export default function TransactionsPage() {
               </button>
               <div className="text-center">
                 <p className="text-sm font-semibold text-white">{monthLabel}</p>
-                <p className="text-[11px] text-slate-500">Spent {fmt(monthTotal, currency)}</p>
+                <p className="text-[11px] text-slate-500">
+                  <span className="text-emerald-400">+{fmt(monthEarned, currency)}</span>
+                  {' · '}
+                  <span className="text-red-400">-{fmt(monthSpent, currency)}</span>
+                </p>
               </div>
               <button onClick={() => changeMonth(1)}
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">
@@ -140,27 +204,33 @@ export default function TransactionsPage() {
               {cells.map((d, i) => {
                 if (d === null) return <div key={`b${i}`} />;
                 const key = dayKey(new Date(y, m, d));
-                const spent = totals[key];
+                const t = totals[key];
+                const active = Boolean(t && (t.spent > 0 || t.earned > 0));
                 const isToday = key === todayKey;
                 const isSelected = key === selectedKey;
                 return (
                   <button
                     key={key}
-                    onClick={() => spent && toggleDay(key)}
-                    className={`flex flex-col items-center justify-start rounded-lg py-1.5 min-h-[46px] transition-colors ${
+                    onClick={() => active && toggleDay(key)}
+                    className={`flex flex-col items-center justify-start rounded-lg py-1.5 min-h-[54px] transition-colors ${
                       isSelected ? 'bg-blue-600/25 border border-blue-500'
-                      : spent ? 'bg-white/5 border border-transparent hover:bg-white/10'
+                      : active ? 'bg-white/5 border border-transparent hover:bg-white/10'
                       : 'border border-transparent'
                     }`}
                   >
                     <span className={`text-xs leading-none ${
-                      isToday ? 'font-bold text-blue-400' : spent ? 'text-white' : 'text-slate-600'
+                      isToday ? 'font-bold text-blue-400' : active ? 'text-white' : 'text-slate-600'
                     }`}>
                       {d}
                     </span>
-                    {spent ? (
-                      <span className="mt-1 text-[9px] font-medium leading-none text-red-400">
-                        {abbrev(spent)}
+                    {t && t.earned > 0 ? (
+                      <span className="mt-1 text-[9px] font-medium leading-none text-emerald-400">
+                        +{abbrev(t.earned)}
+                      </span>
+                    ) : null}
+                    {t && t.spent > 0 ? (
+                      <span className="mt-0.5 text-[9px] font-medium leading-none text-red-400">
+                        -{abbrev(t.spent)}
                       </span>
                     ) : null}
                   </button>
@@ -169,7 +239,7 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          {/* ── Grouped transaction list ── */}
+          {/* ── Grouped activity list ── */}
           {selectedKey && (
             <button onClick={() => setSelectedKey(null)}
               className="mb-3 text-xs text-blue-400 hover:text-blue-300">
@@ -180,7 +250,7 @@ export default function TransactionsPage() {
           {groups.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-10 text-center">
               <ReceiptIcon className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-              <p className="text-sm text-slate-500 mb-1">No transactions this month.</p>
+              <p className="text-sm text-slate-500 mb-1">No activity this month.</p>
               <Link href="/expenses/new" className="text-xs text-blue-400 underline underline-offset-2">
                 Log an expense
               </Link>
@@ -196,20 +266,32 @@ export default function TransactionsPage() {
                       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                         {g.key === todayKey ? 'Today' : label}
                       </p>
-                      <p className="text-xs font-medium text-red-400">-{fmt(g.total, currency)}</p>
+                      <p className="text-xs font-medium">
+                        {g.earned > 0 && (
+                          <span className="text-emerald-400">+{fmt(g.earned, currency)}</span>
+                        )}
+                        {g.earned > 0 && g.spent > 0 && <span className="text-slate-600"> · </span>}
+                        {g.spent > 0 && (
+                          <span className="text-red-400">-{fmt(g.spent, currency)}</span>
+                        )}
+                      </p>
                     </div>
                     <div className="space-y-2">
-                      {g.items.map(e => (
-                        <div key={e.id} className="flex items-center gap-3 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3">
-                          <div className="text-base shrink-0">{catMeta(e.category).icon}</div>
+                      {g.items.map(it => (
+                        <div key={it.id} className="flex items-center gap-3 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3">
+                          <div className="text-base shrink-0">{it.icon}</div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white capitalize">{catMeta(e.category).label}</p>
-                            <p className="text-xs text-slate-500 truncate">
-                              {e.note ? e.note : walletName(e.walletId)}
-                              {e.note && walletName(e.walletId) ? ` · ${walletName(e.walletId)}` : ''}
-                            </p>
+                            <p className="text-sm text-white capitalize">{it.label}</p>
+                            <p className="text-xs text-slate-500 truncate">{it.sub}</p>
                           </div>
-                          <p className="text-sm font-medium text-red-400 shrink-0">-{fmt(e.amount, currency)}</p>
+                          <p className={`text-sm font-medium shrink-0 ${
+                            it.flow === 'earned' ? 'text-emerald-400'
+                            : it.flow === 'moved' ? 'text-slate-400'
+                            : 'text-red-400'
+                          }`}>
+                            {it.flow === 'earned' ? '+' : it.flow === 'moved' ? '' : '-'}
+                            {fmt(it.amount, currency)}
+                          </p>
                         </div>
                       ))}
                     </div>

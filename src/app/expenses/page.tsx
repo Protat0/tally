@@ -85,6 +85,7 @@ export default function BudgetPage() {
     addShopeePayment, updateShopeePayment, deleteShopeePayment,
     emergencyFund, addEmergencyFundEntry,
     toggleBillPaid, updateBill,
+    receivedThisMonth,
   } = useApp();
 
   const { currency, bills, budgetLines, monthlyIncome, monthlySavingsTarget, categoryBudgets, customCategories } = settings;
@@ -308,6 +309,28 @@ export default function BudgetPage() {
                     />
                   </div>
                 </div>
+
+                {/* Actual money received, from wallet top-ups. Deliberately does not
+                    feed the allocation maths below — that stays based on the plan. */}
+                {(monthlyIncome > 0 || receivedThisMonth > 0) && (
+                  <div className="flex items-baseline justify-between gap-3 pb-4 mb-4 border-b border-[#1e2d40]">
+                    <div>
+                      <p className="text-xs text-slate-500">Received this month</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Actual top-ups logged to your wallets</p>
+                    </div>
+                    <p className="text-right shrink-0">
+                      <span className={`text-lg font-bold ${receivedThisMonth > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                        {fmt(receivedThisMonth, currency)}
+                      </span>
+                      {monthlyIncome > 0 && (
+                        <span className="block text-[11px] text-slate-600">
+                          of {fmt(monthlyIncome, currency)} expected
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
                 {monthlyIncome === 0 ? (
                   <p className="text-sm text-slate-400 text-center py-1">Enter your monthly income above to start budgeting.</p>
                 ) : (

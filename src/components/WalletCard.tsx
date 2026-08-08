@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useApp, fmt, Wallet } from './AppContext';
+import { useApp, fmt, Wallet, IncomeSource, INCOME_SOURCES } from './AppContext';
 import { PlusIcon, ArrowUpIcon, ArrowDownIcon, SwitchIcon, TrashIcon } from './Icons';
 
 interface Props {
@@ -15,29 +15,34 @@ interface ActionModal {
 }
 
 export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
-  const { updateWallet, wallets } = useApp();
+  const { wallets, addIncome, addWithdrawal, addTransfer } = useApp();
   const [modal, setModal] = useState<ActionModal | null>(null);
   const [inputVal, setInputVal] = useState('');
   const [targetId, setTargetId] = useState('');
+  const [note, setNote] = useState('');
+  const [source, setSource] = useState<IncomeSource>('salary');
 
-  const closeModal = () => { setModal(null); setInputVal(''); setTargetId(''); };
+  const closeModal = () => {
+    setModal(null); setInputVal(''); setTargetId(''); setNote(''); setSource('salary');
+  };
 
   const confirm = () => {
     const amt = parseFloat(inputVal);
     if (isNaN(amt) || amt <= 0) return;
+    const trimmed = note.trim();
     if (modal?.type === 'add') {
-      updateWallet(wallet.id, { balance: wallet.balance + amt });
+      addIncome({ walletId: wallet.id, amount: amt, source, note: trimmed });
     } else if (modal?.type === 'withdraw') {
-      updateWallet(wallet.id, { balance: wallet.balance - amt });
-    } else if (modal?.type === 'transfer' && targetId) {
-      const target = wallets.find(w => w.id === targetId);
-      if (target) {
-        updateWallet(wallet.id, { balance: wallet.balance - amt });
-        updateWallet(targetId, { balance: target.balance + amt });
-      }
+      addWithdrawal({ walletId: wallet.id, amount: amt, note: trimmed });
+    } else if (modal?.type === 'transfer') {
+      if (!targetId) return;
+      addTransfer({ fromWalletId: wallet.id, toWalletId: targetId, amount: amt, note: trimmed });
     }
     closeModal();
   };
+
+  const amount = parseFloat(inputVal);
+  const canConfirm = !isNaN(amount) && amount > 0 && (modal?.type !== 'transfer' || Boolean(targetId));
 
   const others = wallets.filter(w => w.id !== wallet.id);
 
@@ -105,6 +110,23 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
               className="mb-3 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 text-center text-2xl font-bold outline-none focus:border-blue-500/50"
               autoFocus
             />
+            {modal.type === 'add' && (
+              <>
+                <p className="mb-2 text-xs text-slate-500">Source</p>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {INCOME_SOURCES.map(s => (
+                    <button
+                      key={s.key}
+                      onClick={() => setSource(s.key)}
+                      className={`flex items-center gap-1.5 rounded-xl px-3 py-2 border text-sm transition-colors ${source === s.key ? 'border-emerald-500 bg-emerald-500/15 text-white' : 'border-[#1e2d40] bg-white/5 text-slate-300'}`}
+                    >
+                      <span>{s.icon}</span>{s.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
             {modal.type === 'transfer' && (
               <div className="mb-3 space-y-2">
                 {others.length === 0 ? (
@@ -124,9 +146,19 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
                 )}
               </div>
             )}
+
+            <input
+              type="text"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Note (optional)"
+              className="mb-3 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 text-sm outline-none focus:border-blue-500/50"
+            />
+
             <button
               onClick={confirm}
-              className="w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white active:bg-blue-700 transition-colors"
+              disabled={!canConfirm}
+              className="w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white active:bg-blue-700 disabled:opacity-40 transition-colors"
             >
               Confirm
             </button>
