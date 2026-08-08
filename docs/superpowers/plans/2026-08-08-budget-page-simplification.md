@@ -54,7 +54,7 @@ Extract the sheet chrome duplicated across the page's three existing sheets. Pur
 **Interfaces:**
 - Produces: `BottomSheet({ onClose, children }: { onClose: () => void; children: React.ReactNode })` — default export.
 
-- [ ] **Step 1: Create the component**
+- [x] **Step 1: Create the component**
 
 ```tsx
 'use client';
@@ -87,7 +87,7 @@ export default function BottomSheet({ onClose, children }: Props) {
 
 `max-h-[85vh] overflow-y-auto` is new — later tasks put long lists (bills, appliances) in sheets.
 
-- [ ] **Step 2: Import it in the page**
+- [x] **Step 2: Import it in the page**
 
 Add to the import block at the top of `src/app/expenses/page.tsx`:
 
@@ -95,7 +95,7 @@ Add to the import block at the top of `src/app/expenses/page.tsx`:
 import BottomSheet from '@/components/BottomSheet';
 ```
 
-- [ ] **Step 3: Convert the Edit Bill sheet**
+- [x] **Step 3: Convert the Edit Bill sheet**
 
 Replace the outer wrapper (the `fixed inset-0` div, the backdrop div, the panel div, and the drag-handle div) with `BottomSheet`, keeping the inner content:
 
@@ -126,7 +126,7 @@ Replace the outer wrapper (the `fixed inset-0` div, the backdrop div, the panel 
 )}
 ```
 
-- [ ] **Step 4: Convert the Edit Category Budget sheet the same way**
+- [x] **Step 4: Convert the Edit Category Budget sheet the same way**
 
 ```tsx
 {editCat && (() => {
@@ -146,11 +146,11 @@ Replace the outer wrapper (the `fixed inset-0` div, the backdrop div, the panel 
 })()}
 ```
 
-- [ ] **Step 5: Convert the Add Category sheet the same way**
+- [x] **Step 5: Convert the Add Category sheet the same way**
 
 Wrap its existing inner content (starting at `<p className="font-semibold text-white text-lg mb-5">New Category</p>`) in `<BottomSheet onClose={() => setAddCatOpen(false)}>`, dropping the wrapper/backdrop/handle divs.
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```bash
 npm run build
@@ -161,7 +161,7 @@ Expected: build succeeds; lint shows exactly the 2 errors / 6 warnings baseline.
 
 Manual check — run `npm run dev`, open `/expenses`, and confirm all three sheets still open, close on backdrop click, and save correctly: edit a bill, edit a category budget, add a category.
 
-- [ ] **Step 7: Commit (optional checkpoint)**
+- [x] **Step 7: Commit (optional checkpoint)**
 
 ```bash
 git add src/components/BottomSheet.tsx src/app/expenses/page.tsx
@@ -182,7 +182,7 @@ git commit -m "refactor: extract BottomSheet chrome from budget sheets"
   - `BudgetTile({ icon, label, value, status?, statusTone?, onClick?, href? })` — default export. `statusTone` is `'default' | 'good' | 'warn' | 'bad'`, defaulting to `'default'`. Exactly one of `onClick` / `href` is given.
   - `BillsSheet({ onClose })` — default export; reads bills from `useApp()` itself.
 
-- [ ] **Step 1: Create `BudgetTile`**
+- [x] **Step 1: Create `BudgetTile`**
 
 ```tsx
 'use client';
@@ -234,7 +234,7 @@ export default function BudgetTile({
 }
 ```
 
-- [ ] **Step 2: Create `BillsSheet`**
+- [x] **Step 2: Create `BillsSheet`**
 
 This moves the bills list, the add form, and their state out of the page. `uid` and `InlineAmountInput` are currently private to the page — `BillsSheet` gets its own copies rather than exporting them from a page file.
 
@@ -369,7 +369,7 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
 
 `onEditBill` hands the bill back to the page, which already owns the Edit Bill sheet — keeping one sheet open at a time is the page's job.
 
-- [ ] **Step 3: Wire it into the page**
+- [x] **Step 3: Wire it into the page**
 
 In `src/app/expenses/page.tsx`:
 
@@ -408,7 +408,7 @@ import BillsSheet from '@/components/BillsSheet';
 5. Delete the page's now-unused bills state and handlers: `addBillOpen`/`setAddBillOpen`, `newBillName`, `newBillAmt` (~lines 227-229), `handleAddBill` (~282-288), `removeBill` (~290-291). **Keep** `editBill`, `editBillName`, `editBillAmt`, `openBillEdit`, `saveBillEdit` — the Edit Bill sheet stays on the page.
 6. Remove any import left unused by the deletion (check `CheckIcon`).
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 npm run build
@@ -419,7 +419,7 @@ Expected: build succeeds; lint at baseline, with no new `no-unused-vars` warning
 
 Manual check — `/expenses` shows a Bills tile reading e.g. `₱8,400/mo · 2 of 5 unpaid`. Tapping opens the sheet. Inside: add a bill, toggle it paid (tile's status updates on close), edit it (bills sheet closes, edit sheet opens), delete it.
 
-- [ ] **Step 5: Commit (optional checkpoint)**
+- [x] **Step 5: Commit (optional checkpoint)**
 
 ```bash
 git add src/components/BudgetTile.tsx src/components/BillsSheet.tsx src/app/expenses/page.tsx

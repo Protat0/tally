@@ -6,67 +6,36 @@ A running log of what's been built and what's next, so we can pick up where we l
 
 ---
 
-## ⚠️ Run this migration
+## Migration status — all applied ✅
 
-Category deletion needs one more column. Until it exists, removing a built-in
-category won't survive a reload.
+No outstanding migrations. Every schema object the app reads or writes exists.
 
-```sql
-alter table settings
-  add column if not exists hidden_categories jsonb not null default '[]'::jsonb;
-```
-
----
-
-## ⚠️ Do this first next session
-
-**Two migrations are outstanding.** Run both in the Supabase SQL editor. Until they exist, category budgets won't persist and every wallet Add/Withdraw/Transfer will fail to record.
-
-**1. Category budgets column** (carried over from last session):
-
-```sql
-alter table settings
-  add column if not exists category_budgets jsonb not null default '{}'::jsonb;
-```
-
-**2. Money moves table** (new — powers earned/withdrawn/transfer records):
-
-```sql
-create table if not exists money_moves (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references auth.users(id) on delete cascade,
-  kind         text not null check (kind in ('earned', 'withdrawn', 'moved')),
-  amount       numeric not null check (amount > 0),
-  wallet_id    uuid not null references wallets(id) on delete cascade,
-  to_wallet_id uuid references wallets(id) on delete cascade,
-  source       text,
-  note         text not null default '',
-  date         timestamptz not null default now(),
-  created_at   timestamptz not null default now(),
-  -- transfers need a destination; the other kinds must not have one
-  constraint money_moves_destination check (
-    (kind = 'moved' and to_wallet_id is not null) or
-    (kind <> 'moved' and to_wallet_id is null)
-  )
-);
-
-create index if not exists money_moves_user_date_idx
-  on money_moves (user_id, date desc);
-
-alter table money_moves enable row level security;
-
-create policy "own money_moves" on money_moves
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-```
-
-(You'll see "Success. No rows returned" — that's normal for DDL.)
-
-### Migration status
 | Object | Table | Status |
 | --- | --- | --- |
 | `custom_categories` (jsonb, default `[]`) | `settings` | ✅ Applied |
-| `category_budgets` (jsonb, default `{}`) | `settings` | ❌ **Not yet applied** |
-| `money_moves` (table + RLS policy) | — | ❌ **Not yet applied** |
+| `category_budgets` (jsonb, default `{}`) | `settings` | ✅ Applied 2026-08-08 |
+| `hidden_categories` (jsonb, default `[]`) | `settings` | ✅ Applied 2026-08-08 |
+| `money_moves` (table + index + RLS policy) | — | ✅ Applied 2026-08-08 |
+
+Category budgets now persist, removed built-in categories survive a reload, and
+wallet Add/Withdraw/Transfer records write to `money_moves`.
+
+---
+
+## In progress — Budget page simplification
+
+Plan: `docs/superpowers/plans/2026-08-08-budget-page-simplification.md` (9 tasks).
+Spec: `docs/superpowers/specs/2026-08-08-budget-page-simplification-design.md`.
+
+Collapses the Budget page's seven always-open sections into a hero band, a tile
+grid whose tiles open bottom sheets, and a category card grid. Presentational
+refactor only — no `AppContext` or database changes.
+
+| Task | Status |
+| --- | --- |
+| 1. `BottomSheet` primitive | ✅ Done (`9a4f2e8`) |
+| 2. `BudgetTile` + Bills tile/sheet | ⏳ In progress |
+| 3–9 (Electric, Savings, Shopee, Emergency, Hero, Category cards, layout) | ⬜ Not started |
 
 ---
 
