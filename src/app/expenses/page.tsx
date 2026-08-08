@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  useApp, fmt, Category, Bill, ShopeePayment, currentYYYYMM, calcElectric,
+  useApp, fmt, Category, Bill, currentYYYYMM, calcElectric,
 } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
@@ -11,10 +11,10 @@ import BudgetTile from '@/components/BudgetTile';
 import BillsSheet from '@/components/BillsSheet';
 import ProgressBar from '@/components/ProgressBar';
 import NumberField from '@/components/NumberField';
-import ElectricSection from '@/components/ElectricSection';
+import ElectricSheet from '@/components/ElectricSheet';
+import SavingsSheet from '@/components/SavingsSheet';
 import {
-  PlusIcon, TrashIcon, PencilIcon, CheckIcon,
-  AlertIcon, BagIcon, ShieldIcon,
+  PlusIcon, TrashIcon, PencilIcon,
 } from '@/components/Icons';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -32,12 +32,6 @@ function formatMonth(m: string): string {
   return new Date(parseInt(y), parseInt(mo) - 1)
     .toLocaleDateString('en-PH', { month: 'short', year: 'numeric' });
 }
-
-const STATUS_STYLE: Record<ShopeePayment['status'], string> = {
-  paid:     'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
-  pending:  'bg-amber-500/15   text-amber-400   border-amber-500/20',
-  upcoming: 'bg-slate-500/15   text-slate-400   border-slate-700',
-};
 
 const CATEGORY_ICON_OPTIONS = ['🎯','🐶','🎮','📚','☕','🏠','📱','💰','🌱','🎁','✈️','🍿','💪','🚿','👕','🎵'];
 
@@ -91,9 +85,7 @@ export default function BudgetPage() {
   const {
     settings, expenses, updateSettings,
     shopeeSchedule, shopeeRemainingBalance, shopeeDebtFreeDate,
-    shopeeNewPurchaseLock, setShopeeNewPurchaseLock,
-    addShopeePayment, updateShopeePayment, deleteShopeePayment,
-    emergencyFund, addEmergencyFundEntry,
+    emergencyFund,
     updateBill,
     receivedThisMonth,
   } = useApp();
@@ -226,58 +218,15 @@ export default function BudgetPage() {
     { label: 'Savings',    value: monthlySavingsTarget },
   ].filter(p => p.value > 0);
 
-  // ── bills sheet ──
-  const [billsOpen, setBillsOpen] = useState(false);
+  // ── collapsed-section sheets ──
+  const [billsOpen,    setBillsOpen]    = useState(false);
+  const [electricOpen, setElectricOpen] = useState(false);
+  const [savingsOpen,  setSavingsOpen]  = useState(false);
 
   // ── bill edit sheet ──
   const [editBill,     setEditBill]     = useState<Bill | null>(null);
   const [editBillName, setEditBillName] = useState('');
   const [editBillAmt,  setEditBillAmt]  = useState('');
-
-  // ── shopee inline form ──
-  const [addShopeeOpen,  setAddShopeeOpen]  = useState(false);
-  const [newShopeeMo,    setNewShopeeMo]    = useState('');          // '1'–'12'
-  const [newShopeeYr,    setNewShopeeYr]    = useState('');          // e.g. '2025'
-  const [newShopeeAmt,   setNewShopeeAmt]   = useState('');
-  const [shopeeExpanded, setShopeeExpanded] = useState(false);
-
-  const newShopeeMonth = newShopeeYr && newShopeeMo
-    ? `${newShopeeYr}-${newShopeeMo.padStart(2, '0')}`
-    : '';
-
-  const MONTHS = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December',
-  ];
-  const thisYear = new Date().getFullYear();
-  const YEARS = [thisYear, thisYear + 1, thisYear + 2];
-
-  // ── emergency fund ──
-  const [addEFOpen,  setAddEFOpen]  = useState(false);
-  const [efAmount,   setEFAmount]   = useState('');
-  const [efNote,     setEFNote]     = useState('');
-  const [showAllEF,  setShowAllEF]  = useState(false);
-
-  const efTarget  = settings.emergencyFundTarget;
-  const efCurrent = emergencyFund.currentAmount;
-  const efPct     = efTarget > 0 ? Math.min((efCurrent / efTarget) * 100, 100) : 0;
-  const efEntries = emergencyFund.entries;
-
-  const efProjected = (() => {
-    if (efTarget <= 0 || efCurrent >= efTarget) return null;
-    const recent = efEntries.slice(0, 6);
-    if (recent.length === 0) return null;
-    const avg = recent.reduce((s, e) => s + e.amount, 0) / recent.length;
-    if (avg <= 0) return null;
-    const months = Math.ceil((efTarget - efCurrent) / avg);
-    const d = new Date();
-    d.setMonth(d.getMonth() + months);
-    return d.toLocaleDateString('en-PH', { month: 'short', year: 'numeric' });
-  })();
-
-  const efMilestones = efTarget > 0
-    ? [0.25, 0.5, 0.75, 1].map(f => ({ pct: f, amt: efTarget * f, reached: efCurrent >= efTarget * f }))
-    : [];
 
   // ── handlers ──
   const openBillEdit = (bill: Bill) => {
@@ -291,23 +240,6 @@ export default function BudgetPage() {
     updateBill(editBill.id, { name: editBillName.trim(), amount: parseFloat(editBillAmt) || 0 });
     setEditBill(null);
   };
-
-  const handleAddEF = () => {
-    const amt = parseFloat(efAmount);
-    if (isNaN(amt) || amt <= 0) return;
-    addEmergencyFundEntry({ amount: amt, note: efNote.trim() });
-    setAddEFOpen(false); setEFAmount(''); setEFNote('');
-  };
-
-  const handleAddShopee = () => {
-    if (!newShopeeMonth || !newShopeeAmt) return;
-    addShopeePayment({ month: newShopeeMonth, amount: parseFloat(newShopeeAmt), status: 'upcoming' });
-    setAddShopeeOpen(false);
-    setNewShopeeMo(''); setNewShopeeYr(''); setNewShopeeAmt('');
-  };
-
-  const sortedShopee = [...shopeeSchedule].sort((a, b) => a.month.localeCompare(b.month));
-  const visibleShopee = shopeeExpanded ? sortedShopee : sortedShopee.filter(p => p.status !== 'paid').slice(0, 3);
 
   return (
     <div className="min-h-screen bg-[#0b0f1a]">
@@ -432,296 +364,45 @@ export default function BudgetPage() {
               />
 
               {/* ── Shopee Pay Later ── */}
-              <div>
-                <SectionHeader
-                  title={shopeeRemainingBalance > 0
-                    ? `Shopee Pay Later · ${fmt(shopeeRemainingBalance, currency)} left`
-                    : 'Shopee Pay Later'}
-                  action={
-                    <button onClick={() => setAddShopeeOpen(v => !v)}
-                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
-                      <PlusIcon className="w-3.5 h-3.5" /> Add
-                    </button>
-                  }
-                />
-
-                {/* New purchase lock warning */}
-                {shopeeNewPurchaseLock && (
-                  <div className="mb-2 flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2.5">
-                    <AlertIcon className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                    <p className="flex-1 text-xs text-red-400">New purchase lock active — clear balance first.</p>
-                    <button onClick={() => setShopeeNewPurchaseLock(false)}
-                      className="text-xs text-red-400/60 hover:text-red-400 shrink-0">
-                      Dismiss
-                    </button>
-                  </div>
-                )}
-
-                {/* Summary strip — only if there's data */}
-                {shopeeSchedule.length > 0 && (
-                  <div className="mb-2 flex items-center justify-between rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/15 text-base shrink-0">🛍️</div>
-                      <div>
-                        <p className="text-sm font-medium text-white">
-                          {nextShopee ? `${fmt(nextShopee.amount, currency)} due ${formatMonth(nextShopee.month)}` : 'All paid'}
-                        </p>
-                        {shopeeDebtFreeDate && (
-                          <p className="text-xs text-slate-500">Debt-free by {formatMonth(shopeeDebtFreeDate)}</p>
-                        )}
-                      </div>
-                    </div>
-                    {/* lock toggle */}
-                    <button
-                      onClick={() => setShopeeNewPurchaseLock(!shopeeNewPurchaseLock)}
-                      title={shopeeNewPurchaseLock ? 'Lock active' : 'Enable lock'}
-                      className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs transition-colors ${
-                        shopeeNewPurchaseLock
-                          ? 'border-red-500/40 bg-red-500/15 text-red-400'
-                          : 'border-[#1e2d40] bg-white/5 text-slate-500 hover:border-slate-500'
-                      }`}
-                    >
-                      🔒
-                    </button>
-                  </div>
-                )}
-
-                {/* Instalment rows */}
-                <div className="space-y-2">
-                  {shopeeSchedule.length === 0 && !addShopeeOpen && (
-                    <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-5 text-center">
-                      <BagIcon className="w-6 h-6 text-slate-700 mx-auto mb-1" />
-                      <p className="text-sm text-slate-500">No instalments added yet.</p>
-                    </div>
-                  )}
-
-                  {visibleShopee.map(p => (
-                    <div key={p.id} className="flex items-center gap-3 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white">{formatMonth(p.month)}</p>
-                        <p className="text-xs text-slate-500">{fmt(p.amount, currency)}</p>
-                      </div>
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize shrink-0 ${STATUS_STYLE[p.status]}`}>
-                        {p.status}
-                      </span>
-                      {p.status !== 'paid' && (
-                        <button
-                          onClick={() => updateShopeePayment(p.id, { status: 'paid' })}
-                          className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors shrink-0">
-                          <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
-                        </button>
-                      )}
-                      <button onClick={() => deleteShopeePayment(p.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
-                        <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
-                      </button>
-                    </div>
-                  ))}
-
-                  {/* Show more/less */}
-                  {sortedShopee.length > 3 && (
-                    <button onClick={() => setShopeeExpanded(v => !v)}
-                      className="w-full py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                      {shopeeExpanded
-                        ? 'Show less'
-                        : `Show all ${sortedShopee.length} instalments`}
-                    </button>
-                  )}
-
-                  {/* Add instalment inline */}
-                  {addShopeeOpen && (
-                    <div className="rounded-xl bg-[#1a2332] border border-blue-500/30 p-4 space-y-3">
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <p className="text-xs text-slate-500 mb-1">Month &amp; Year</p>
-                          <div className="flex gap-1.5">
-                            <select
-                              value={newShopeeMo}
-                              onChange={e => setNewShopeeMo(e.target.value)}
-                              autoFocus
-                              className="flex-1 rounded-lg bg-[#0b0f1a] border border-[#1e2d40] px-2 py-2 text-sm text-white outline-none focus:border-blue-500/50"
-                            >
-                              <option value="">Month</option>
-                              {MONTHS.map((m, i) => (
-                                <option key={i} value={String(i + 1)}>{m}</option>
-                              ))}
-                            </select>
-                            <select
-                              value={newShopeeYr}
-                              onChange={e => setNewShopeeYr(e.target.value)}
-                              className="w-20 rounded-lg bg-[#0b0f1a] border border-[#1e2d40] px-2 py-2 text-sm text-white outline-none focus:border-blue-500/50"
-                            >
-                              <option value="">Year</option>
-                              {YEARS.map(y => (
-                                <option key={y} value={String(y)}>{y}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-xs text-slate-500 mb-1">Amount</p>
-                          <input
-                            type="number"
-                            value={newShopeeAmt}
-                            onChange={e => setNewShopeeAmt(e.target.value)}
-                            placeholder="0.00"
-                            className="w-full rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={handleAddShopee} disabled={!newShopeeMonth || !newShopeeAmt}
-                          className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white disabled:opacity-40">
-                          Save
-                        </button>
-                        <button onClick={() => { setAddShopeeOpen(false); setNewShopeeMo(''); setNewShopeeYr(''); setNewShopeeAmt(''); }}
-                          className="flex-1 rounded-lg bg-white/5 py-2 text-sm text-slate-400">
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <BudgetTile
+                icon="🛍️"
+                label="Shopee"
+                value={shopeeMonthly > 0 ? fmt(shopeeMonthly, currency) : 'Nothing due'}
+                status={
+                  shopeeRemainingBalance > 0
+                    ? `${fmt(shopeeRemainingBalance, currency)} left${shopeeDebtFreeDate ? ` · ${formatMonth(shopeeDebtFreeDate)}` : ''}`
+                    : 'all paid off'
+                }
+                statusTone={shopeeRemainingBalance > 0 ? 'default' : 'good'}
+                href="/shopee"
+              />
 
               {/* ── Savings Target ── */}
-              <div>
-                <SectionHeader title="Savings Target" />
-                <div className="rounded-xl bg-[#111827] border border-[#1e2d40] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-lg shrink-0">🌱</div>
-                      <div>
-                        <p className="text-sm font-medium text-white">Monthly Savings</p>
-                        <p className="text-xs text-slate-500">Amount to set aside each month</p>
-                      </div>
-                    </div>
-                    <input
-                      type="number"
-                      value={monthlySavingsTarget || ''}
-                      onChange={e => updateSettings({ monthlySavingsTarget: parseFloat(e.target.value) || 0 })}
-                      placeholder="0.00"
-                      className="w-28 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-right text-sm text-white outline-none focus:border-emerald-500/50"
-                    />
-                  </div>
-                </div>
-              </div>
+              <BudgetTile
+                icon="🌱"
+                label="Savings"
+                value={monthlySavingsTarget > 0 ? `${fmt(monthlySavingsTarget, currency)}/mo` : 'Not set'}
+                status={monthlySavingsTarget > 0 ? 'set aside each month' : 'tap to set a target'}
+                onClick={() => setSavingsOpen(true)}
+              />
 
               {/* ── Emergency Fund ── */}
-              <div>
-                <SectionHeader
-                  title={efTarget > 0 ? `Emergency Fund · ${efPct.toFixed(0)}%` : 'Emergency Fund'}
-                  action={
-                    efTarget > 0 ? (
-                      <button
-                        onClick={() => setAddEFOpen(v => !v)}
-                        className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
-                      >
-                        <PlusIcon className="w-3.5 h-3.5" /> Add
-                      </button>
-                    ) : null
-                  }
-                />
-
-                {efTarget === 0 ? (
-                  <div className="rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-5 text-center">
-                    <ShieldIcon className="w-6 h-6 text-slate-600 mx-auto mb-2" />
-                    <p className="text-sm text-slate-500 mb-2">No target set yet.</p>
-                    <Link href="/settings" className="text-xs text-blue-400 underline underline-offset-2">
-                      Set a goal in Settings →
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="rounded-xl bg-[#111827] border border-[#1e2d40] p-4 space-y-3">
-                    {/* Amount + bar */}
-                    <div>
-                      <div className="flex items-end justify-between mb-2">
-                        <p className="text-xl font-bold text-white">{fmt(efCurrent, currency)}</p>
-                        <p className="text-xs text-slate-500">of {fmt(efTarget, currency)}</p>
-                      </div>
-                      <ProgressBar value={efCurrent} max={efTarget} color="green" />
-                      {efProjected && (
-                        <p className="mt-1.5 text-xs text-emerald-400">Projected full by {efProjected}</p>
-                      )}
-                    </div>
-
-                    {/* Milestones */}
-                    <div className="flex items-center gap-1.5">
-                      {efMilestones.map((m, i) => (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <div className={`h-2 w-2 rounded-full ${m.reached ? 'bg-emerald-500' : 'bg-[#1e2d40]'}`} />
-                          <p className={`text-[10px] ${m.reached ? 'text-emerald-400' : 'text-slate-600'}`}>
-                            {Math.round(m.pct * 100)}%
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Inline add form */}
-                    {addEFOpen && (
-                      <div className="space-y-2 pt-1 border-t border-[#1e2d40]">
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            value={efAmount}
-                            onChange={e => setEFAmount(e.target.value)}
-                            placeholder="Amount"
-                            autoFocus
-                            className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50"
-                          />
-                          <input
-                            type="text"
-                            value={efNote}
-                            onChange={e => setEFNote(e.target.value)}
-                            placeholder="Note (optional)"
-                            className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleAddEF}
-                            disabled={!efAmount || parseFloat(efAmount) <= 0}
-                            className="flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white disabled:opacity-40"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => { setAddEFOpen(false); setEFAmount(''); setEFNote(''); }}
-                            className="flex-1 rounded-lg bg-white/5 py-2 text-sm text-slate-400"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Contribution log */}
-                    {efEntries.length > 0 && (
-                      <div className="space-y-1.5 pt-1 border-t border-[#1e2d40]">
-                        {(showAllEF ? efEntries : efEntries.slice(0, 3)).map(e => (
-                          <div key={e.id} className="flex items-center justify-between">
-                            <div>
-                              <p className="text-xs text-slate-400">
-                                {new Date(e.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
-                                {e.note ? ` · ${e.note}` : ''}
-                              </p>
-                            </div>
-                            <p className="text-xs font-medium text-emerald-400">+{fmt(e.amount, currency)}</p>
-                          </div>
-                        ))}
-                        {efEntries.length > 3 && (
-                          <button
-                            onClick={() => setShowAllEF(v => !v)}
-                            className="w-full pt-0.5 text-xs text-slate-600 hover:text-slate-400 transition-colors"
-                          >
-                            {showAllEF ? 'Show less' : `Show all ${efEntries.length} contributions`}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <BudgetTile
+                icon="🛡️"
+                label="Emergency"
+                value={`${fmt(emergencyFund.currentAmount, currency)} of ${fmt(settings.emergencyFundTarget, currency)}`}
+                status={
+                  settings.emergencyFundTarget > 0
+                    ? `${Math.min(100, (emergencyFund.currentAmount / settings.emergencyFundTarget) * 100).toFixed(0)}% funded`
+                    : 'no target set'
+                }
+                statusTone={
+                  settings.emergencyFundTarget > 0 && emergencyFund.currentAmount >= settings.emergencyFundTarget
+                    ? 'good'
+                    : 'default'
+                }
+                href="/emergency-fund"
+              />
 
             </div>{/* end left col */}
 
@@ -729,7 +410,18 @@ export default function BudgetPage() {
             <div className="space-y-6 mt-6 md:mt-0">
 
               {/* ── Electric ── */}
-              <ElectricSection />
+              <BudgetTile
+                icon="⚡"
+                label="Electric"
+                value={fmt(liveElectric, currency)}
+                status={
+                  settings.appliances.filter(a => a.enabled).length > 0
+                    ? `${settings.appliances.filter(a => a.enabled).length} running`
+                    : 'nothing running'
+                }
+                statusTone={settings.appliances.filter(a => a.enabled).length > 0 ? 'warn' : 'default'}
+                onClick={() => setElectricOpen(true)}
+              />
 
               {/* ── Category Budgets ── */}
               <div>
@@ -869,6 +561,12 @@ export default function BudgetPage() {
           onEditBill={b => { setBillsOpen(false); openBillEdit(b); }}
         />
       )}
+
+      {/* ── Electric Sheet ── */}
+      {electricOpen && <ElectricSheet onClose={() => setElectricOpen(false)} />}
+
+      {/* ── Savings Sheet ── */}
+      {savingsOpen && <SavingsSheet onClose={() => setSavingsOpen(false)} />}
 
       {/* ── Edit Bill Sheet ── */}
       {editBill && (
