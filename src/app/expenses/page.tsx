@@ -88,7 +88,7 @@ export default function BudgetPage() {
     receivedThisMonth,
   } = useApp();
 
-  const { currency, bills, budgetLines, monthlyIncome, monthlySavingsTarget, categoryBudgets, customCategories } = settings;
+  const { currency, bills, monthlyIncome, monthlySavingsTarget, categoryBudgets, customCategories } = settings;
 
   // Built-in categories plus any the user has added.
   const allCategories = [
@@ -163,10 +163,21 @@ export default function BudgetPage() {
     .filter(p => p.status !== 'paid')
     .sort((a, b) => a.month.localeCompare(b.month))[0];
   const shopeeMonthly = nextShopee?.amount ?? 0;
-  const totalBudgetLines = budgetLines.reduce((s, b) => s + b.monthlyLimit, 0);
-  const totalAllocated   = totalBills + shopeeMonthly + totalBudgetLines + monthlySavingsTarget;
+  // Only budgets for categories that still exist count — a stale entry left by a
+  // deleted custom category shouldn't quietly inflate the total.
+  const totalCategoryBudgets = allCategories
+    .reduce((s, c) => s + (categoryBudgets[c.key] ?? 0), 0);
+  const totalAllocated   = totalBills + shopeeMonthly + totalCategoryBudgets + monthlySavingsTarget;
   const unallocated      = monthlyIncome - totalAllocated;
   const allocatedPct     = monthlyIncome > 0 ? (totalAllocated / monthlyIncome) * 100 : 0;
+
+  // Named parts of totalAllocated, for the breakdown under the progress bar.
+  const allocationParts = [
+    { label: 'Bills',      value: totalBills },
+    { label: 'Categories', value: totalCategoryBudgets },
+    { label: 'Shopee',     value: shopeeMonthly },
+    { label: 'Savings',    value: monthlySavingsTarget },
+  ].filter(p => p.value > 0);
 
   // ── bill inline form ──
   const [addBillOpen, setAddBillOpen] = useState(false);
@@ -357,6 +368,15 @@ export default function BudgetPage() {
                     <p className="mt-2 text-xs text-slate-500">
                       {allocatedPct.toFixed(0)}% of {fmt(monthlyIncome, currency)} income
                     </p>
+                    {allocationParts.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                        {allocationParts.map(p => (
+                          <span key={p.label} className="text-[11px] text-slate-600">
+                            {p.label} <span className="text-slate-400">{fmt(p.value, currency)}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

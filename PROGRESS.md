@@ -89,6 +89,25 @@ replacing it; income sources are a fixed hardcoded list, not user-editable.
 
 ---
 
+## Done 2026-08-08 — Allocation reflects category budgets
+
+"Allocated" on the Budget page was summing `budgetLines` — the dead data layer
+behind the UI removed last session — so setting a Category Budget moved nothing.
+
+- `totalAllocated` = Bills + **Category Budgets** + Shopee + Savings target.
+- Stale budgets for deleted custom categories are excluded; only categories that
+  currently exist are counted.
+- Added a compact breakdown row under the progress bar so Allocated isn't an
+  unexplainable aggregate of four sources.
+- `budgetLines` is no longer read on the Budget page. The data layer in
+  `AppContext.tsx` is still intact.
+
+⚠️ **Known overlap:** a budget on the built-in **Bills** category is counted
+*in addition to* Recurring Bills, so Allocated can overstate if you use both.
+Left as-is deliberately — see "Ideas / not yet done" for the alternatives.
+
+---
+
 ## Done previous session
 
 - **Fixed startup issue** — Supabase project `Tally-db` had auto-paused (free tier pauses after 7 days idle), causing `NetworkError` in the browser. Resolved by resuming from the dashboard.
@@ -115,6 +134,7 @@ replacing it; income sources are a fixed hardcoded list, not user-editable.
 - **Restore or drop budget lines / allocation breakdown** — data layer is still there if we want them back.
 - **Editing / deleting activity rows** — `deleteMoneyMove` exists in `AppContext` and correctly reverses wallet balances, but nothing in the UI calls it yet. Same for expenses (`deleteExpense`). A swipe or long-press on a Transactions row would wire both up.
 - **Income sources are fixed** — Salary/Freelance/Gift/Refund/Other are hardcoded in `INCOME_SOURCES`. Make them user-editable if the list starts chafing.
+- **Bills double-count in Allocated** — a budget on the built-in Bills category adds on top of Recurring Bills. Options: exclude the `bills` category from `totalCategoryBudgets`, or count whichever of the two is larger.
 
 ---
 
