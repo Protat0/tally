@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  useApp, fmt, Category, Bill, ShopeePayment, currentYYYYMM,
+  useApp, fmt, Category, Bill, ShopeePayment, currentYYYYMM, calcElectric,
 } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import ProgressBar from '@/components/ProgressBar';
 import NumberField from '@/components/NumberField';
+import ElectricSection from '@/components/ElectricSection';
 import {
   PlusIcon, TrashIcon, PencilIcon, CheckIcon,
   AlertIcon, BagIcon, ShieldIcon,
@@ -46,6 +47,12 @@ const EXPENSE_CATEGORIES: { key: Category; label: string; icon: string }[] = [
   { key: 'health',    label: 'Health',    icon: '💊' },
   { key: 'other',     label: 'Other',     icon: '✦' },
 ];
+
+// Budgetable like the rest, but its spend is metered from appliance usage rather
+// than logged expenses — so it's deliberately absent from the Log Expense picker.
+const ELECTRIC_CATEGORY = { key: 'electric' as Category, label: 'Electric', icon: '⚡' };
+
+const BUDGETABLE_CATEGORIES = [...EXPENSE_CATEGORIES, ELECTRIC_CATEGORY];
 
 // ─── small components ─────────────────────────────────────────────────────────
 
@@ -95,12 +102,12 @@ export default function BudgetPage() {
 
   // Built-in categories plus any the user has added, minus any they've removed.
   const allCategories = [
-    ...EXPENSE_CATEGORIES,
+    ...BUDGETABLE_CATEGORIES,
     ...customCategories.map(c => ({ key: c.key, label: c.label, icon: c.icon })),
   ].filter(c => !hiddenCategories.includes(c.key));
 
   // Built-ins the user has removed, still restorable.
-  const hiddenBuiltIns = EXPENSE_CATEGORIES.filter(c => hiddenCategories.includes(c.key));
+  const hiddenBuiltIns = BUDGETABLE_CATEGORIES.filter(c => hiddenCategories.includes(c.key));
 
   const setCategoryBudget = (cat: Category, v: number) =>
     updateSettings({ categoryBudgets: { ...categoryBudgets, [cat]: v } });
@@ -163,8 +170,17 @@ export default function BudgetPage() {
 
   const catMetaFor = (key: Category) =>
     allCategories.find(c => c.key === key)
-    ?? EXPENSE_CATEGORIES.find(c => c.key === key)
+    ?? BUDGETABLE_CATEGORIES.find(c => c.key === key)
     ?? { key, label: String(key), icon: '✦' };
+
+  // Electric spend is metered from running appliances rather than logged
+  // expenses, so this page ticks to keep its budget row current.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 10_000);
+    return () => clearInterval(id);
+  }, []);
+  const liveElectric = calcElectric(settings);
   const now = new Date();
   const monthLabel = now.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
 
@@ -180,6 +196,10 @@ export default function BudgetPage() {
     return acc;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenses]);
+
+  // Electric reads from the meter; every other category from logged expenses.
+  const spentFor = (key: Category): number =>
+    key === ELECTRIC_CATEGORY.key ? liveElectric : (spentByCategory[key] ?? 0);
 
   // ── budget totals ──
   const totalBills    = bills.reduce((s, b) => s + b.amount, 0);
@@ -784,6 +804,9 @@ export default function BudgetPage() {
             {/* ══ RIGHT COLUMN ═════════════════════════════════════════════ */}
             <div className="space-y-6 mt-6 md:mt-0">
 
+              {/* ── Electric ── */}
+              <ElectricSection />
+
               {/* ── Category Budgets ── */}
               <div>
                 <SectionHeader
@@ -798,7 +821,7 @@ export default function BudgetPage() {
                 <div className="space-y-2">
                   {allCategories.map(({ key, label, icon }) => {
                     const budget = categoryBudgets[key] ?? 0;
-                    const spent = spentByCategory[key] ?? 0;
+                    const spent = spentFor(key);
                     const hasBudget = budget > 0;
                     const remaining = budget - spent;
                     const pct = hasBudget ? (spent / budget) * 100 : 0;

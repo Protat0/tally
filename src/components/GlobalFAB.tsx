@@ -117,7 +117,7 @@ export default function GlobalFAB() {
             {appliances.length === 0 ? (
               <div className="py-4 text-center">
                 <p className="text-sm text-slate-500 mb-3">No appliances set up yet.</p>
-                <Link href="/electric" onClick={closeAll}
+                <Link href="/expenses#electric" onClick={closeAll}
                   className="text-sm text-blue-400 underline underline-offset-2">
                   Set up appliances →
                 </Link>
@@ -212,7 +212,7 @@ export default function GlobalFAB() {
             {appliances.length === 0 ? (
               <div className="py-4 text-center">
                 <p className="text-sm text-slate-500 mb-3">No appliances set up yet.</p>
-                <Link href="/electric" onClick={closeAll}
+                <Link href="/expenses#electric" onClick={closeAll}
                   className="text-sm text-blue-400 underline underline-offset-2">
                   Set up appliances →
                 </Link>

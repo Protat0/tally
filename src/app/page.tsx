@@ -220,7 +220,7 @@ export default function Dashboard() {
                     ? `${settings.appliances.filter(a => a.enabled).length} of ${settings.appliances.length} running`
                     : 'No appliances running'}
                 </p>
-                <Link href="/electric" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                <Link href="/expenses#electric" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
                   Manage →
                 </Link>
               </div>

@@ -180,7 +180,7 @@ function daysUntil(date: Date | null): number {
   return Math.max(0, Math.ceil((date.getTime() - now.getTime()) / 86400000));
 }
 
-function calcElectric(settings: Settings): number {
+export function calcElectric(settings: Settings): number {
   return settings.appliances.reduce((s, a) => {
     return s + (a.wattage * (getApplianceMinutes(a) / 60) / 1000) * settings.electricityRate;
   }, 0);

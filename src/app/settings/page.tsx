@@ -302,7 +302,7 @@ export default function SettingsPage() {
           {/* Tools */}
           <Section title="Tools">
             <Link
-              href="/electric"
+              href="/expenses#electric"
               className="flex items-center gap-4 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3.5 hover:bg-[#1a2332] transition-colors"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 shrink-0">
