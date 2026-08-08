@@ -6,6 +6,18 @@ A running log of what's been built and what's next, so we can pick up where we l
 
 ---
 
+## ⚠️ Run this migration
+
+Category deletion needs one more column. Until it exists, removing a built-in
+category won't survive a reload.
+
+```sql
+alter table settings
+  add column if not exists hidden_categories jsonb not null default '[]'::jsonb;
+```
+
+---
+
 ## ⚠️ Do this first next session
 
 **Two migrations are outstanding.** Run both in the Supabase SQL editor. Until they exist, category budgets won't persist and every wallet Add/Withdraw/Transfer will fail to record.
@@ -86,6 +98,26 @@ balance via `updateWallet`, leaving no record. They now write to `money_moves`.
 Design decisions taken: all three actions recorded (transfers neutral); actual
 income kept **separate** from the manual Monthly Income setting rather than
 replacing it; income sources are a fixed hardcoded list, not user-editable.
+
+---
+
+## Done 2026-08-08 — Category deletion
+
+Every Category Budgets row now has a delete button, not just custom ones.
+
+- **Custom categories** are removed outright, as before.
+- **Built-in categories** can't be truly deleted — expenses already logged
+  against them must keep resolving their icon/label — so they're added to
+  `settings.hiddenCategories` (needs `hidden_categories` column) and filtered
+  out of the Budget page, the Allocated total, and the Log Expense picker.
+- **Restorable:** a "Removed" strip below Category Budgets lists hidden
+  built-ins; tap one to bring it back. Without this, deletion is a one-way door.
+- **Confirm dialog** on both paths, with copy that states what's kept —
+  previously custom deletion fired instantly with no confirmation.
+- Deleting either kind drops that category's budget, so Allocated updates.
+
+Expenses logged under a removed category are never touched. They keep showing
+correctly on the Activity page via the built-in icon map.
 
 ---
 

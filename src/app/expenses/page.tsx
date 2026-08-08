@@ -88,13 +88,19 @@ export default function BudgetPage() {
     receivedThisMonth,
   } = useApp();
 
-  const { currency, bills, monthlyIncome, monthlySavingsTarget, categoryBudgets, customCategories } = settings;
+  const {
+    currency, bills, monthlyIncome, monthlySavingsTarget,
+    categoryBudgets, customCategories, hiddenCategories,
+  } = settings;
 
-  // Built-in categories plus any the user has added.
+  // Built-in categories plus any the user has added, minus any they've removed.
   const allCategories = [
     ...EXPENSE_CATEGORIES,
     ...customCategories.map(c => ({ key: c.key, label: c.label, icon: c.icon })),
-  ];
+  ].filter(c => !hiddenCategories.includes(c.key));
+
+  // Built-ins the user has removed, still restorable.
+  const hiddenBuiltIns = EXPENSE_CATEGORIES.filter(c => hiddenCategories.includes(c.key));
 
   const setCategoryBudget = (cat: Category, v: number) =>
     updateSettings({ categoryBudgets: { ...categoryBudgets, [cat]: v } });
@@ -133,14 +139,32 @@ export default function BudgetPage() {
     setNewCatName(''); setNewCatIcon('🎯'); setNewCatBudget('');
   };
 
+  // ── category deletion ──
+  const [confirmDeleteCat, setConfirmDeleteCat] = useState<Category | null>(null);
+
+  // Custom categories are removed outright. Built-ins can't be — expenses
+  // already logged against them still need to resolve — so they're hidden
+  // instead, and can be restored below. Either way the budget is dropped.
   const deleteCategory = (key: string) => {
     const restBudgets = { ...categoryBudgets };
     delete restBudgets[key];
+    const isCustom = customCategories.some(c => c.key === key);
     updateSettings({
-      customCategories: customCategories.filter(c => c.key !== key),
       categoryBudgets: restBudgets,
+      ...(isCustom
+        ? { customCategories: customCategories.filter(c => c.key !== key) }
+        : { hiddenCategories: [...hiddenCategories, key] }),
     });
+    setConfirmDeleteCat(null);
   };
+
+  const restoreCategory = (key: string) =>
+    updateSettings({ hiddenCategories: hiddenCategories.filter(k => k !== key) });
+
+  const catMetaFor = (key: Category) =>
+    allCategories.find(c => c.key === key)
+    ?? EXPENSE_CATEGORIES.find(c => c.key === key)
+    ?? { key, label: String(key), icon: '✦' };
   const now = new Date();
   const monthLabel = now.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
 
@@ -773,7 +797,6 @@ export default function BudgetPage() {
                 />
                 <div className="space-y-2">
                   {allCategories.map(({ key, label, icon }) => {
-                    const isCustom = customCategories.some(c => c.key === key);
                     const budget = categoryBudgets[key] ?? 0;
                     const spent = spentByCategory[key] ?? 0;
                     const hasBudget = budget > 0;
@@ -797,13 +820,11 @@ export default function BudgetPage() {
                               className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
                               <PencilIcon className="w-3.5 h-3.5 text-slate-500 hover:text-slate-200" />
                             </button>
-                            {isCustom && (
-                              <button onClick={() => deleteCategory(key)}
-                                title="Delete category"
-                                className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
-                                <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
-                              </button>
-                            )}
+                            <button onClick={() => setConfirmDeleteCat(key)}
+                              title="Delete category"
+                              className="flex h-6 w-6 items-center justify-center rounded-full hover:bg-white/10">
+                              <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
+                            </button>
                           </div>
                         </div>
                         {hasBudget ? (
@@ -827,12 +848,72 @@ export default function BudgetPage() {
                     );
                   })}
                 </div>
+
+                {/* Removed built-ins — restorable, since they can't be truly deleted. */}
+                {hiddenBuiltIns.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-dashed border-[#1e2d40] p-3">
+                    <p className="mb-2 text-[11px] uppercase tracking-widest text-slate-600">
+                      Removed
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {hiddenBuiltIns.map(({ key, label, icon }) => (
+                        <button
+                          key={key}
+                          onClick={() => restoreCategory(key)}
+                          title={`Restore ${label}`}
+                          className="flex items-center gap-1.5 rounded-lg border border-[#1e2d40] bg-white/5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
+                        >
+                          <span className="opacity-50">{icon}</span>
+                          {label}
+                          <span className="text-slate-600">· restore</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>{/* end right col */}
           </div>
         </div>
       </div>
+
+      {/* ── Confirm Delete Category ── */}
+      {confirmDeleteCat && (() => {
+        const { label, icon } = catMetaFor(confirmDeleteCat);
+        const isCustom = customCategories.some(c => c.key === confirmDeleteCat);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={() => setConfirmDeleteCat(null)}>
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <div
+              className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-2xl">
+                {icon}
+              </div>
+              <p className="font-semibold text-white mb-1">
+                {isCustom ? `Delete ${label}?` : `Remove ${label}?`}
+              </p>
+              <p className="text-sm text-slate-400 mb-5">
+                {isCustom
+                  ? 'The category and its budget are removed. Expenses already logged under it are kept.'
+                  : 'Hidden from the category pickers and its budget cleared. Expenses already logged under it are kept, and you can restore it any time.'}
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmDeleteCat(null)}
+                  className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-300">
+                  Cancel
+                </button>
+                <button onClick={() => deleteCategory(confirmDeleteCat)}
+                  className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-medium text-white">
+                  {isCustom ? 'Delete' : 'Remove'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Edit Bill Sheet ── */}
       {editBill && (

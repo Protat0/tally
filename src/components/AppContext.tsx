@@ -86,6 +86,10 @@ export interface Settings {
   currency: string;
   categoryBudgets: Partial<Record<Category, number>>;
   customCategories: CustomCategory[];
+  // Built-in categories the user has removed. They can't be deleted outright —
+  // expenses already logged against them must keep resolving — so they're
+  // hidden from the pickers and restorable.
+  hiddenCategories: string[];
 }
 
 interface EmergencyFund {
@@ -198,6 +202,7 @@ function fromDBSettings(r: Row): Partial<Settings> {
     electricityRate:    Number(r.electricity_rate)     || 11.8,
     categoryBudgets:    (r.category_budgets || {}) as Partial<Record<Category, number>>,
     customCategories:   (r.custom_categories || []) as CustomCategory[],
+    hiddenCategories:   (r.hidden_categories || []) as string[],
   };
 }
 
@@ -212,6 +217,7 @@ function toDBSettings(s: Partial<Settings>): Row {
   if ('electricityRate'     in s) m.electricity_rate      = s.electricityRate;
   if ('categoryBudgets'     in s) m.category_budgets      = s.categoryBudgets;
   if ('customCategories'    in s) m.custom_categories     = s.customCategories;
+  if ('hiddenCategories'    in s) m.hidden_categories     = s.hiddenCategories;
   return m;
 }
 
@@ -259,6 +265,7 @@ const defaultSettings: Settings = {
   electricityRate: 11.8, currency: '₱',
   categoryBudgets: {},
   customCategories: [],
+  hiddenCategories: [],
 };
 
 // ─── Context ─────────────────────────────────────────────────────────────────

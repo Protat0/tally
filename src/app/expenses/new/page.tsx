@@ -18,14 +18,15 @@ const KEYS = [['7','8','9'],['4','5','6'],['1','2','3'],['.','0','⌫']];
 
 function ExpenseForm() {
   const { wallets, addExpense, settings } = useApp();
-  // Built-in categories plus any user-defined custom ones (given a neutral color).
+  // Built-in categories plus any user-defined custom ones (given a neutral
+  // color), minus any the user has removed on the Budget page.
   const categories = [
     ...CATEGORIES,
     ...settings.customCategories.map(c => ({
       key: c.key, label: c.label, icon: c.icon,
       color: 'bg-slate-500/15 border-slate-500/40',
     })),
-  ];
+  ].filter(c => !settings.hiddenCategories.includes(c.key));
   const router = useRouter();
   const searchParams = useSearchParams();
   const presetWalletId = searchParams.get('walletId') ?? '';
