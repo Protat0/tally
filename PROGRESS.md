@@ -22,6 +22,38 @@ wallet Add/Withdraw/Transfer records write to `money_moves`.
 
 ---
 
+## ⏭ Next up — Debt Board (planned, not started)
+
+Plan: **`debtplan.md`** (repo root) — 7 tasks, designed 2026-08-08, to build next session.
+
+A `/debts` page tracking mutual mini-debts with friends and coworkers: who owes you,
+who you owe, and what each debt was for.
+
+**Run this migration first** — Task 1 is blocked without it, and the SQL is in
+`debtplan.md` Task 1 Step 1. Two new tables: `debt_people` and `debt_entries`.
+
+Design decisions already settled (don't relitigate):
+
+- **Standalone ledger** — settling a debt never touches a wallet balance or writes a
+  `money_move`. Mini-debts are usually cash that never went through a tracked wallet.
+- **Itemised, grouped per person** — each debt is its own line; a person's section
+  nets both directions and lists them.
+- **Netting is derived, never stored** — `Σ(owed_to_me) − Σ(i_owe)` over open entries.
+- **`settled_at` is a nullable timestamp, not a boolean** — it doubles as history.
+  Un-settling is supported.
+- **Per-item settle plus "Settle up"** to clear a person in one action.
+- **Nav:** Debts joins the bar; **Settings drops off the mobile bar** and is reached
+  by a cog in every page header. Desktop sidebar keeps all six.
+- **Out of scope for v1:** splitting one bill across several people, reminders,
+  sharing a board with the other person.
+
+Gotcha found while planning: all three non-Settings pages using `PageHeader` already
+pass a `right` slot, so the cog has to render *beside* it, not as a fallback.
+`/expenses` has no header at all since the simplification, so its cog goes in the
+Log Expense row.
+
+---
+
 ## Done 2026-08-08 — Category card refinements
 
 Follow-on polish after the simplification plan, driven by review of the live page.
@@ -191,6 +223,7 @@ Left as-is deliberately — see "Ideas / not yet done" for the alternatives.
 - **Editing / deleting activity rows** — `deleteMoneyMove` exists in `AppContext` and correctly reverses wallet balances, but nothing in the UI calls it yet. Same for expenses (`deleteExpense`). A swipe or long-press on a Transactions row would wire both up — and the rows in the new Category Detail sheet are now a second natural home for it.
 - **Income sources are fixed** — Salary/Freelance/Gift/Refund/Other are hardcoded in `INCOME_SOURCES`. Make them user-editable if the list starts chafing.
 - **Bills double-count in Allocated** — a budget on the built-in Bills category adds on top of Recurring Bills. Options: exclude the `bills` category from `totalCategoryBudgets`, or count whichever of the two is larger.
+- **Two arc implementations** — `src/components/HalfCircleProgress.tsx` (category cards) and a local `ArcProgress` inside `src/app/emergency-fund/page.tsx` do much the same job. Worth consolidating onto the shared one next time either is touched.
 
 ---
 
