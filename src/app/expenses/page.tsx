@@ -7,6 +7,8 @@ import {
 } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
+import BudgetTile from '@/components/BudgetTile';
+import BillsSheet from '@/components/BillsSheet';
 import ProgressBar from '@/components/ProgressBar';
 import NumberField from '@/components/NumberField';
 import ElectricSection from '@/components/ElectricSection';
@@ -92,7 +94,7 @@ export default function BudgetPage() {
     shopeeNewPurchaseLock, setShopeeNewPurchaseLock,
     addShopeePayment, updateShopeePayment, deleteShopeePayment,
     emergencyFund, addEmergencyFundEntry,
-    toggleBillPaid, updateBill,
+    updateBill,
     receivedThisMonth,
   } = useApp();
 
@@ -224,10 +226,8 @@ export default function BudgetPage() {
     { label: 'Savings',    value: monthlySavingsTarget },
   ].filter(p => p.value > 0);
 
-  // ── bill inline form ──
-  const [addBillOpen, setAddBillOpen] = useState(false);
-  const [newBillName, setNewBillName] = useState('');
-  const [newBillAmt,  setNewBillAmt]  = useState('');
+  // ── bills sheet ──
+  const [billsOpen, setBillsOpen] = useState(false);
 
   // ── bill edit sheet ──
   const [editBill,     setEditBill]     = useState<Bill | null>(null);
@@ -280,17 +280,6 @@ export default function BudgetPage() {
     : [];
 
   // ── handlers ──
-  const handleAddBill = () => {
-    if (!newBillName.trim() || !newBillAmt) return;
-    const bill: Bill = { id: uid(), name: newBillName.trim(), amount: parseFloat(newBillAmt), paidMonths: [] };
-    updateSettings({ bills: [...bills, bill] });
-    setAddBillOpen(false);
-    setNewBillName(''); setNewBillAmt('');
-  };
-
-  const removeBill = (id: string) =>
-    updateSettings({ bills: bills.filter(b => b.id !== id) });
-
   const openBillEdit = (bill: Bill) => {
     setEditBill(bill);
     setEditBillName(bill.name);
@@ -427,86 +416,20 @@ export default function BudgetPage() {
               </div>
 
               {/* ── Recurring Bills ── */}
-              <div>
-                <SectionHeader
-                  title={`Recurring Bills · ${fmt(totalBills, currency)}/mo`}
-                  action={
-                    <button onClick={() => setAddBillOpen(v => !v)}
-                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
-                      <PlusIcon className="w-3.5 h-3.5" /> Add
-                    </button>
-                  }
-                />
-                <div className="space-y-2">
-                  {bills.length === 0 && !addBillOpen && (
-                    <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-5 text-center">
-                      <p className="text-sm text-slate-500">No recurring bills yet.</p>
-                    </div>
-                  )}
-                  {bills.map(b => {
-                    const isPaid = b.paidMonths.includes(currentYYYYMM());
-                    return (
-                      <div key={b.id} className={`flex items-center gap-2 rounded-xl border px-4 py-3 transition-colors ${isPaid ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-[#111827] border-[#1e2d40]'}`}>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 text-sm shrink-0">💡</div>
-                        <p className={`flex-1 text-sm min-w-0 truncate ${isPaid ? 'text-slate-500' : 'text-white'}`}>{b.name}</p>
-                        <p className="text-sm font-medium text-slate-300 shrink-0">{fmt(b.amount, currency)}</p>
-                        {isPaid && (
-                          <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/15 rounded-full px-2 py-0.5 shrink-0">
-                            Paid
-                          </span>
-                        )}
-                        <button
-                          onClick={() => toggleBillPaid(b.id)}
-                          title={isPaid ? 'Mark unpaid' : 'Mark as paid'}
-                          className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors shrink-0 ${isPaid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-500 hover:text-slate-200 hover:bg-white/10'}`}
-                        >
-                          <CheckIcon className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => openBillEdit(b)}
-                          title="Edit bill"
-                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
-                          <PencilIcon className="w-3.5 h-3.5 text-slate-500 hover:text-slate-200" />
-                        </button>
-                        <button onClick={() => removeBill(b.id)}
-                          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
-                          <TrashIcon className="w-3.5 h-3.5 text-red-400/60 hover:text-red-400" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {addBillOpen && (
-                    <div className="rounded-xl bg-[#1a2332] border border-blue-500/30 p-4 space-y-3">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newBillName}
-                          onChange={e => setNewBillName(e.target.value)}
-                          placeholder="Bill name"
-                          autoFocus
-                          className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
-                        />
-                        <input
-                          type="number"
-                          value={newBillAmt}
-                          onChange={e => setNewBillAmt(e.target.value)}
-                          placeholder="Amount"
-                          className="w-28 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={handleAddBill} disabled={!newBillName.trim() || !newBillAmt}
-                          className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white disabled:opacity-40">
-                          Save
-                        </button>
-                        <button onClick={() => { setAddBillOpen(false); setNewBillName(''); setNewBillAmt(''); }}
-                          className="flex-1 rounded-lg bg-white/5 py-2 text-sm text-slate-400">
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <BudgetTile
+                icon="💡"
+                label="Bills"
+                value={`${fmt(totalBills, currency)}/mo`}
+                status={
+                  bills.length === 0
+                    ? 'none yet'
+                    : `${bills.filter(b => !b.paidMonths.includes(currentYYYYMM())).length} of ${bills.length} unpaid`
+                }
+                statusTone={
+                  bills.length > 0 && bills.every(b => b.paidMonths.includes(currentYYYYMM())) ? 'good' : 'default'
+                }
+                onClick={() => setBillsOpen(true)}
+              />
 
               {/* ── Shopee Pay Later ── */}
               <div>
@@ -938,6 +861,14 @@ export default function BudgetPage() {
           </div>
         );
       })()}
+
+      {/* ── Recurring Bills Sheet ── */}
+      {billsOpen && (
+        <BillsSheet
+          onClose={() => setBillsOpen(false)}
+          onEditBill={b => { setBillsOpen(false); openBillEdit(b); }}
+        />
+      )}
 
       {/* ── Edit Bill Sheet ── */}
       {editBill && (
