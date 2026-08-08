@@ -517,7 +517,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // Scalar settings row
     const dbScalar = toDBSettings(scalar);
     if (Object.keys(dbScalar).length > 0) {
-      await supabase.from('settings').update(dbScalar).eq('user_id', userId);
+      const { error } = await supabase.from('settings').update(dbScalar).eq('user_id', userId);
+      // State above was set optimistically, so a rejected write — a column that
+      // doesn't exist yet, an RLS denial — otherwise looks fine until the next reload.
+      if (error) console.error('settings update failed:', error.message, Object.keys(dbScalar));
     }
 
     // Bills — detect add or remove
