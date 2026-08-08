@@ -6,6 +6,7 @@ import {
   useApp, fmt, Category, Bill, ShopeePayment, currentYYYYMM, calcElectric,
 } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
+import BottomSheet from '@/components/BottomSheet';
 import ProgressBar from '@/components/ProgressBar';
 import NumberField from '@/components/NumberField';
 import ElectricSection from '@/components/ElectricSection';
@@ -940,89 +941,74 @@ export default function BudgetPage() {
 
       {/* ── Edit Bill Sheet ── */}
       {editBill && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setEditBill(null)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
-            onClick={e => e.stopPropagation()}>
-            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
-            <div className="flex items-center gap-3 mb-5">
-              <span className="text-2xl">💡</span>
-              <p className="font-semibold text-white">Edit Bill</p>
-            </div>
-            <p className="text-xs text-slate-500 mb-1">Name</p>
-            <input
-              type="text"
-              value={editBillName}
-              onChange={e => setEditBillName(e.target.value)}
-              placeholder="Bill name"
-              className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
-            />
-            <InlineAmountInput label="Amount" value={editBillAmt} onChange={setEditBillAmt} />
-            <button
-              onClick={saveBillEdit}
-              disabled={!editBillName.trim() || !editBillAmt}
-              className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
-            >
-              Save
-            </button>
+        <BottomSheet onClose={() => setEditBill(null)}>
+          <div className="flex items-center gap-3 mb-5">
+            <span className="text-2xl">💡</span>
+            <p className="font-semibold text-white">Edit Bill</p>
           </div>
-        </div>
+          <p className="text-xs text-slate-500 mb-1">Name</p>
+          <input
+            type="text"
+            value={editBillName}
+            onChange={e => setEditBillName(e.target.value)}
+            placeholder="Bill name"
+            className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
+          />
+          <InlineAmountInput label="Amount" value={editBillAmt} onChange={setEditBillAmt} />
+          <button
+            onClick={saveBillEdit}
+            disabled={!editBillName.trim() || !editBillAmt}
+            className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
+          >
+            Save
+          </button>
+        </BottomSheet>
       )}
 
       {/* ── Edit Category Budget Sheet ── */}
       {editCat && (() => {
         const meta = allCategories.find(c => c.key === editCat) ?? { icon: '✦', label: 'Category' };
         return (
-          <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setEditCat(null)}>
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <div className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
-              onClick={e => e.stopPropagation()}>
-              <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
-              <div className="flex items-center gap-3 mb-5">
-                <span className="text-2xl">{meta.icon}</span>
-                <p className="font-semibold text-white">{meta.label} Budget</p>
-              </div>
-              <InlineAmountInput label="Monthly budget" value={editCatBudget} onChange={setEditCatBudget} />
-              <button onClick={saveCatEdit} className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white">
-                Save
-              </button>
+          <BottomSheet onClose={() => setEditCat(null)}>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="text-2xl">{meta.icon}</span>
+              <p className="font-semibold text-white">{meta.label} Budget</p>
             </div>
-          </div>
+            <InlineAmountInput label="Monthly budget" value={editCatBudget} onChange={setEditCatBudget} />
+            <button onClick={saveCatEdit} className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white">
+              Save
+            </button>
+          </BottomSheet>
         );
       })()}
 
       {/* ── Add Category Sheet ── */}
       {addCatOpen && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setAddCatOpen(false)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
-            onClick={e => e.stopPropagation()}>
-            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
-            <p className="font-semibold text-white text-lg mb-5">New Category</p>
-            <p className="text-xs text-slate-500 mb-2">Icon</p>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {CATEGORY_ICON_OPTIONS.map(ico => (
-                <button key={ico} onClick={() => setNewCatIcon(ico)}
-                  className={`h-10 w-10 rounded-xl text-xl border transition-colors ${newCatIcon === ico ? 'border-blue-500 bg-blue-500/15' : 'border-[#1e2d40] bg-white/5'}`}>
-                  {ico}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500 mb-1">Name</p>
-            <input
-              type="text"
-              value={newCatName}
-              onChange={e => setNewCatName(e.target.value)}
-              placeholder="e.g. Pets"
-              className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
-            />
-            <InlineAmountInput label="Monthly budget (optional)" value={newCatBudget} onChange={setNewCatBudget} />
-            <button onClick={handleAddCategory} disabled={!newCatName.trim()}
-              className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40">
-              Add Category
-            </button>
+        <BottomSheet onClose={() => setAddCatOpen(false)}>
+          <p className="font-semibold text-white text-lg mb-5">New Category</p>
+          <p className="text-xs text-slate-500 mb-2">Icon</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {CATEGORY_ICON_OPTIONS.map(ico => (
+              <button key={ico} onClick={() => setNewCatIcon(ico)}
+                className={`h-10 w-10 rounded-xl text-xl border transition-colors ${newCatIcon === ico ? 'border-blue-500 bg-blue-500/15' : 'border-[#1e2d40] bg-white/5'}`}>
+                {ico}
+              </button>
+            ))}
           </div>
-        </div>
+          <p className="text-xs text-slate-500 mb-1">Name</p>
+          <input
+            type="text"
+            value={newCatName}
+            onChange={e => setNewCatName(e.target.value)}
+            placeholder="e.g. Pets"
+            className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
+          />
+          <InlineAmountInput label="Monthly budget (optional)" value={newCatBudget} onChange={setNewCatBudget} />
+          <button onClick={handleAddCategory} disabled={!newCatName.trim()}
+            className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40">
+            Add Category
+          </button>
+        </BottomSheet>
       )}
 
     </div>
