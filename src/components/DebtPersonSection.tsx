@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useApp, fmt } from './AppContext';
+import { useApp, fmt, DebtEntry } from './AppContext';
 import DebtEntryRow from './DebtEntryRow';
 import SettleUpSheet from './SettleUpSheet';
 import { TrashIcon } from './Icons';
@@ -14,10 +14,11 @@ interface Props {
 }
 
 export default function DebtPersonSection({ group, currency, onDeletePerson }: Props) {
-  const { setDebtEntrySettled, deleteDebtEntry, reverseSettleBatch } = useApp();
+  const { setDebtEntrySettled, deleteDebtEntry, settleUpPerson, reverseSettleBatch } = useApp();
   const { person, open, settled, net } = group;
   const [showSettled, setShowSettled] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
+  const [settleEntry, setSettleEntry] = useState<DebtEntry | null>(null);
   const [confirmBatch, setConfirmBatch] = useState<string | null>(null);
 
   const label = net > 0 ? 'owes you' : net < 0 ? 'you owe' : 'settled up';
@@ -69,7 +70,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
               key={e.id}
               entry={e}
               currency={currency}
-              onToggleSettled={() => setDebtEntrySettled(e.id, true)}
+              onToggleSettled={() => setSettleEntry(e)}
               onDelete={() => deleteDebtEntry(e.id)}
             />
           ))}
@@ -107,10 +108,24 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
 
       {settleOpen && (
         <SettleUpSheet
-          person={person}
+          title={`Settle up with ${person.name}`}
+          personName={person.name}
           net={net}
           currency={currency}
+          onConfirm={wid => settleUpPerson(person.id, wid)}
           onClose={() => setSettleOpen(false)}
+        />
+      )}
+
+      {settleEntry && (
+        <SettleUpSheet
+          title={settleEntry.note || 'Mark settled'}
+          personName={person.name}
+          // One row on its own: the sign is its direction, not a person's net.
+          net={settleEntry.direction === 'owed_to_me' ? settleEntry.amount : -settleEntry.amount}
+          currency={currency}
+          onConfirm={wid => setDebtEntrySettled(settleEntry.id, true, wid)}
+          onClose={() => setSettleEntry(null)}
         />
       )}
 

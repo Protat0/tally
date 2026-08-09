@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useApp, fmt, DebtDirection } from './AppContext';
 import BottomSheet from './BottomSheet';
+import WalletPicker from './WalletPicker';
 
 const PERSON_EMOJI = ['🧑','👩','👨','🧔','👧','👦','🙂','😎','🐱','🐶','⭐','🎯'];
 
@@ -17,7 +18,7 @@ interface Props {
 }
 
 export default function AddDebtSheet({ onClose }: Props) {
-  const { debtPeople, addDebtPerson, addDebtEntry, wallets, settings } = useApp();
+  const { debtPeople, addDebtPerson, addDebtEntry, settings } = useApp();
 
   const [personId,  setPersonId]  = useState<string>(debtPeople[0]?.id ?? '');
   const [newName,   setNewName]   = useState('');
@@ -178,31 +179,7 @@ export default function AddDebtSheet({ onClose }: Props) {
         {direction === 'owed_to_me' ? 'Paid from' : 'Received into'}
         <span className="text-slate-600"> · optional</span>
       </p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setWalletId('')}
-          className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-            walletId === ''
-              ? 'border-blue-500 bg-blue-500/15 text-white'
-              : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
-          }`}
-        >
-          No wallet
-        </button>
-        {wallets.map(w => (
-          <button
-            key={w.id}
-            onClick={() => setWalletId(w.id)}
-            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-              walletId === w.id
-                ? 'border-blue-500 bg-blue-500/15 text-white'
-                : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>{w.icon}</span>{w.name}
-          </button>
-        ))}
-      </div>
+      <WalletPicker value={walletId} onChange={setWalletId} />
       <p className="mt-2 text-[11px] text-slate-600">
         {walletId === ''
           ? 'No balance will change. Pick a wallet if the money left or entered one.'

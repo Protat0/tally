@@ -186,7 +186,7 @@ interface AppContextValue extends Computed {
     walletId?: string | null;
   }) => Promise<void>;
   deleteDebtEntry: (id: string) => Promise<void>;
-  setDebtEntrySettled: (id: string, settled: boolean) => Promise<void>;
+  setDebtEntrySettled: (id: string, settled: boolean, walletId?: string | null) => Promise<void>;
   settleUpPerson: (personId: string, walletId?: string | null) => Promise<void>;
   reverseSettleBatch: (settleMoveId: string) => Promise<void>;
 }
@@ -713,10 +713,44 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await reverseMoves([settleMoveId]);
   };
 
-  const setDebtEntrySettled = async (id: string, settled: boolean) => {
-    const settledAt = settled ? new Date().toISOString() : null;
-    setDebtEntries(prev => prev.map(e => e.id === id ? { ...e, settledAt } : e));
-    await supabase.from('debt_entries').update({ settled_at: settledAt }).eq('id', id);
+  // Settling one row is a settle-up batch of exactly one, so it reuses
+  // settle_move_id and reverses through the same path as a netted batch.
+  const setDebtEntrySettled = async (id: string, settled: boolean, walletId?: string | null) => {
+    const entry = debtEntries.find(e => e.id === id);
+    if (!entry) return;
+
+    // Un-settling a wallet-linked row goes through reverseSettleBatch instead;
+    // this branch only handles rows that never moved money.
+    if (!settled) {
+      setDebtEntries(prev => prev.map(e => e.id === id ? { ...e, settledAt: null } : e));
+      await supabase.from('debt_entries').update({ settled_at: null }).eq('id', id);
+      return;
+    }
+
+    const settledAt = new Date().toISOString();
+    const name = debtPeople.find(p => p.id === entry.personId)?.name ?? 'someone';
+
+    // Settling `owed_to_me` means they paid you: money in. Settling `i_owe`
+    // means you paid them: money out.
+    let moveId: string | null = null;
+    if (walletId) {
+      const incoming = entry.direction === 'owed_to_me';
+      moveId = await recordMove(
+        {
+          kind: incoming ? 'debt_in' : 'debt_out',
+          amount: entry.amount, walletId, toWalletId: null, source: null,
+          note: incoming ? `${name} paid you back` : `Paid ${name} back`,
+        },
+        { [walletId]: balanceOf(walletId) + (incoming ? entry.amount : -entry.amount) },
+      );
+    }
+
+    setDebtEntries(prev => prev.map(
+      e => e.id === id ? { ...e, settledAt, settleMoveId: moveId } : e
+    ));
+    await supabase.from('debt_entries')
+      .update({ settled_at: settledAt, settle_move_id: moveId })
+      .eq('id', id);
   };
 
   // Clears every open entry for one person. With a wallet, the NET moves — not

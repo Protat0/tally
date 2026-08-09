@@ -1,38 +1,41 @@
 'use client';
 
 import { useState } from 'react';
-import { useApp, fmt, DebtPerson } from './AppContext';
+import { fmt } from './AppContext';
 import BottomSheet from './BottomSheet';
+import WalletPicker from './WalletPicker';
 
 interface Props {
-  person: DebtPerson;
+  title: string;
+  personName: string;
+  /** Signed: positive means they pay you, negative means you pay them. */
   net: number;
   currency: string;
+  onConfirm: (walletId: string | null) => Promise<void>;
   onClose: () => void;
 }
 
-// Squaring up is one exchange of one amount: the net. Picking a wallet is
-// optional — leave it blank when the cash never touched a tracked wallet.
-export default function SettleUpSheet({ person, net, currency, onClose }: Props) {
-  const { wallets, settleUpPerson } = useApp();
+// Used for both a person's whole settle-up and a single row. Either way the
+// question is the same: this much changes hands — which wallet, if any?
+export default function SettleUpSheet({
+  title, personName, net, currency, onConfirm, onClose,
+}: Props) {
   const [walletId, setWalletId] = useState<string>('');
   const [saving, setSaving] = useState(false);
 
   const incoming = net > 0;
   const amount = Math.abs(net);
 
-  const handleSettle = async () => {
+  const handleConfirm = async () => {
     setSaving(true);
-    await settleUpPerson(person.id, walletId || null);
+    await onConfirm(walletId || null);
     setSaving(false);
     onClose();
   };
 
   return (
     <BottomSheet onClose={onClose}>
-      <p className="font-semibold text-white text-lg mb-1">
-        Settle up with {person.name}
-      </p>
+      <p className="font-semibold text-white text-lg mb-1">{title}</p>
 
       {net === 0 ? (
         <p className="text-sm text-slate-500 mb-5">
@@ -41,7 +44,7 @@ export default function SettleUpSheet({ person, net, currency, onClose }: Props)
         </p>
       ) : (
         <p className="text-sm text-slate-500 mb-5">
-          {incoming ? `${person.name} pays you ` : `You pay ${person.name} `}
+          {incoming ? `${personName} pays you ` : `You pay ${personName} `}
           <span className={incoming ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
             {fmt(amount, currency)}
           </span>
@@ -55,32 +58,8 @@ export default function SettleUpSheet({ person, net, currency, onClose }: Props)
             {incoming ? 'Received into' : 'Paid from'}
             <span className="text-slate-600"> · optional</span>
           </p>
-          <div className="flex flex-wrap gap-2 mb-2">
-            <button
-              onClick={() => setWalletId('')}
-              className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                walletId === ''
-                  ? 'border-blue-500 bg-blue-500/15 text-white'
-                  : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
-              }`}
-            >
-              No wallet
-            </button>
-            {wallets.map(w => (
-              <button
-                key={w.id}
-                onClick={() => setWalletId(w.id)}
-                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                  walletId === w.id
-                    ? 'border-blue-500 bg-blue-500/15 text-white'
-                    : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
-                }`}
-              >
-                <span>{w.icon}</span>{w.name}
-              </button>
-            ))}
-          </div>
-          <p className="mb-1 text-[11px] text-slate-600">
+          <WalletPicker value={walletId} onChange={setWalletId} />
+          <p className="mt-2 text-[11px] text-slate-600">
             {walletId === ''
               ? 'No balance will change.'
               : `${fmt(amount, currency)} ${incoming ? 'enters' : 'leaves'} this wallet.`}
@@ -89,11 +68,11 @@ export default function SettleUpSheet({ person, net, currency, onClose }: Props)
       )}
 
       <button
-        onClick={handleSettle}
+        onClick={handleConfirm}
         disabled={saving}
         className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
       >
-        {saving ? 'Settling…' : 'Settle up'}
+        {saving ? 'Settling…' : 'Mark settled'}
       </button>
     </BottomSheet>
   );
