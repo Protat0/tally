@@ -46,6 +46,30 @@ export interface MoneyMove {
   source: IncomeSource | null; note: string; date: string;
 }
 
+// ── Debt board ──────────────────────────────────────────────────────────────
+// A standalone ledger: settling a debt never moves a wallet balance. A person's
+// balance is derived from their open entries, never stored.
+export type DebtDirection = 'owed_to_me' | 'i_owe';
+
+export interface DebtPerson {
+  id: string; name: string; emoji: string;
+}
+
+export interface DebtEntry {
+  id: string; personId: string; direction: DebtDirection;
+  amount: number; note: string; date: string;
+  settledAt: string | null;   // null means open
+}
+
+// Positive = they owe you. Caller decides which entries to include; pass only
+// open ones for a live balance.
+export function netOf(entries: DebtEntry[]): number {
+  return entries.reduce(
+    (s, e) => s + (e.direction === 'owed_to_me' ? e.amount : -e.amount),
+    0,
+  );
+}
+
 export interface Bill {
   id: string; name: string; amount: number;
   paidMonths: string[]; // 'YYYY-MM' strings — resets each month naturally
@@ -144,6 +168,19 @@ interface AppContextValue extends Computed {
   toggleBillPaid: (id: string) => Promise<void>;
   updateBill: (id: string, updates: { name?: string; amount?: number }) => Promise<void>;
   resetBalances: (walletBalances: Record<string, number>) => Promise<void>;
+  debtPeople: DebtPerson[];
+  debtEntries: DebtEntry[];
+  totalOwedToMe: number;
+  totalIOwe: number;
+  addDebtPerson: (p: { name: string; emoji: string }) => Promise<string | null>;
+  deleteDebtPerson: (id: string) => Promise<void>;
+  addDebtEntry: (e: {
+    personId: string; direction: DebtDirection;
+    amount: number; note: string; date: string;
+  }) => Promise<void>;
+  deleteDebtEntry: (id: string) => Promise<void>;
+  setDebtEntrySettled: (id: string, settled: boolean) => Promise<void>;
+  settleUpPerson: (personId: string) => Promise<void>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -255,6 +292,15 @@ const fromDBShopee     = (r: Row): ShopeePayment => ({
 const fromDBEFEntry    = (r: Row): EmergencyFundEntry => ({
   id: r.id, amount: Number(r.amount), note: r.note || '', date: r.date,
 });
+const fromDBDebtPerson = (r: Row): DebtPerson => ({
+  id: r.id, name: r.name, emoji: r.emoji || '🧑',
+});
+const fromDBDebtEntry  = (r: Row): DebtEntry => ({
+  id: r.id, personId: r.person_id,
+  direction: r.direction as DebtDirection,
+  amount: Number(r.amount), note: r.note || '',
+  date: r.date, settledAt: r.settled_at ?? null,
+});
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
@@ -283,6 +329,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const [shopeeNewPurchaseLock, setLock]                = useState(false);
   const [emergencyFund,        setEmergencyFund]        = useState<EmergencyFund>({ entries: [], currentAmount: 0 });
   const [dataLoading,          setDataLoading]          = useState(false);
+  const [debtPeople,           setDebtPeople]           = useState<DebtPerson[]>([]);
+  const [debtEntries,          setDebtEntries]          = useState<DebtEntry[]>([]);
 
   // ── Load / clear on auth change ──────────────────────────────────────────
   useEffect(() => {
@@ -290,6 +338,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       setWallets([]); setExpenses([]); setMoneyMoves([]); setSettings(defaultSettings);
       setShopeeSchedule([]); setLock(false);
       setEmergencyFund({ entries: [], currentAmount: 0 });
+      setDebtPeople([]); setDebtEntries([]);
       return;
     }
     loadAll(userId);
@@ -298,7 +347,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
   async function loadAll(uid: string) {
     setDataLoading(true);
-    const [sRes, wRes, eRes, mmRes, bRes, blRes, aRes, spRes, efRes] = await Promise.all([
+    const [sRes, wRes, eRes, mmRes, bRes, blRes, aRes, spRes, efRes, dpRes, deRes] = await Promise.all([
       supabase.from('settings').select('*').eq('user_id', uid).single(),
       supabase.from('wallets').select('*').eq('user_id', uid).order('created_at'),
       supabase.from('expenses').select('*').eq('user_id', uid).order('date', { ascending: false }),
@@ -308,6 +357,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       supabase.from('appliances').select('*').eq('user_id', uid),
       supabase.from('shopee_payments').select('*').eq('user_id', uid).order('month'),
       supabase.from('emergency_fund_entries').select('*').eq('user_id', uid).order('date', { ascending: false }),
+      supabase.from('debt_people').select('*').eq('user_id', uid).order('created_at'),
+      supabase.from('debt_entries').select('*').eq('user_id', uid).order('date', { ascending: false }),
     ]);
 
     if (sRes.data) {
@@ -329,6 +380,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       const entries = efRes.data.map(fromDBEFEntry);
       setEmergencyFund({ entries, currentAmount: entries.reduce((s, e) => s + e.amount, 0) });
     }
+    if (dpRes.data) setDebtPeople(dpRes.data.map(fromDBDebtPerson));
+    if (deRes.data) setDebtEntries(deRes.data.map(fromDBDebtEntry));
     setDataLoading(false);
   }
 
@@ -369,6 +422,17 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       shopeeDebtFreeDate: pending.length > 0 ? pending[pending.length - 1].month : null,
     };
   }, [wallets, expenses, moneyMoves, settings, shopeeSchedule]);
+
+  // Open entries only — settled debts are history, not balance.
+  const debtTotals = useMemo(() => {
+    const open = debtEntries.filter(e => !e.settledAt);
+    return {
+      totalOwedToMe: open.filter(e => e.direction === 'owed_to_me')
+                         .reduce((s, e) => s + e.amount, 0),
+      totalIOwe:     open.filter(e => e.direction === 'i_owe')
+                         .reduce((s, e) => s + e.amount, 0),
+    };
+  }, [debtEntries]);
 
   // ── Wallets ───────────────────────────────────────────────────────────────
   const addWallet = async (w: Omit<Wallet, 'id'>) => {
@@ -505,6 +569,67 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
         supabase.from('wallets').update({ balance }).eq('id', wid)
       ),
     ]);
+  };
+
+  // ── Debt board ────────────────────────────────────────────────────────────
+  // Not optimistic: the caller needs the real row id to reference as a foreign
+  // key on the entry it inserts next.
+  const addDebtPerson = async (p: { name: string; emoji: string }): Promise<string | null> => {
+    if (!userId) return null;
+    const { data } = await supabase.from('debt_people').insert({
+      user_id: userId, name: p.name, emoji: p.emoji,
+    }).select().single();
+    if (!data) return null;
+    setDebtPeople(prev => [...prev, fromDBDebtPerson(data)]);
+    return data.id as string;
+  };
+
+  // The DB cascades their entries; mirror that locally so the UI matches.
+  const deleteDebtPerson = async (id: string) => {
+    setDebtPeople(prev => prev.filter(p => p.id !== id));
+    setDebtEntries(prev => prev.filter(e => e.personId !== id));
+    await supabase.from('debt_people').delete().eq('id', id);
+  };
+
+  const addDebtEntry = async (e: {
+    personId: string; direction: DebtDirection;
+    amount: number; note: string; date: string;
+  }) => {
+    if (!userId) return;
+    const tempId = crypto.randomUUID();
+    setDebtEntries(prev => [{ ...e, id: tempId, settledAt: null }, ...prev]);
+
+    const { data } = await supabase.from('debt_entries').insert({
+      user_id: userId, person_id: e.personId, direction: e.direction,
+      amount: e.amount, note: e.note, date: e.date,
+    }).select().single();
+
+    if (data) {
+      setDebtEntries(prev => prev.map(x => x.id === tempId ? fromDBDebtEntry(data) : x));
+    }
+  };
+
+  const deleteDebtEntry = async (id: string) => {
+    setDebtEntries(prev => prev.filter(e => e.id !== id));
+    await supabase.from('debt_entries').delete().eq('id', id);
+  };
+
+  const setDebtEntrySettled = async (id: string, settled: boolean) => {
+    const settledAt = settled ? new Date().toISOString() : null;
+    setDebtEntries(prev => prev.map(e => e.id === id ? { ...e, settledAt } : e));
+    await supabase.from('debt_entries').update({ settled_at: settledAt }).eq('id', id);
+  };
+
+  // Clears every open entry for one person in a single write.
+  const settleUpPerson = async (personId: string) => {
+    const settledAt = new Date().toISOString();
+    setDebtEntries(prev => prev.map(
+      e => e.personId === personId && !e.settledAt ? { ...e, settledAt } : e
+    ));
+    await supabase.from('debt_entries')
+      .update({ settled_at: settledAt })
+      .eq('person_id', personId)
+      .is('settled_at', null);
   };
 
   // ── Settings (scalar fields + bills + appliances) ─────────────────────────
@@ -789,6 +914,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, toggleBillPaid,
       updateBill,
       resetBalances,
+      debtPeople, debtEntries,
+      ...debtTotals,
+      addDebtPerson, deleteDebtPerson,
+      addDebtEntry, deleteDebtEntry, setDebtEntrySettled, settleUpPerson,
     }}>
       {children}
     </AppContext.Provider>
