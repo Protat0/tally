@@ -1,6 +1,7 @@
 'use client';
 
 import { useModalLock } from './ModalLock';
+import { useSwipeToClose } from './useSwipeToClose';
 
 interface Props {
   onClose: () => void;
@@ -11,6 +12,7 @@ interface Props {
 // Backdrop click closes; clicks inside do not bubble out to it.
 export default function BottomSheet({ onClose, children }: Props) {
   useModalLock();
+  const swipe = useSwipeToClose(onClose);
   return (
     <div
       className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
@@ -20,6 +22,8 @@ export default function BottomSheet({ onClose, children }: Props) {
       <div
         className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6 max-h-[85vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
+        style={swipe.style}
+        {...swipe.handlers}
       >
         <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
         {children}

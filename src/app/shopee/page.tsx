@@ -5,6 +5,7 @@ import { useApp, fmt, ShopeePayment } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import { ScrollLock } from '@/components/ModalLock';
+import { useSwipeToClose } from '@/components/useSwipeToClose';
 import { PlusIcon, BagIcon, AlertIcon, CheckIcon, TrashIcon } from '@/components/Icons';
 
 const STATUS_STYLE: Record<ShopeePayment['status'], string> = {
@@ -27,6 +28,7 @@ export default function ShopeePage() {
   } = useApp();
 
   const [showAdd, setShowAdd] = useState(false);
+  const swipe = useSwipeToClose(() => setShowAdd(false));
   const [newMonth, setNewMonth] = useState('');
   const [newAmount, setNewAmount] = useState('');
 
@@ -154,6 +156,8 @@ export default function ShopeePage() {
           <div
             className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-10 md:pb-6"
             onClick={e => e.stopPropagation()}
+            style={swipe.style}
+            {...swipe.handlers}
           >
             <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
             <p className="mb-5 text-center font-semibold text-white text-lg">Add Instalment</p>

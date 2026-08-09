@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useApp, fmt, Wallet, IncomeSource, INCOME_SOURCES } from './AppContext';
 import { ScrollLock } from './ModalLock';
+import { useSwipeToClose } from './useSwipeToClose';
 import { PlusIcon, ArrowUpIcon, ArrowDownIcon, SwitchIcon, TrashIcon } from './Icons';
 
 interface Props {
@@ -26,6 +27,8 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
   const closeModal = () => {
     setModal(null); setInputVal(''); setTargetId(''); setNote(''); setSource('salary');
   };
+
+  const swipe = useSwipeToClose(closeModal);
 
   const confirm = () => {
     const amt = parseFloat(inputVal);
@@ -100,6 +103,8 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
           <div
             className="relative w-full max-w-[430px] rounded-t-3xl bg-[#111827] border-t border-[#1e2d40] p-6 pb-10"
             onClick={e => e.stopPropagation()}
+            style={swipe.style}
+            {...swipe.handlers}
           >
             <p className="mb-4 text-center font-semibold text-white capitalize">
               {modal.type === 'add' ? 'Add Funds' : modal.type === 'withdraw' ? 'Withdraw' : 'Transfer'}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from './AppContext';
 import { ScrollLock, useAnyModalOpen } from './ModalLock';
+import { useSwipeToClose } from './useSwipeToClose';
 import { PlusIcon, XIcon, ReceiptIcon, BoltIcon } from './Icons';
 
 const HIDDEN = ['/auth', '/expenses/new'];
@@ -23,12 +24,18 @@ export default function GlobalFAB() {
   const [hrs, setHrs]           = useState('');
   const [mins, setMins]         = useState('');
 
-  if (HIDDEN.includes(pathname)) return null;
-
   const closeAll = () => {
     setOpen(false); setElectric(false); setRefund(false);
     setAppId(''); setHrs(''); setMins('');
   };
+
+  // Both modals close the same way, so one gesture instance serves both —
+  // only ever one of them is mounted at a time.
+  const swipe = useSwipeToClose(closeAll);
+
+  // Every hook must run before this early return, or the hook order changes
+  // as you navigate on and off the hidden routes.
+  if (HIDDEN.includes(pathname)) return null;
 
   const totalMinutes = (parseFloat(hrs) || 0) * 60 + (parseFloat(mins) || 0);
   const canLog = !!appId && totalMinutes > 0;
@@ -108,6 +115,8 @@ export default function GlobalFAB() {
           <div
             className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
             onClick={e => e.stopPropagation()}
+            style={swipe.style}
+            {...swipe.handlers}
           >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 md:hidden" />
 
@@ -204,6 +213,8 @@ export default function GlobalFAB() {
           <div
             className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
             onClick={e => e.stopPropagation()}
+            style={swipe.style}
+            {...swipe.handlers}
           >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 md:hidden" />
 
