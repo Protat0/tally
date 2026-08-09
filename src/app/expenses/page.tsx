@@ -14,7 +14,7 @@ import CategoryGrid from '@/components/CategoryGrid';
 import CategoryDetailSheet from '@/components/CategoryDetailSheet';
 import ElectricSheet from '@/components/ElectricSheet';
 import SavingsSheet from '@/components/SavingsSheet';
-import { PlusIcon } from '@/components/Icons';
+import { PlusIcon, CogIcon } from '@/components/Icons';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -236,7 +236,14 @@ export default function BudgetPage() {
         <div className="mx-auto max-w-5xl px-4 md:px-8 pb-28 md:pb-12">
 
           {/* ── Log Expense ── */}
-          <div className="flex justify-end pt-14 pb-4 md:pt-10">
+          <div className="flex justify-end items-center gap-2 pt-14 pb-4 md:pt-10">
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 active:bg-white/10 transition-colors md:hidden"
+            >
+              <CogIcon className="w-5 h-5 text-slate-400" />
+            </Link>
             <Link
               href="/expenses/new"
               className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 transition-colors"

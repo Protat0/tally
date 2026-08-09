@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp, fmt } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import WalletCard from '@/components/WalletCard';
-import { PlusIcon, WalletIcon } from '@/components/Icons';
+import { PlusIcon, WalletIcon, CogIcon } from '@/components/Icons';
 
 const ICONS = ['💳', '🏦', '💵', '💰', '🪙', '📱', '🏧', '💼'];
 
@@ -41,13 +42,22 @@ export default function WalletsPage() {
               <p className="text-xs text-slate-500 uppercase tracking-widest">All Wallets</p>
               <p className="text-2xl font-bold text-white mt-0.5">{fmt(totalBalance, settings.currency)}</p>
             </div>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white active:bg-blue-700 transition-colors"
-            >
-              <PlusIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Wallet</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAdd(true)}
+                className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white active:bg-blue-700 transition-colors"
+              >
+                <PlusIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Add Wallet</span>
+              </button>
+              <Link
+                href="/settings"
+                aria-label="Settings"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 active:bg-white/10 transition-colors md:hidden"
+              >
+                <CogIcon className="w-5 h-5 text-slate-400" />
+              </Link>
+            </div>
           </header>
 
           {wallets.length === 0 ? (
