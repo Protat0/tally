@@ -14,11 +14,68 @@ A running log of what's been built and what's next, so we can pick up where we l
 | `category_budgets` (jsonb, default `{}`) | `settings` | ✅ Applied 2026-08-08 |
 | `hidden_categories` (jsonb, default `[]`) | `settings` | ✅ Applied 2026-08-08 |
 | `money_moves` (table + index + RLS policy) | — | ✅ Applied 2026-08-08 |
-| `debt_people` + `debt_entries` (tables + indexes + RLS) | — | ⏳ **Run it** — SQL in `debtplan.md` Task 1 Step 1 |
+| `debt_people` + `debt_entries` (tables + indexes + RLS) | — | ✅ Applied 2026-08-09 |
+| `money_moves.kind` check widened + `debt_entries.wallet_id` / `move_id` / `settle_move_id` | — | ⏳ **Run it** — SQL in `docs/superpowers/plans/2026-08-09-debt-wallet-linkage.md` Task 1 Step 1 |
 
-**The Debt Board code is all merged but `/debts` cannot work until that migration
-runs.** Without the tables, `loadAll` gets a 404 from PostgREST for both queries;
-the page renders its empty state rather than crashing, but nothing can be saved.
+**The wallet-linkage code is all merged but will fail on write until that migration
+runs.** Inserting a debt with a wallet writes `wallet_id` / `move_id`, and a movement
+writes `kind = 'debt_out'` — all three are rejected without the new columns and the
+widened check constraint.
+
+---
+
+## Done 2026-08-09 — Debt–wallet linkage (all 4 tasks) — ⏳ manual verification pending
+
+Spec: `docs/superpowers/specs/2026-08-09-debt-wallet-linkage-design.md`
+Plan: `docs/superpowers/plans/2026-08-09-debt-wallet-linkage.md`
+
+A debt can now optionally carry a wallet, so the balance moves when the money does.
+All 4 tasks built and committed, each verified with `npm run build` + `npm run lint`
+at the 2-error/6-warning baseline. **The manual checks have not been run** — they need
+the migration above.
+
+**Why this exists.** The board was designed as a standalone ledger, and the accounting
+half of that was right: what you're owed is a receivable, not cash. But it left the
+*movement* unrecorded, so spotting someone ₱250 from GCash took four actions (add the
+debt, withdraw on the Wallets page, tick settle, add income on the Wallets page).
+Steps two and four get skipped and balances drift silently.
+
+**How it works:**
+
+- **Two new `MoneyMoveKind` values**, `debt_out` and `debt_in`, named for direction
+  rather than story — `lent`/`repaid` reads well until someone lends *you* cash, which
+  is money in but not a repayment. Both map to `flow: 'moved'` on the Activity page, so
+  they render as 🤝 Debt but count toward neither `monthSpent` nor `monthEarned`.
+  **A repayment recorded as `earned` would have polluted `receivedThisMonth`** and
+  quietly inflated your actual-vs-expected income row for months.
+- **Three nullable columns on `debt_entries`** tie a debt to the rows it caused:
+  `wallet_id`, `move_id` (creation movement), `settle_move_id` (settle-up movement,
+  **shared across the whole batch**).
+- **Settle-up moves the NET.** ₱250 owed against ₱180 owing is one ₱70 movement, not
+  two. A zero net creates no movement at all. The per-row tick stays a one-tap
+  bookkeeping toggle that never touches a balance.
+- **The batch is the unit of reversal.** No individual row owns a share of a netted
+  ₱70 movement, so un-ticking any row from a wallet-linked settle-up reopens the entire
+  batch behind a confirm that names the consequence.
+
+**Traps worth remembering:**
+
+- **`reverseMoves` takes an array and accumulates deltas per wallet before computing
+  any balance.** `balanceOf` reads React state, which does not update between
+  iterations of a loop — reversing moves one at a time would compute every new balance
+  from the same stale figure and the last write would win. Deleting a person with two
+  linked entries on the same wallet hits this exactly. **Never reintroduce a loop of
+  single reversals.**
+- **`recordMove` now returns the inserted row id and takes an optional date.** The
+  three existing callers (`addIncome`, `addWithdrawal`, `addTransfer`) used concise
+  arrow bodies, so they implicitly returned it and broke their `Promise<void>`
+  contract; they now discard it explicitly.
+- **`addDebtEntry` is no longer optimistic.** With a wallet it must await the move to
+  learn its id, and maintaining two code paths was more bug surface than the sheet's
+  existing "Saving…" state is worth.
+- **The Activity page's money-move mapping ends in a fallback `return`** that labels
+  anything unrecognised as "Transfer 🔄". A new kind that isn't handled explicitly
+  mislabels silently rather than erroring.
 
 ---
 

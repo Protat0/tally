@@ -115,7 +115,7 @@ The `do $$ ... $$` block drops any existing check constraint on `money_moves` th
 mentions `kind`, whatever it is named. The original `money_moves` DDL was applied by
 hand and is not in the repo, so its constraint name is unknown.
 
-- [ ] **Step 2: Extend `MoneyMoveKind`**
+- [x] **Step 2: Extend `MoneyMoveKind`**
 
 In `src/components/AppContext.tsx`, replace the `MoneyMoveKind` line (~line 32):
 
@@ -126,7 +126,7 @@ In `src/components/AppContext.tsx`, replace the `MoneyMoveKind` line (~line 32):
 export type MoneyMoveKind = 'earned' | 'withdrawn' | 'moved' | 'debt_out' | 'debt_in';
 ```
 
-- [ ] **Step 3: Extend the `DebtEntry` interface**
+- [x] **Step 3: Extend the `DebtEntry` interface**
 
 Replace the `DebtEntry` interface:
 
@@ -141,7 +141,7 @@ export interface DebtEntry {
 }
 ```
 
-- [ ] **Step 4: Map the new columns**
+- [x] **Step 4: Map the new columns**
 
 Replace `fromDBDebtEntry`:
 
@@ -157,7 +157,7 @@ const fromDBDebtEntry  = (r: Row): DebtEntry => ({
 });
 ```
 
-- [ ] **Step 5: Make `recordMove` return the new row's id and accept a date**
+- [x] **Step 5: Make `recordMove` return the new row's id and accept a date**
 
 Replace the `recordMove` signature and its final block. Existing callers pass two
 arguments and ignore the return value, so they are unaffected.
@@ -194,7 +194,7 @@ arguments and ignore the return value, so they are unaffected.
   };
 ```
 
-- [ ] **Step 6: Add the `reverseMoves` primitive**
+- [x] **Step 6: Add the `reverseMoves` primitive**
 
 Place immediately after `deleteMoneyMove`. **Read the comment before changing this —
 the accumulation is not optional.**
@@ -236,7 +236,7 @@ the accumulation is not optional.**
   };
 ```
 
-- [ ] **Step 7: Keep the existing optimistic insert compiling**
+- [x] **Step 7: Keep the existing optimistic insert compiling**
 
 `addDebtEntry` builds its optimistic row from `{ ...e, id, settledAt: null }`, which no
 longer satisfies `DebtEntry` now that three fields exist. Add them so the file
@@ -249,7 +249,7 @@ type-checks; Task 2 rewrites this function entirely.
     }, ...prev]);
 ```
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 ```bash
 npm run build
@@ -262,7 +262,7 @@ Manual check — open `/debts` and confirm existing entries still render, settle
 delete exactly as before. Nothing about the UI has changed yet. If the page 404s from
 Supabase, the Step 1 migration has not been run.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/components/AppContext.tsx
@@ -280,7 +280,7 @@ git commit -m "feat: debt movement kinds, linkage columns and reversal primitive
 - Consumes: `recordMove` (returns id), `DebtEntry` fields from Task 1.
 - Produces: `addDebtEntry(e: { personId, direction, amount, note, date, walletId? })` on the `useApp()` value, where `walletId?: string | null`.
 
-- [ ] **Step 1: Rewrite `addDebtEntry`**
+- [x] **Step 1: Rewrite `addDebtEntry`**
 
 Replace the whole function. Note it is **no longer optimistic**: with a wallet set it
 must await the move to learn its id, and running two code paths — one optimistic, one
@@ -323,7 +323,7 @@ not — is more bug surface than the sheet's existing "Saving…" state is worth
   };
 ```
 
-- [ ] **Step 2: Widen the context type**
+- [x] **Step 2: Widen the context type**
 
 In `interface AppContextValue`, replace the `addDebtEntry` entry:
 
@@ -335,7 +335,7 @@ In `interface AppContextValue`, replace the `addDebtEntry` entry:
   }) => Promise<void>;
 ```
 
-- [ ] **Step 3: Add the wallet picker to `AddDebtSheet`**
+- [x] **Step 3: Add the wallet picker to `AddDebtSheet`**
 
 Pull `wallets` and `settings` from the hook — replace the destructure at the top of
 the component:
@@ -398,7 +398,7 @@ Add `fmt` to the `AppContext` import on line 4:
 import { useApp, fmt, DebtDirection } from './AppContext';
 ```
 
-- [ ] **Step 4: Pass the wallet through on save**
+- [x] **Step 4: Pass the wallet through on save**
 
 In `handleSave`, add `walletId` to the `addDebtEntry` call:
 
@@ -414,7 +414,7 @@ In `handleSave`, add `walletId` to the `addDebtEntry` call:
     });
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 npm run build
@@ -429,7 +429,7 @@ row for it (mislabelled "Transfer 🔄" for now — Task 4 fixes the label). Add
 debt with **No wallet** selected and confirm no balance moves. Add an "I owe them ₱500"
 with a wallet and confirm that wallet *rises* by ₱500.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/AppContext.tsx src/components/AddDebtSheet.tsx
@@ -450,7 +450,7 @@ git commit -m "feat: optional wallet on debt creation"
   - `settleUpPerson(personId: string, walletId?: string | null): Promise<void>`
   - `SettleUpSheet({ person, net, currency, onClose })` — default export
 
-- [ ] **Step 1: Rewrite `settleUpPerson`**
+- [x] **Step 1: Rewrite `settleUpPerson`**
 
 Replace the whole function:
 
@@ -495,7 +495,7 @@ Replace the whole function:
   };
 ```
 
-- [ ] **Step 2: Widen the context type**
+- [x] **Step 2: Widen the context type**
 
 In `interface AppContextValue`, replace the `settleUpPerson` entry:
 
@@ -503,7 +503,7 @@ In `interface AppContextValue`, replace the `settleUpPerson` entry:
   settleUpPerson: (personId: string, walletId?: string | null) => Promise<void>;
 ```
 
-- [ ] **Step 3: Create `SettleUpSheet`**
+- [x] **Step 3: Create `SettleUpSheet`**
 
 ```tsx
 'use client';
@@ -610,7 +610,7 @@ export default function SettleUpSheet({ person, net, currency, onClose }: Props)
 }
 ```
 
-- [ ] **Step 4: Open the sheet from `DebtPersonSection`**
+- [x] **Step 4: Open the sheet from `DebtPersonSection`**
 
 Add the import and state, then swap the button's handler.
 
@@ -658,7 +658,7 @@ destructure at the top of the component, leaving:
   const { setDebtEntrySettled, deleteDebtEntry } = useApp();
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 npm run build
@@ -673,7 +673,7 @@ sheet reads "Marco pays you ₱70.00". Pick **Cash** and settle: Cash rises by �
 person whose net is exactly zero and confirm the sheet says they cancel out, offers no
 wallet, and moves no money.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/SettleUpSheet.tsx src/components/AppContext.tsx src/components/DebtPersonSection.tsx
@@ -691,7 +691,7 @@ git commit -m "feat: settle up sheet moves the net into a wallet"
 - Consumes: `reverseMoves` from Task 1; `settleMoveId` from Tasks 1 and 3.
 - Produces: `reverseSettleBatch(settleMoveId: string): Promise<void>` on the `useApp()` value.
 
-- [ ] **Step 1: Add `reverseSettleBatch`**
+- [x] **Step 1: Add `reverseSettleBatch`**
 
 Place after `settleUpPerson`:
 
@@ -712,7 +712,7 @@ Place after `settleUpPerson`:
   };
 ```
 
-- [ ] **Step 2: Reverse on delete**
+- [x] **Step 2: Reverse on delete**
 
 Replace `deleteDebtEntry` and `deleteDebtPerson`:
 
@@ -741,7 +741,7 @@ Replace `deleteDebtEntry` and `deleteDebtPerson`:
   };
 ```
 
-- [ ] **Step 3: Expose `reverseSettleBatch`**
+- [x] **Step 3: Expose `reverseSettleBatch`**
 
 Add to `interface AppContextValue`:
 
@@ -755,7 +755,7 @@ Add to the provider value object, beside the other debt functions:
       reverseSettleBatch,
 ```
 
-- [ ] **Step 4: Confirm before reopening a batch**
+- [x] **Step 4: Confirm before reopening a batch**
 
 In `DebtPersonSection.tsx`, pull the new function and add confirm state:
 
@@ -831,7 +831,7 @@ Add the dialog as the last child of the outer `<div>`, after the `SettleUpSheet`
       })()}
 ```
 
-- [ ] **Step 5: Render the new kinds on the Activity page**
+- [x] **Step 5: Render the new kinds on the Activity page**
 
 In `src/app/transactions/page.tsx`, inside the `moneyMoves.filter(...).map(...)`
 callback, add this branch **after** the `withdrawn` branch and **before** the final
@@ -852,7 +852,7 @@ callback, add this branch **after** the `withdrawn` branch and **before** the fi
         }
 ```
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 ```bash
 npm run build
@@ -878,7 +878,7 @@ Manual check, in order:
    Getting ₱200 back means the deltas are not accumulating.
 5. Reload after each of the above and confirm the balances persisted.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/components/AppContext.tsx src/components/DebtPersonSection.tsx src/app/transactions/page.tsx
