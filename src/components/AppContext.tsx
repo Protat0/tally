@@ -29,7 +29,10 @@ export interface Expense {
 //   withdrawn — money out. walletId is the source.
 //   moved     — wallet-to-wallet. walletId → toWalletId. Net-zero overall,
 //               so it is deliberately excluded from earned/spent totals.
-export type MoneyMoveKind = 'earned' | 'withdrawn' | 'moved';
+// debt_out / debt_in — a debt board movement. Excluded from earned and spent
+// totals: lending is not consumption and a repayment is not income. Both are
+// your own money changing location.
+export type MoneyMoveKind = 'earned' | 'withdrawn' | 'moved' | 'debt_out' | 'debt_in';
 export type IncomeSource = 'salary' | 'freelance' | 'gift' | 'refund' | 'other';
 
 export const INCOME_SOURCES: { key: IncomeSource; label: string; icon: string }[] = [
@@ -58,7 +61,10 @@ export interface DebtPerson {
 export interface DebtEntry {
   id: string; personId: string; direction: DebtDirection;
   amount: number; note: string; date: string;
-  settledAt: string | null;   // null means open
+  settledAt: string | null;      // null means open
+  walletId: string | null;       // wallet the creation movement hit; null = none
+  moveId: string | null;         // money_moves row created at creation
+  settleMoveId: string | null;   // shared by every entry in one settle-up batch
 }
 
 // Positive = they owe you. Caller decides which entries to include; pass only
@@ -300,6 +306,9 @@ const fromDBDebtEntry  = (r: Row): DebtEntry => ({
   direction: r.direction as DebtDirection,
   amount: Number(r.amount), note: r.note || '',
   date: r.date, settledAt: r.settled_at ?? null,
+  walletId: r.wallet_id ?? null,
+  moveId: r.move_id ?? null,
+  settleMoveId: r.settle_move_id ?? null,
 });
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
@@ -499,9 +508,11 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const recordMove = async (
     move: Omit<MoneyMove, 'id' | 'date'>,
     balanceUpdates: Record<string, number>,
-  ) => {
-    if (!userId) return;
-    const now = new Date().toISOString();
+    date?: string,
+  ): Promise<string | null> => {
+    if (!userId) return null;
+    // Debt movements are dated to the debt itself, which may be days ago.
+    const now = date ?? new Date().toISOString();
     const tempId = crypto.randomUUID();
 
     setMoneyMoves(prev => [{ ...move, id: tempId, date: now }, ...prev]);
@@ -519,31 +530,37 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     ]);
     if (moveRes.data) {
       setMoneyMoves(prev => prev.map(m => m.id === tempId ? fromDBMoneyMove(moveRes.data) : m));
+      return moveRes.data.id as string;
     }
+    return null;
   };
 
   const balanceOf = (id: string) => wallets.find(w => w.id === id)?.balance ?? 0;
 
-  const addIncome = async (m: { walletId: string; amount: number; source: IncomeSource; note: string }) =>
-    recordMove(
+  // These three discard recordMove's id — only the debt board needs it.
+  const addIncome = async (m: { walletId: string; amount: number; source: IncomeSource; note: string }) => {
+    await recordMove(
       { kind: 'earned', amount: m.amount, walletId: m.walletId, toWalletId: null, source: m.source, note: m.note },
       { [m.walletId]: balanceOf(m.walletId) + m.amount },
     );
+  };
 
-  const addWithdrawal = async (m: { walletId: string; amount: number; note: string }) =>
-    recordMove(
+  const addWithdrawal = async (m: { walletId: string; amount: number; note: string }) => {
+    await recordMove(
       { kind: 'withdrawn', amount: m.amount, walletId: m.walletId, toWalletId: null, source: null, note: m.note },
       { [m.walletId]: balanceOf(m.walletId) - m.amount },
     );
+  };
 
-  const addTransfer = async (m: { fromWalletId: string; toWalletId: string; amount: number; note: string }) =>
-    recordMove(
+  const addTransfer = async (m: { fromWalletId: string; toWalletId: string; amount: number; note: string }) => {
+    await recordMove(
       { kind: 'moved', amount: m.amount, walletId: m.fromWalletId, toWalletId: m.toWalletId, source: null, note: m.note },
       {
         [m.fromWalletId]: balanceOf(m.fromWalletId) - m.amount,
         [m.toWalletId]:   balanceOf(m.toWalletId)   + m.amount,
       },
     );
+  };
 
   const deleteMoneyMove = async (id: string) => {
     const found = moneyMoves.find(m => m.id === id);
@@ -572,6 +589,40 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   };
 
   // ── Debt board ────────────────────────────────────────────────────────────
+  // Undo a set of debt movements: put the money back and delete the records.
+  //
+  // Deltas are summed per wallet BEFORE any balance is computed. `balanceOf`
+  // reads React state, which does not update between iterations of a loop, so
+  // reversing moves one at a time would compute every new balance from the same
+  // stale figure and the last write would win — silently corrupting the balance
+  // whenever one wallet is hit twice (deleting a person with two linked entries
+  // on the same wallet does exactly that).
+  const reverseMoves = async (moveIds: string[]) => {
+    const ids = moveIds.filter(Boolean);
+    if (ids.length === 0) return;
+    const targets = moneyMoves.filter(m => ids.includes(m.id));
+    if (targets.length === 0) return;
+
+    const deltas: Record<string, number> = {};
+    for (const mv of targets) {
+      deltas[mv.walletId] = (deltas[mv.walletId] ?? 0)
+        + (mv.kind === 'debt_in' ? -mv.amount : mv.amount);
+    }
+
+    const newBalances: Record<string, number> = {};
+    for (const [wid, d] of Object.entries(deltas)) newBalances[wid] = balanceOf(wid) + d;
+
+    setMoneyMoves(prev => prev.filter(m => !ids.includes(m.id)));
+    setWallets(prev => prev.map(w => w.id in newBalances ? { ...w, balance: newBalances[w.id] } : w));
+
+    await Promise.all([
+      supabase.from('money_moves').delete().in('id', ids),
+      ...Object.entries(newBalances).map(([wid, balance]) =>
+        supabase.from('wallets').update({ balance }).eq('id', wid)
+      ),
+    ]);
+  };
+
   // Not optimistic: the caller needs the real row id to reference as a foreign
   // key on the entry it inserts next.
   const addDebtPerson = async (p: { name: string; emoji: string }): Promise<string | null> => {
@@ -597,7 +648,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   }) => {
     if (!userId) return;
     const tempId = crypto.randomUUID();
-    setDebtEntries(prev => [{ ...e, id: tempId, settledAt: null }, ...prev]);
+    setDebtEntries(prev => [{
+      ...e, id: tempId, settledAt: null,
+      walletId: null, moveId: null, settleMoveId: null,
+    }, ...prev]);
 
     const { data } = await supabase.from('debt_entries').insert({
       user_id: userId, person_id: e.personId, direction: e.direction,
