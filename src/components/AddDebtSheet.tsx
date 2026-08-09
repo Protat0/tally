@@ -73,13 +73,14 @@ export default function AddDebtSheet({ onClose }: Props) {
             <button
               key={p.id}
               onClick={() => { setCreating(false); setPersonId(p.id); }}
-              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+              className={`flex max-w-full min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
                 !creating && personId === p.id
                   ? 'border-blue-500 bg-blue-500/15 text-white'
                   : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
               }`}
             >
-              <span>{p.emoji}</span>{p.name}
+              <span className="shrink-0">{p.emoji}</span>
+              <span className="truncate">{p.name}</span>
             </button>
           ))}
           <button
@@ -168,11 +169,13 @@ export default function AddDebtSheet({ onClose }: Props) {
 
       {/* Date */}
       <p className="text-xs text-slate-500 mb-1">Date</p>
+      {/* max-w-full because iOS gives date inputs an intrinsic width that
+          w-full alone does not always beat. */}
       <input
         type="date"
         value={date}
         onChange={e => setDate(e.target.value)}
-        className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+        className="w-full max-w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
       />
 
       {/* Wallet — required. The balance moves as soon as this is saved. */}
