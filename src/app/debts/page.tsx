@@ -6,6 +6,7 @@ import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import DebtSummary from '@/components/DebtSummary';
 import DebtPersonSection from '@/components/DebtPersonSection';
+import AddDebtSheet from '@/components/AddDebtSheet';
 import { PlusIcon, UsersIcon } from '@/components/Icons';
 
 export interface PersonGroup {
@@ -87,6 +88,8 @@ export default function DebtsPage() {
 
         </div>
       </div>
+
+      {addOpen && <AddDebtSheet onClose={() => setAddOpen(false)} />}
     </div>
   );
 }
