@@ -1,10 +1,10 @@
-# Debt Board Implementation Plan
+﻿# Debt Board Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A `/debts` page that tracks mutual mini-debts with friends and coworkers — who owes you, who you owe, and what each debt was for.
+**Goal:** A `/debts` page that tracks mutual mini-debts with friends and coworkers â€” who owes you, who you owe, and what each debt was for.
 
-**Architecture:** Two new Supabase tables (`debt_people`, `debt_entries`) loaded through `AppContext` alongside the existing data. Entries are itemised and grouped into a section per person; a person's balance is **derived** by netting their open entries, never stored. Settling stamps `settled_at` rather than deleting, so history survives. The board is a **standalone ledger** — it does not touch wallet balances or `money_moves`.
+**Architecture:** Two new Supabase tables (`debt_people`, `debt_entries`) loaded through `AppContext` alongside the existing data. Entries are itemised and grouped into a section per person; a person's balance is **derived** by netting their open entries, never stored. Settling stamps `settled_at` rather than deleting, so history survives. The board is a **standalone ledger** â€” it does not touch wallet balances or `money_moves`.
 
 **Tech Stack:** Next.js 16.2.4 (Turbopack, App Router), React 19, TypeScript, Tailwind CSS v4, Supabase (`@supabase/supabase-js`).
 
@@ -12,14 +12,14 @@
 
 ## Global Constraints
 
-- **No test framework exists.** `package.json` defines only `build` (`next build`) and `lint` (`eslint`). Every task verifies with `npm run build`, `npm run lint`, and a named manual check. **Do not add a test framework — it is out of scope.**
-- **Lint baseline.** `npm run lint` reports **2 errors and 6 warnings**, all pre-existing in `src/components/AppContext.tsx` and `src/app/auth/page.tsx` / `src/app/page.tsx`. A task passes if it introduces nothing beyond this baseline. **Do not fix the baseline issues — out of scope.**
+- **No test framework exists.** `package.json` defines only `build` (`next build`) and `lint` (`eslint`). Every task verifies with `npm run build`, `npm run lint`, and a named manual check. **Do not add a test framework â€” it is out of scope.**
+- **Lint baseline.** `npm run lint` reports **2 errors and 6 warnings**, all pre-existing in `src/components/AppContext.tsx` and `src/app/auth/page.tsx` / `src/app/page.tsx`. A task passes if it introduces nothing beyond this baseline. **Do not fix the baseline issues â€” out of scope.**
 - **This is NOT the Next.js you know.** Per `AGENTS.md`, read the relevant guide in `node_modules/next/dist/docs/` before writing code that touches framework APIs. This plan touches only client components, `next/link` and `next/navigation`, all already used throughout.
-- **All new components are client components** — start every new file with `'use client';`.
+- **All new components are client components** â€” start every new file with `'use client';`.
 - **Preserve the existing dark palette exactly:** surface `bg-[#111827]`, border `border-[#1e2d40]`, hover surface `bg-[#141d2e]`, page background `bg-[#0b0f1a]`, accent `blue-600`/`blue-400`, positive `emerald-400`, negative `red-400`.
-- **Money is always rendered with `fmt(amount, currency)`** from `AppContext`, where `currency` comes from `settings.currency`. Never hardcode `₱`.
+- **Money is always rendered with `fmt(amount, currency)`** from `AppContext`, where `currency` comes from `settings.currency`. Never hardcode `â‚±`.
 - **The migration in Task 1 must be run by the user in the Supabase SQL editor before any later task can be manually verified.** Ask them to run it; do not attempt to apply it programmatically.
-- **Direction values are exactly `'owed_to_me'` and `'i_owe'`** — used in the DB check constraint, the TypeScript union, and every component. Do not invent variants.
+- **Direction values are exactly `'owed_to_me'` and `'i_owe'`** â€” used in the DB check constraint, the TypeScript union, and every component. Do not invent variants.
 
 ---
 
@@ -30,9 +30,9 @@
 | File | Responsibility |
 |---|---|
 | `src/app/debts/page.tsx` | Route shell: sorting, sheet state, person sections |
-| `src/components/DebtSummary.tsx` | Top band — you're owed / you owe / net |
+| `src/components/DebtSummary.tsx` | Top band â€” you're owed / you owe / net |
 | `src/components/DebtPersonSection.tsx` | One person: header, net, Settle up, open items, settled disclosure |
-| `src/components/DebtEntryRow.tsx` | One entry — direction arrow, note, date, amount, settle tick, delete |
+| `src/components/DebtEntryRow.tsx` | One entry â€” direction arrow, note, date, amount, settle tick, delete |
 | `src/components/AddDebtSheet.tsx` | Add an entry; pick an existing person or create a new one |
 
 **Modify:**
@@ -51,13 +51,13 @@
 
 ---
 
-## Design Decisions (already settled — do not relitigate)
+## Design Decisions (already settled â€” do not relitigate)
 
 - **Standalone ledger.** Settling never writes a `money_move` and never changes a wallet balance.
-- **Netting is derived.** A person's balance is `Σ(owed_to_me) − Σ(i_owe)` across their **open** entries. Never persist a balance.
-- **`settled_at` is a nullable timestamp, not a boolean** — it doubles as the settled history.
+- **Netting is derived.** A person's balance is `Î£(owed_to_me) âˆ’ Î£(i_owe)` across their **open** entries. Never persist a balance.
+- **`settled_at` is a nullable timestamp, not a boolean** â€” it doubles as the settled history.
 - **Un-settle is supported.** Ticking a settled entry clears `settled_at`.
-- **Deleting an entry does not confirm** (low stakes, re-addable). **Deleting a person does confirm** — it cascades their whole history.
+- **Deleting an entry does not confirm** (low stakes, re-addable). **Deleting a person does confirm** â€” it cascades their whole history.
 - **Date defaults to today**, editable in the add sheet.
 - **Out of scope:** splitting one bill across several people, reminders, sharing a board with the other person, any link to wallets or `money_moves`.
 
@@ -79,7 +79,7 @@ Nothing renders yet. This task makes the data available.
 - Produces, on the `useApp()` value:
   - `debtPeople: DebtPerson[]`
   - `debtEntries: DebtEntry[]`
-  - `addDebtPerson(p: { name: string; emoji: string }): Promise<string | null>` — resolves to the **real** row id
+  - `addDebtPerson(p: { name: string; emoji: string }): Promise<string | null>` â€” resolves to the **real** row id
   - `deleteDebtPerson(id: string): Promise<void>`
   - `addDebtEntry(e: { personId: string; direction: DebtDirection; amount: number; note: string; date: string }): Promise<void>`
   - `deleteDebtEntry(id: string): Promise<void>`
@@ -89,14 +89,14 @@ Nothing renders yet. This task makes the data available.
 
 - [ ] **Step 1: Ask the user to run the migration**
 
-Post this to the user and wait for them to confirm it succeeded. Do not proceed until they do — every later manual check depends on it.
+Post this to the user and wait for them to confirm it succeeded. Do not proceed until they do â€” every later manual check depends on it.
 
 ```sql
 create table if not exists debt_people (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references auth.users(id) on delete cascade,
   name       text not null,
-  emoji      text not null default '🧑',
+  emoji      text not null default 'ðŸ§‘',
   created_at timestamptz not null default now()
 );
 
@@ -129,14 +129,14 @@ create policy "own debt_entries" on debt_entries
 `create policy` has no `if not exists`. If it errors with "policy already exists", prepend
 `drop policy if exists "own debt_people" on debt_people;` (and the same for `debt_entries`).
 
-Expect "Success. No rows returned" — normal for DDL.
+Expect "Success. No rows returned" â€” normal for DDL.
 
-- [ ] **Step 2: Add the types**
+- [x] **Step 2: Add the types**
 
 In `src/components/AppContext.tsx`, after the `MoneyMove` interface (~line 47):
 
 ```tsx
-// ── Debt board ──────────────────────────────────────────────────────────────
+// â”€â”€ Debt board â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // A standalone ledger: settling a debt never moves a wallet balance. A person's
 // balance is derived from their open entries, never stored.
 export type DebtDirection = 'owed_to_me' | 'i_owe';
@@ -161,13 +161,13 @@ export function netOf(entries: DebtEntry[]): number {
 }
 ```
 
-- [ ] **Step 3: Add the row mappers**
+- [x] **Step 3: Add the row mappers**
 
 Next to the other `fromDB*` helpers (~line 257):
 
 ```tsx
 const fromDBDebtPerson = (r: Row): DebtPerson => ({
-  id: r.id, name: r.name, emoji: r.emoji || '🧑',
+  id: r.id, name: r.name, emoji: r.emoji || 'ðŸ§‘',
 });
 
 const fromDBDebtEntry  = (r: Row): DebtEntry => ({
@@ -178,7 +178,7 @@ const fromDBDebtEntry  = (r: Row): DebtEntry => ({
 });
 ```
 
-- [ ] **Step 4: Add state and wire the loader**
+- [x] **Step 4: Add state and wire the loader**
 
 Add alongside the other `useState` calls in `AppProvider` (~line 285):
 
@@ -193,7 +193,7 @@ In the `useEffect` that clears state when `userId` goes null (~line 290), add:
 setDebtPeople([]); setDebtEntries([]);
 ```
 
-In `loadAll`, add two queries to the `Promise.all` array and destructure them —
+In `loadAll`, add two queries to the `Promise.all` array and destructure them â€”
 **append to the end of both the array and the destructuring list** so the existing
 positional bindings do not shift:
 
@@ -212,14 +212,14 @@ if (dpRes.data) setDebtPeople(dpRes.data.map(fromDBDebtPerson));
 if (deRes.data) setDebtEntries(deRes.data.map(fromDBDebtEntry));
 ```
 
-- [ ] **Step 5: Add the CRUD functions**
+- [x] **Step 5: Add the CRUD functions**
 
-Place after `deleteMoneyMove` (~line 508). Note `addDebtPerson` is **not optimistic** —
+Place after `deleteMoneyMove` (~line 508). Note `addDebtPerson` is **not optimistic** â€”
 it awaits the insert and returns the real id, because `AddDebtSheet` immediately
 inserts an entry with that id as a foreign key. A temp UUID would violate the FK.
 
 ```tsx
-// ── Debt board ────────────────────────────────────────────────────────────
+// â”€â”€ Debt board â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Not optimistic: the caller needs the real row id to reference as a foreign
 // key on the entry it inserts next.
 const addDebtPerson = async (p: { name: string; emoji: string }): Promise<string | null> => {
@@ -281,13 +281,13 @@ const settleUpPerson = async (personId: string) => {
 };
 ```
 
-- [ ] **Step 6: Add the computed totals**
+- [x] **Step 6: Add the computed totals**
 
-Add a `useMemo` after the existing `computed` block (~line 336). Keep it separate —
+Add a `useMemo` after the existing `computed` block (~line 336). Keep it separate â€”
 do not enlarge the existing `Computed` interface, which is about budget maths:
 
 ```tsx
-// Open entries only — settled debts are history, not balance.
+// Open entries only â€” settled debts are history, not balance.
 const debtTotals = useMemo(() => {
   const open = debtEntries.filter(e => !e.settledAt);
   return {
@@ -299,7 +299,7 @@ const debtTotals = useMemo(() => {
 }, [debtEntries]);
 ```
 
-- [ ] **Step 7: Extend the context type and provider value**
+- [x] **Step 7: Extend the context type and provider value**
 
 Add to `interface AppContextValue` (~line 113):
 
@@ -328,7 +328,7 @@ Add to the `<AppContext.Provider value={{ ... }}>` object:
       addDebtEntry, deleteDebtEntry, setDebtEntrySettled, settleUpPerson,
 ```
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 ```bash
 npm run build
@@ -337,11 +337,11 @@ npm run lint
 
 Expected: build succeeds; lint shows exactly the 2 errors / 6 warnings baseline.
 
-Manual check — run `npm run dev`, open any page, and confirm it still loads with no
+Manual check â€” run `npm run dev`, open any page, and confirm it still loads with no
 console errors. In the browser console the new tables should read as empty arrays,
 not throw. If you see a 404 from Supabase, the Step 1 migration has not been run.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/components/AppContext.tsx
@@ -358,7 +358,7 @@ git commit -m "feat: debt board data layer"
 **Interfaces:**
 - Produces: `UsersIcon` exported from `Icons.tsx`, same signature as every other icon there.
 
-- [ ] **Step 1: Add the icon**
+- [x] **Step 1: Add the icon**
 
 `Icons.tsx` builds every icon with the local `i(path)` helper. Add alongside the others:
 
@@ -366,7 +366,7 @@ git commit -m "feat: debt board data layer"
 export const UsersIcon = i('M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z');
 ```
 
-- [ ] **Step 2: Split the nav lists**
+- [x] **Step 2: Split the nav lists**
 
 In `BottomNav.tsx`, replace the single `links` array (lines 8-14) with:
 
@@ -387,12 +387,12 @@ const mobileLinks = links.filter(l => l.href !== '/settings');
 
 Update the import on line 5 to include `UsersIcon`.
 
-- [ ] **Step 3: Use `mobileLinks` in the mobile bar only**
+- [x] **Step 3: Use `mobileLinks` in the mobile bar only**
 
 In the `<nav className="md:hidden ...">` block, change `links.map(...)` to `mobileLinks.map(...)`.
-**Leave the desktop `<aside>` using the full `links` array** — the sidebar has room for all six.
+**Leave the desktop `<aside>` using the full `links` array** â€” the sidebar has room for all six.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 npm run build
@@ -400,12 +400,12 @@ npm run lint
 ```
 
 Expected: build succeeds; lint at baseline. `/debts` does not exist yet, so the nav
-item will 404 when tapped — that is expected until Task 4.
+item will 404 when tapped â€” that is expected until Task 4.
 
-Manual check — at a phone width the bottom bar shows five items ending in **Debts**,
+Manual check â€” at a phone width the bottom bar shows five items ending in **Debts**,
 no Settings. At `md` and wider the sidebar shows all six including Settings.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/Icons.tsx src/components/BottomNav.tsx
@@ -423,7 +423,7 @@ pages that use `PageHeader` already pass a `right` slot**, so the cog must rende
 **Files:**
 - Modify: `src/components/PageHeader.tsx`, `src/app/page.tsx`, `src/app/wallets/page.tsx`, `src/app/expenses/page.tsx`
 
-- [ ] **Step 1: Rewrite `PageHeader`**
+- [x] **Step 1: Rewrite `PageHeader`**
 
 Replace the whole file:
 
@@ -443,7 +443,7 @@ interface Props {
 export default function PageHeader({ title, right, onBack }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  // Mobile only — the desktop sidebar still carries Settings. And never link a
+  // Mobile only â€” the desktop sidebar still carries Settings. And never link a
   // page to itself.
   const showCog = pathname !== '/settings';
 
@@ -476,7 +476,7 @@ export default function PageHeader({ title, right, onBack }: Props) {
 The old fixed `w-9` wrapper is now `flex ... gap-2` so two controls fit. `truncate`
 on the `<h1>` stops a long title pushing the buttons off-screen.
 
-- [ ] **Step 2: Add the cog to the Dashboard's bespoke header**
+- [x] **Step 2: Add the cog to the Dashboard's bespoke header**
 
 `src/app/page.tsx` has its own `<header>`. Add this as the last child of that header's
 right-hand side (add `import Link from 'next/link';` and `CogIcon` to the icon import
@@ -495,13 +495,13 @@ if they are not already there):
 If the header has no right-hand container, wrap the existing right-hand content and
 this link together in `<div className="flex items-center gap-2">`.
 
-- [ ] **Step 3: Add the same cog to `src/app/wallets/page.tsx`**
+- [x] **Step 3: Add the same cog to `src/app/wallets/page.tsx`**
 
 Identical markup, same placement in that page's bespoke `<header>`.
 
-- [ ] **Step 4: Add the same cog to `src/app/expenses/page.tsx`**
+- [x] **Step 4: Add the same cog to `src/app/expenses/page.tsx`**
 
-This page has **no** `<header>` — its top row is the Log Expense link
+This page has **no** `<header>` â€” its top row is the Log Expense link
 (`<div className="flex justify-end pt-14 pb-4 md:pt-10">`). Put the cog **before**
 the existing `<Link href="/expenses/new">` inside that div, and add `gap-2` to it:
 
@@ -520,10 +520,10 @@ the existing `<Link href="/expenses/new">` inside that div, and add `gap-2` to i
 
 Add `CogIcon` to the `@/components/Icons` import on that page.
 
-`/expenses/new` is deliberately excluded — it is a form sub-page you back out of,
+`/expenses/new` is deliberately excluded â€” it is a form sub-page you back out of,
 not a destination you navigate onward from.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 npm run build
@@ -538,7 +538,7 @@ each opens Settings. On Shopee / Emergency Fund / Activity the cog sits **beside
 that page's existing button, not instead of it. Settings itself shows **no** cog.
 At `md` and wider, no cog appears anywhere.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/PageHeader.tsx src/app/page.tsx src/app/wallets/page.tsx src/app/expenses/page.tsx
@@ -557,9 +557,9 @@ state; person sections arrive in Task 5.
 
 **Interfaces:**
 - Consumes: `totalOwedToMe`, `totalIOwe`, `debtPeople`, `debtEntries` from Task 1.
-- Produces: `DebtSummary({ owedToMe, iOwe, currency })` — default export.
+- Produces: `DebtSummary({ owedToMe, iOwe, currency })` â€” default export.
 
-- [ ] **Step 1: Create `DebtSummary`**
+- [x] **Step 1: Create `DebtSummary`**
 
 ```tsx
 'use client';
@@ -610,7 +610,7 @@ export default function DebtSummary({ owedToMe, iOwe, currency }: Props) {
 }
 ```
 
-- [ ] **Step 2: Create the page**
+- [x] **Step 2: Create the page**
 
 ```tsx
 'use client';
@@ -683,7 +683,7 @@ export default function DebtsPage() {
                 <UsersIcon className="w-8 h-8 text-slate-700 mx-auto mb-2" />
                 <p className="text-sm text-slate-500 mb-1">No debts tracked yet.</p>
                 <p className="text-xs text-slate-600">
-                  Add one when you cover someone&rsquo;s meal — or they cover yours.
+                  Add one when you cover someone&rsquo;s meal â€” or they cover yours.
                 </p>
               </div>
             ) : (
@@ -693,7 +693,7 @@ export default function DebtsPage() {
                     {g.person.emoji} {g.person.name}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {g.open.length} open · net {g.net}
+                    {g.open.length} open Â· net {g.net}
                   </p>
                 </div>
               ))
@@ -710,21 +710,21 @@ export default function DebtsPage() {
 The placeholder person card above is replaced wholesale in Task 5. `addOpen` is
 declared now and wired in Task 6; until then the + button opens nothing.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 npm run build
 npm run lint
 ```
 
-Expected: build succeeds. Lint will report **one new warning** — `addOpen` assigned
+Expected: build succeeds. Lint will report **one new warning** â€” `addOpen` assigned
 but never used. That is expected and resolved in Task 6; do not delete the state.
 
-Manual check — tap **Debts** in the bottom bar. The page loads with a summary band
-reading `₱0.00 / ₱0.00 / ₱0.00` and the empty state. The back chevron and Settings
+Manual check â€” tap **Debts** in the bottom bar. The page loads with a summary band
+reading `â‚±0.00 / â‚±0.00 / â‚±0.00` and the empty state. The back chevron and Settings
 cog both work.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/DebtSummary.tsx src/app/debts/page.tsx
@@ -742,10 +742,10 @@ git commit -m "feat: debts route with summary band"
 **Interfaces:**
 - Consumes: `DebtEntry`, `DebtPerson`, `netOf`, `setDebtEntrySettled`, `deleteDebtEntry`, `settleUpPerson`, `deleteDebtPerson` from Task 1; `PersonGroup` from Task 4.
 - Produces:
-  - `DebtEntryRow({ entry, currency, onToggleSettled, onDelete })` — default export
-  - `DebtPersonSection({ group, currency, onDeletePerson })` — default export
+  - `DebtEntryRow({ entry, currency, onToggleSettled, onDelete })` â€” default export
+  - `DebtPersonSection({ group, currency, onDeletePerson })` â€” default export
 
-- [ ] **Step 1: Create `DebtEntryRow`**
+- [x] **Step 1: Create `DebtEntryRow`**
 
 ```tsx
 'use client';
@@ -772,7 +772,7 @@ export default function DebtEntryRow({ entry, currency, onToggleSettled, onDelet
       settled ? 'bg-white/[0.02] border-[#1e2d40]' : 'bg-white/5 border-[#1e2d40]'
     }`}>
       <span className={`text-xs shrink-0 ${owedToMe ? 'text-emerald-400' : 'text-red-400'}`}>
-        {owedToMe ? '→' : '←'}
+        {owedToMe ? 'â†’' : 'â†'}
       </span>
 
       <div className="min-w-0 flex-1">
@@ -814,7 +814,7 @@ export default function DebtEntryRow({ entry, currency, onToggleSettled, onDelet
 }
 ```
 
-- [ ] **Step 2: Create `DebtPersonSection`**
+- [x] **Step 2: Create `DebtPersonSection`**
 
 ```tsx
 'use client';
@@ -899,7 +899,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
             onClick={() => setShowSettled(v => !v)}
             className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
           >
-            {showSettled ? '▴ Hide' : '▾ Show'} {settled.length} settled
+            {showSettled ? 'â–´ Hide' : 'â–¾ Show'} {settled.length} settled
           </button>
           {showSettled && (
             <div className="mt-2 space-y-2">
@@ -921,7 +921,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
 }
 ```
 
-- [ ] **Step 3: Use it in the page**
+- [x] **Step 3: Use it in the page**
 
 In `src/app/debts/page.tsx`, import it and replace the placeholder person card from
 Task 4 with:
@@ -943,7 +943,7 @@ Add the confirm state next to `addOpen` (the dialog itself is Task 7):
 const [confirmDeletePerson, setConfirmDeletePerson] = useState<DebtPerson | null>(null);
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 npm run build
@@ -951,17 +951,17 @@ npm run lint
 ```
 
 Expected: build succeeds. Lint still reports the unused `addOpen` warning plus a new
-unused `confirmDeletePerson` warning — both resolved in Tasks 6 and 7. No other new
+unused `confirmDeletePerson` warning â€” both resolved in Tasks 6 and 7. No other new
 warnings.
 
-Manual check — you cannot add entries through the UI yet. Insert two rows by hand in
+Manual check â€” you cannot add entries through the UI yet. Insert two rows by hand in
 the Supabase table editor (one `owed_to_me` for 250, one `i_owe` for 180, same
-`person_id`), reload `/debts`, and confirm: the section header nets to `₱70.00 owes
+`person_id`), reload `/debts`, and confirm: the section header nets to `â‚±70.00 owes
 you`, both rows render with the right arrow and colour, ticking one drops it out of
 the net and into "1 settled", expanding shows it struck through, and un-ticking
 restores it. "Settle up" clears all open rows at once.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/DebtEntryRow.tsx src/components/DebtPersonSection.tsx src/app/debts/page.tsx
@@ -978,9 +978,9 @@ git commit -m "feat: debt person sections with netting and settling"
 
 **Interfaces:**
 - Consumes: `BottomSheet`, `addDebtPerson`, `addDebtEntry`, `debtPeople` from Task 1.
-- Produces: `AddDebtSheet({ onClose })` — default export; reads everything else from `useApp()`.
+- Produces: `AddDebtSheet({ onClose })` â€” default export; reads everything else from `useApp()`.
 
-- [ ] **Step 1: Create the sheet**
+- [x] **Step 1: Create the sheet**
 
 ```tsx
 'use client';
@@ -989,7 +989,7 @@ import { useState } from 'react';
 import { useApp, DebtDirection } from './AppContext';
 import BottomSheet from './BottomSheet';
 
-const PERSON_EMOJI = ['🧑','👩','👨','🧔','👧','👦','🙂','😎','🐱','🐶','⭐','🎯'];
+const PERSON_EMOJI = ['ðŸ§‘','ðŸ‘©','ðŸ‘¨','ðŸ§”','ðŸ‘§','ðŸ‘¦','ðŸ™‚','ðŸ˜Ž','ðŸ±','ðŸ¶','â­','ðŸŽ¯'];
 
 function todayInputValue(): string {
   const d = new Date();
@@ -1006,7 +1006,7 @@ export default function AddDebtSheet({ onClose }: Props) {
 
   const [personId,  setPersonId]  = useState<string>(debtPeople[0]?.id ?? '');
   const [newName,   setNewName]   = useState('');
-  const [newEmoji,  setNewEmoji]  = useState('🧑');
+  const [newEmoji,  setNewEmoji]  = useState('ðŸ§‘');
   const [creating,  setCreating]  = useState(debtPeople.length === 0);
   const [direction, setDirection] = useState<DebtDirection>('owed_to_me');
   const [amount,    setAmount]    = useState('');
@@ -1022,7 +1022,7 @@ export default function AddDebtSheet({ onClose }: Props) {
     if (!canSave) return;
     setSaving(true);
 
-    // A new person must be inserted first — the entry references its real id.
+    // A new person must be inserted first â€” the entry references its real id.
     const targetId = creating
       ? await addDebtPerson({ name: newName.trim(), emoji: newEmoji })
       : personId;
@@ -1161,14 +1161,14 @@ export default function AddDebtSheet({ onClose }: Props) {
         disabled={!canSave}
         className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
       >
-        {saving ? 'Saving…' : 'Add debt'}
+        {saving ? 'Savingâ€¦' : 'Add debt'}
       </button>
     </BottomSheet>
   );
 }
 ```
 
-- [ ] **Step 2: Render it from the page**
+- [x] **Step 2: Render it from the page**
 
 In `src/app/debts/page.tsx`, import `AddDebtSheet` and add before the closing
 `</div>` of the outermost wrapper (matching how `/expenses` renders its sheets):
@@ -1177,7 +1177,7 @@ In `src/app/debts/page.tsx`, import `AddDebtSheet` and add before the closing
 {addOpen && <AddDebtSheet onClose={() => setAddOpen(false)} />}
 ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```bash
 npm run build
@@ -1187,17 +1187,17 @@ npm run lint
 Expected: build succeeds. The `addOpen` unused warning is now gone; only the
 `confirmDeletePerson` warning remains, cleared in Task 7.
 
-Manual check, end to end — tap **+**. With no people yet the sheet opens straight
+Manual check, end to end â€” tap **+**. With no people yet the sheet opens straight
 into the new-person form. Pick an emoji, type "Marco", choose **They owe me**, amount
 `250`, note `Ramen lunch`, keep today's date, Add. The sheet closes, a Marco section
-appears reading `₱250.00 owes you`, and the summary band's "You're owed" rises to
-₱250.00. Tap **+** again: Marco now appears as a chip. Select him, choose **I owe
-them**, `180`, note `Coffee`, Add. His section nets to `₱70.00 owes you` with both
-rows listed. Reload the page — everything persists.
+appears reading `â‚±250.00 owes you`, and the summary band's "You're owed" rises to
+â‚±250.00. Tap **+** again: Marco now appears as a chip. Select him, choose **I owe
+them**, `180`, note `Coffee`, Add. His section nets to `â‚±70.00 owes you` with both
+rows listed. Reload the page â€” everything persists.
 
 Confirm Save stays disabled with an empty name, a blank amount, or a zero amount.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/components/AddDebtSheet.tsx src/app/debts/page.tsx
@@ -1217,7 +1217,7 @@ action on this page that confirms.
 **Interfaces:**
 - Consumes: `deleteDebtPerson` from Task 1; `confirmDeletePerson` state from Task 5.
 
-- [ ] **Step 1: Add the dialog**
+- [x] **Step 1: Add the dialog**
 
 Add `deleteDebtPerson` to the `useApp()` destructure, then render this next to the
 `AddDebtSheet`. It reuses the confirm-dialog markup already used on `/expenses`
@@ -1264,7 +1264,7 @@ rather than `BottomSheet`, because it is a decision, not a form:
 )}
 ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```bash
 npm run build
@@ -1274,12 +1274,12 @@ npm run lint
 Expected: build succeeds; lint back at **exactly the 2 errors / 6 warnings baseline**,
 with no leftover unused-variable warnings from Tasks 4 and 5.
 
-Manual check — tap the trash icon on a person's header. The dialog names them and
+Manual check â€” tap the trash icon on a person's header. The dialog names them and
 warns that settled history goes too. Cancel leaves everything intact. Delete removes
 the section, and the summary band drops by that person's open amounts. Reload to
 confirm the rows are gone from the database, not just from local state.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/app/debts/page.tsx
@@ -1294,14 +1294,14 @@ git commit -m "feat: confirm before deleting a debt person"
 
 | Design requirement | Task |
 |---|---|
-| Standalone ledger — no wallet/money_move writes | 1 (no such call exists anywhere in the plan) |
+| Standalone ledger â€” no wallet/money_move writes | 1 (no such call exists anywhere in the plan) |
 | Itemised entries, grouped per person | 5 |
 | Net per person, both directions listed | 1 (`netOf`), 5 (header + rows) |
 | Per-item settle | 1, 5 |
 | "Settle up" clears all open for a person | 1 (`settleUpPerson`), 5 |
 | Settled history, expandable | 5 |
 | `debt_people` + `debt_entries` with FK cascade | 1 |
-| Summary band — owed / owe / net | 4 |
+| Summary band â€” owed / owe / net | 4 |
 | Debts in nav, Settings off the mobile bar | 2 |
 | Settings cog reachable on every mobile page header | 3 |
 | Person created inline while adding an entry | 6 |
@@ -1326,9 +1326,9 @@ git commit -m "feat: confirm before deleting a debt person"
 **Known risks**
 
 1. **Task 1 Step 4 edits a destructured array.** Adding the two queries anywhere but
-   the end silently reassigns `sRes`…`efRes` to the wrong results. The step says
+   the end silently reassigns `sRes`â€¦`efRes` to the wrong results. The step says
    append; the manual check (every existing page still loads) catches it if not.
 2. **Lint warnings are expected mid-plan.** Tasks 4 and 5 declare state used later.
    Only Task 7 returns lint to baseline. Do not "fix" these by deleting the state.
 3. **`AddDebtSheet` awaits two sequential writes** when creating a person. The button
-   shows "Saving…" and is disabled meanwhile, so a double-tap cannot create two people.
+   shows "Savingâ€¦" and is disabled meanwhile, so a double-tap cannot create two people.

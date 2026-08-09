@@ -1,14 +1,12 @@
 # Tally — Progress Log
 
-_Last updated: 2026-08-08_
+_Last updated: 2026-08-09_
 
 A running log of what's been built and what's next, so we can pick up where we left off.
 
 ---
 
-## Migration status — all applied ✅
-
-No outstanding migrations. Every schema object the app reads or writes exists.
+## ⚠️ Migration status — one outstanding
 
 | Object | Table | Status |
 | --- | --- | --- |
@@ -16,41 +14,67 @@ No outstanding migrations. Every schema object the app reads or writes exists.
 | `category_budgets` (jsonb, default `{}`) | `settings` | ✅ Applied 2026-08-08 |
 | `hidden_categories` (jsonb, default `[]`) | `settings` | ✅ Applied 2026-08-08 |
 | `money_moves` (table + index + RLS policy) | — | ✅ Applied 2026-08-08 |
+| `debt_people` + `debt_entries` (tables + indexes + RLS) | — | ⏳ **Run it** — SQL in `debtplan.md` Task 1 Step 1 |
 
-Category budgets now persist, removed built-in categories survive a reload, and
-wallet Add/Withdraw/Transfer records write to `money_moves`.
+**The Debt Board code is all merged but `/debts` cannot work until that migration
+runs.** Without the tables, `loadAll` gets a 404 from PostgREST for both queries;
+the page renders its empty state rather than crashing, but nothing can be saved.
 
 ---
 
-## ⏭ Next up — Debt Board (planned, not started)
+## Done 2026-08-09 — Debt Board (all 7 tasks) — ⏳ manual verification pending
 
-Plan: **`debtplan.md`** (repo root) — 7 tasks, designed 2026-08-08, to build next session.
+Plan: `debtplan.md` (repo root). All 7 tasks implemented and committed; each
+verified with `npm run build` + `npm run lint` at the 2-error/6-warning baseline.
+**The end-to-end manual checks in the plan have not been run** — they all need the
+migration above. Run it, then walk `debtplan.md` Task 6 Step 3 for the full flow.
 
 A `/debts` page tracking mutual mini-debts with friends and coworkers: who owes you,
 who you owe, and what each debt was for.
 
-**Run this migration first** — Task 1 is blocked without it, and the SQL is in
-`debtplan.md` Task 1 Step 1. Two new tables: `debt_people` and `debt_entries`.
+**New files:**
 
-Design decisions already settled (don't relitigate):
+| File | Role |
+| --- | --- |
+| `src/app/debts/page.tsx` | Route shell: grouping/sorting, sheet state, delete-person confirm. Also **exports the `PersonGroup` type** |
+| `src/components/DebtSummary.tsx` | Top band — you're owed / you owe / net |
+| `src/components/DebtPersonSection.tsx` | One person: header, net, Settle up, open items, settled disclosure |
+| `src/components/DebtEntryRow.tsx` | One entry — direction arrow, note, date, amount, settle tick, delete |
+| `src/components/AddDebtSheet.tsx` | Add an entry; pick an existing person or create one inline |
+
+**Design decisions (settled — don't relitigate):**
 
 - **Standalone ledger** — settling a debt never touches a wallet balance or writes a
   `money_move`. Mini-debts are usually cash that never went through a tracked wallet.
-- **Itemised, grouped per person** — each debt is its own line; a person's section
-  nets both directions and lists them.
-- **Netting is derived, never stored** — `Σ(owed_to_me) − Σ(i_owe)` over open entries.
-- **`settled_at` is a nullable timestamp, not a boolean** — it doubles as history.
-  Un-settling is supported.
-- **Per-item settle plus "Settle up"** to clear a person in one action.
-- **Nav:** Debts joins the bar; **Settings drops off the mobile bar** and is reached
-  by a cog in every page header. Desktop sidebar keeps all six.
+- **Netting is derived, never stored** — `netOf()` in `AppContext` sums
+  `Σ(owed_to_me) − Σ(i_owe)` over **open** entries only.
+- **`settled_at` is a nullable timestamp, not a boolean** — it doubles as history,
+  so un-settling is just clearing it.
+- **Per-item settle plus "Settle up"**, which clears a person's open entries in one
+  write (`.eq('person_id', …).is('settled_at', null)`).
+- **Deleting an entry does not confirm; deleting a person does** — the latter
+  cascades their whole history via the FK.
 - **Out of scope for v1:** splitting one bill across several people, reminders,
   sharing a board with the other person.
 
-Gotcha found while planning: all three non-Settings pages using `PageHeader` already
-pass a `right` slot, so the cog has to render *beside* it, not as a fallback.
-`/expenses` has no header at all since the simplification, so its cog goes in the
-Log Expense row.
+**Notes worth remembering:**
+
+- **`addDebtPerson` is deliberately not optimistic.** It awaits the insert and
+  returns the real row id, because `AddDebtSheet` immediately inserts an entry
+  using it as a foreign key — a temp UUID would violate the FK. Every other debt
+  mutation *is* optimistic.
+- **The date input is stored at midday** (`T12:00:00` → ISO). In PH (UTC+8) a
+  midnight timestamp would slide back a day when read as UTC.
+- **`PersonGroup` is exported from `src/app/debts/page.tsx`** and imported by
+  `DebtPersonSection` as a type-only import. Next 16's page-export validation
+  accepts this — verified at build — and being type-only there's no runtime cycle.
+- **Nav changed:** Debts joined the bar and **Settings dropped off the mobile bar**
+  (five items fit comfortably; Settings is the rarest destination). The desktop
+  sidebar still lists all six. `PageHeader` now renders a Settings cog *beside* its
+  `right` slot, not as a fallback — all three non-Settings pages using it already
+  pass one. `/expenses` has no header since the simplification, so its cog sits in
+  the Log Expense row; `/expenses/new` is deliberately excluded as a form sub-page.
+  The Dashboard already had a cog before this work.
 
 ---
 
