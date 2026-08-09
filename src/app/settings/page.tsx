@@ -43,6 +43,77 @@ function NumInput({ value, onChange, step = 1, placeholder = '0' }: { value: num
   );
 }
 
+// Deletes everything. Gated behind typing the word rather than a second tap —
+// a mis-tap must not be able to wipe an account.
+const CONFIRM_WORD = 'RESET';
+
+function ResetAccountModal({ onClose }: { onClose: () => void }) {
+  const { resetAccount } = useApp();
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const handleReset = async () => {
+    setBusy(true);
+    await resetAccount();
+    setBusy(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/15 shrink-0">
+            <AlertIcon className="w-5 h-5 text-red-400" />
+          </div>
+          <h2 className="text-base font-semibold text-white">Reset account</h2>
+        </div>
+
+        <p className="text-xs text-slate-400 leading-relaxed mb-3">
+          Deletes <span className="text-red-300">every wallet, expense, income,
+          transfer, debt, bill, appliance and custom category</span>, and clears
+          all budget amounts. Only your currency, payday cycle and electricity
+          rate are kept.
+        </p>
+        <p className="text-xs text-slate-500 mb-4">
+          This cannot be undone. There is no export and no backup.
+        </p>
+
+        <label className="block text-xs text-slate-500 mb-2">
+          Type <span className="font-semibold text-slate-300">{CONFIRM_WORD}</span> to confirm
+        </label>
+        <input
+          type="text"
+          value={typed}
+          onChange={e => setTyped(e.target.value)}
+          autoFocus
+          className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-red-500/50 mb-5"
+        />
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleReset}
+            disabled={typed !== CONFIRM_WORD || busy}
+            className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-40 transition-colors"
+          >
+            {busy ? 'Resetting…' : 'Reset everything'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResetModal({ onClose }: { onClose: () => void }) {
   const { wallets, settings, resetBalances } = useApp();
   // Prefill each input with the wallet's current balance so untouched wallets keep their value.
@@ -211,6 +282,7 @@ export default function SettingsPage() {
 
   const [customPayday, setCustomPayday] = useState('');
   const [resetOpen, setResetOpen] = useState(false);
+  const [resetAccountOpen, setResetAccountOpen] = useState(false);
 
   const addCustomPayday = () => {
     const d = parseInt(customPayday);
@@ -337,6 +409,21 @@ export default function SettingsPage() {
               </div>
               <ChevronRightIcon className="w-4 h-4 text-slate-600 shrink-0" />
             </button>
+            <button
+              onClick={() => setResetAccountOpen(true)}
+              className="flex w-full items-center gap-4 rounded-xl bg-[#111827] border border-red-500/30 px-4 py-3.5 text-left hover:bg-[#1a2332] transition-colors"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-500/15 shrink-0">
+                <AlertIcon className="w-5 h-5 text-red-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-red-400">Reset account</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Deletes wallets, all history, debts, bills &amp; budgets
+                </p>
+              </div>
+              <ChevronRightIcon className="w-4 h-4 text-slate-600 shrink-0" />
+            </button>
             <p className="text-xs text-slate-600 px-1">
               Current total across wallets: {fmt(totalBalance, settings.currency)}
             </p>
@@ -359,6 +446,7 @@ export default function SettingsPage() {
       </div>
 
       {resetOpen && <ResetModal onClose={() => setResetOpen(false)} />}
+      {resetAccountOpen && <ResetAccountModal onClose={() => setResetAccountOpen(false)} />}
     </div>
   );
 }

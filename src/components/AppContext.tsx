@@ -174,6 +174,7 @@ interface AppContextValue extends Computed {
   toggleBillPaid: (id: string) => Promise<void>;
   updateBill: (id: string, updates: { name?: string; amount?: number }) => Promise<void>;
   resetBalances: (walletBalances: Record<string, number>) => Promise<void>;
+  resetAccount: () => Promise<void>;
   debtPeople: DebtPerson[];
   debtEntries: DebtEntry[];
   totalOwedToMe: number;
@@ -1043,6 +1044,48 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     ]);
   };
 
+  // Wipe everything the user has entered, leaving the account itself and the
+  // few preferences that are configuration rather than data: currency, payday
+  // cycle and electricity rate.
+  const resetAccount = async () => {
+    if (!userId) return;
+
+    // Local first so the UI empties immediately rather than after ten writes.
+    setWallets([]); setExpenses([]); setMoneyMoves([]);
+    setShopeeSchedule([]); setLock(false);
+    setEmergencyFund({ entries: [], currentAmount: 0 });
+    setDebtPeople([]); setDebtEntries([]);
+    setSettings(prev => ({
+      ...prev,
+      monthlyIncome: 0,
+      emergencyFundTarget: 0,
+      monthlySavingsTarget: 0,
+      bills: [], budgetLines: [], appliances: [],
+      categoryBudgets: {}, customCategories: [], hiddenCategories: [],
+    }));
+
+    const own = (table: string) => supabase.from(table).delete().eq('user_id', userId);
+
+    // Children before parents: expenses, money_moves and debt_entries all
+    // reference wallets, and debt_entries reference debt_people.
+    await Promise.all([own('debt_entries'), own('expenses'), own('money_moves')]);
+    await Promise.all([
+      own('debt_people'), own('shopee_payments'), own('emergency_fund_entries'),
+      own('bills'), own('budget_lines'), own('appliances'),
+    ]);
+    await own('wallets');
+
+    await supabase.from('settings').update({
+      monthly_income: 0,
+      emergency_fund_target: 0,
+      monthly_savings_target: 0,
+      category_budgets: {},
+      custom_categories: [],
+      hidden_categories: [],
+      shopee_purchase_lock: false,
+    }).eq('user_id', userId);
+  };
+
   const refundApplianceUsage = async (id: string, minutes: number) => {
     const month = currentYYYYMM();
     const appl = settings.appliances.find(a => a.id === id);
@@ -1073,7 +1116,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
       toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, toggleBillPaid,
       updateBill,
-      resetBalances,
+      resetBalances, resetAccount,
       debtPeople, debtEntries,
       ...debtTotals,
       addDebtPerson, deleteDebtPerson,
