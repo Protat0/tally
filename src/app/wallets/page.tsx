@@ -7,8 +7,8 @@ import { useApp, fmt } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
 import WalletCard from '@/components/WalletCard';
-import { WALLET_PRESET_GROUPS } from '@/lib/walletPresets';
-import { PlusIcon, WalletIcon, CogIcon } from '@/components/Icons';
+import { WALLET_PRESET_GROUPS, ALL_WALLET_PRESETS } from '@/lib/walletPresets';
+import { PlusIcon, WalletIcon, CogIcon, ChevronDownIcon } from '@/components/Icons';
 
 const ICONS = ['💳', '🏦', '💵', '💰', '🪙', '📱', '🏧', '💼'];
 
@@ -100,27 +100,29 @@ export default function WalletsPage() {
           <p className="mb-5 text-center font-semibold text-white text-lg">New Wallet</p>
 
             <p className="mb-2 text-xs text-slate-500">Quick pick</p>
-            <div className="mb-5 space-y-3">
-              {WALLET_PRESET_GROUPS.map(group => (
-                <div key={group.label}>
-                  <p className="mb-1.5 text-[11px] text-slate-600">{group.label}</p>
-                  <div className="flex flex-wrap gap-1.5">
+            <div className="relative mb-4">
+              <select
+                // Derived, not stored: typing a custom name below clears the
+                // selection on its own rather than leaving a stale bank shown.
+                value={ALL_WALLET_PRESETS.some(p => p.name === newName) ? newName : ''}
+                onChange={e => {
+                  const found = ALL_WALLET_PRESETS.find(p => p.name === e.target.value);
+                  if (found) { setNewName(found.name); setNewIcon(found.icon); }
+                }}
+                className="w-full appearance-none rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 pr-10 text-sm text-white outline-none focus:border-blue-500/50"
+              >
+                <option value="" className="bg-[#111827]">Choose a bank or e-wallet…</option>
+                {WALLET_PRESET_GROUPS.map(group => (
+                  <optgroup key={group.label} label={group.label} className="bg-[#111827]">
                     {group.presets.map(p => (
-                      <button
-                        key={p.name}
-                        onClick={() => { setNewName(p.name); setNewIcon(p.icon); }}
-                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                          newName === p.name
-                            ? 'border-blue-500 bg-blue-500/15 text-white'
-                            : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        <span>{p.icon}</span>{p.name}
-                      </button>
+                      <option key={p.name} value={p.name} className="bg-[#111827]">
+                        {p.icon} {p.name}
+                      </option>
                     ))}
-                  </div>
-                </div>
-              ))}
+                  </optgroup>
+                ))}
+              </select>
+              <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             </div>
 
             <p className="mb-2 text-xs text-slate-500">Icon</p>

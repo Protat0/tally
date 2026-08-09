@@ -56,3 +56,7 @@ export const WALLET_PRESET_GROUPS: { label: string; presets: WalletPreset[] }[] 
     ],
   },
 ];
+
+// Flat lookup, for resolving a chosen name back to its icon.
+export const ALL_WALLET_PRESETS: WalletPreset[] =
+  WALLET_PRESET_GROUPS.flatMap(g => g.presets);
