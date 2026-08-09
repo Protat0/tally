@@ -17,7 +17,7 @@ export interface PersonGroup {
 }
 
 export default function DebtsPage() {
-  const { debtPeople, debtEntries, totalOwedToMe, totalIOwe, settings } = useApp();
+  const { debtPeople, debtEntries, totalOwedToMe, totalIOwe, settings, deleteDebtPerson } = useApp();
   const { currency } = settings;
 
   const [addOpen, setAddOpen] = useState(false);
@@ -90,6 +90,45 @@ export default function DebtsPage() {
       </div>
 
       {addOpen && <AddDebtSheet onClose={() => setAddOpen(false)} />}
+
+      {confirmDeletePerson && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          onClick={() => setConfirmDeletePerson(null)}
+        >
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <p className="text-3xl mb-3">{confirmDeletePerson.emoji}</p>
+            <p className="font-semibold text-white mb-1">
+              Delete {confirmDeletePerson.name}?
+            </p>
+            <p className="text-sm text-slate-500 mb-5">
+              Every debt logged with them is deleted too, settled ones included. This
+              cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDeletePerson(null)}
+                className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  deleteDebtPerson(confirmDeletePerson.id);
+                  setConfirmDeletePerson(null);
+                }}
+                className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white hover:bg-red-500 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
