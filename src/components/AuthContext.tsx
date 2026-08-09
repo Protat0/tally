@@ -51,7 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // Without emailRedirectTo, Supabase falls back to the project's Site URL —
+    // one global value, so localhost and production cannot both be right.
+    // Sending the current origin means each environment gets its own link back.
+    // The flow is implicit with detectSessionInUrl on, so the token arrives in
+    // the hash and any page consumes it; no dedicated callback route needed.
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    });
     if (error) return { error: parseError(error.message), needsConfirmation: false };
     // needsConfirmation = user created but no session yet (email verify required)
     return { error: null, needsConfirmation: !!data.user && !data.session };
