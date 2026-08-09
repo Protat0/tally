@@ -74,7 +74,7 @@ helpers the later tasks build on.
   - `recordMove(move, balanceUpdates, date?): Promise<string | null>` — now returns the inserted row id
   - `reverseMoves(moveIds: string[]): Promise<void>`
 
-- [ ] **Step 1: Ask the user to run the migration**
+- [x] **Step 1: Ask the user to run the migration**
 
 Post this to the user and wait for them to confirm it succeeded. Do not proceed until
 they do — every later manual check depends on it.

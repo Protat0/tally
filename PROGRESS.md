@@ -6,7 +6,7 @@ A running log of what's been built and what's next, so we can pick up where we l
 
 ---
 
-## ⚠️ Migration status — one outstanding
+## Migration status — all applied ✅
 
 | Object | Table | Status |
 | --- | --- | --- |
@@ -15,12 +15,9 @@ A running log of what's been built and what's next, so we can pick up where we l
 | `hidden_categories` (jsonb, default `[]`) | `settings` | ✅ Applied 2026-08-08 |
 | `money_moves` (table + index + RLS policy) | — | ✅ Applied 2026-08-08 |
 | `debt_people` + `debt_entries` (tables + indexes + RLS) | — | ✅ Applied 2026-08-09 |
-| `money_moves.kind` check widened + `debt_entries.wallet_id` / `move_id` / `settle_move_id` | — | ⏳ **Run it** — SQL in `docs/superpowers/plans/2026-08-09-debt-wallet-linkage.md` Task 1 Step 1 |
+| `money_moves.kind` check widened + `debt_entries.wallet_id` / `move_id` / `settle_move_id` | — | ✅ Applied 2026-08-09 |
 
-**The wallet-linkage code is all merged but will fail on write until that migration
-runs.** Inserting a debt with a wallet writes `wallet_id` / `move_id`, and a movement
-writes `kind = 'debt_out'` — all three are rejected without the new columns and the
-widened check constraint.
+No outstanding migrations. Every schema object the app reads or writes exists.
 
 ---
 
