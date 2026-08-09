@@ -98,7 +98,7 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
                 className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
               />
               <input
-                type="number" value={amt} onChange={e => setAmt(e.target.value)}
+                type="number" inputMode="decimal" value={amt} onChange={e => setAmt(e.target.value)}
                 placeholder="Amount"
                 className="w-28 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
               />

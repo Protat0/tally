@@ -55,6 +55,7 @@ function InlineAmountInput({
       <p className="text-xs text-slate-500 mb-1">{label}</p>
       <input
         type="number"
+        inputMode="decimal"
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}

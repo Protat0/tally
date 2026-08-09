@@ -120,6 +120,7 @@ export default function ElectricSection() {
           <span className="text-sm text-slate-500">{currency}</span>
           <input
             type="number"
+            inputMode="decimal"
             value={electricityRate || ''}
             onChange={e => updateSettings({ electricityRate: parseFloat(e.target.value) || 0 })}
             placeholder="11.80"
@@ -156,6 +157,7 @@ export default function ElectricSection() {
           <div className="flex items-center gap-2">
             <input
               type="number"
+              inputMode="numeric"
               value={newWatts}
               onChange={e => setNewWatts(e.target.value)}
               placeholder="Wattage (e.g. 1500)"
@@ -227,6 +229,7 @@ export default function ElectricSection() {
                     <div className="flex gap-2 items-center">
                       <input
                         type="number"
+                        inputMode="numeric"
                         value={editWatts}
                         onChange={e => setEditWatts(e.target.value)}
                         className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50"

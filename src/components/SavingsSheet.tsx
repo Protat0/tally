@@ -22,6 +22,7 @@ export default function SavingsSheet({ onClose }: Props) {
         <span className="text-sm text-slate-500">{currency}</span>
         <input
           type="number"
+          inputMode="decimal"
           value={monthlySavingsTarget || ''}
           onChange={e => updateSettings({ monthlySavingsTarget: parseFloat(e.target.value) || 0 })}
           placeholder="0.00"

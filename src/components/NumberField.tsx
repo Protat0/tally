@@ -35,6 +35,7 @@ export default function NumberField({
     <div className={`flex items-stretch gap-1.5 ${className}`}>
       <input
         type="number"
+        inputMode="decimal"
         value={value || ''}
         onChange={e => onChange(parseFloat(e.target.value) || 0)}
         placeholder={placeholder}

@@ -172,6 +172,7 @@ export default function ShopeePage() {
             <p className="mb-2 text-xs text-slate-500">Amount</p>
             <input
               type="number"
+              inputMode="decimal"
               value={newAmount}
               onChange={e => setNewAmount(e.target.value)}
               placeholder="0.00"

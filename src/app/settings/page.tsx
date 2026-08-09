@@ -213,6 +213,7 @@ function ResetModal({ onClose }: { onClose: () => void }) {
                       <span className="text-lg text-slate-500">{settings.currency}</span>
                       <input
                         type="number"
+                        inputMode="decimal"
                         value={balances[current.id] ?? ''}
                         onChange={e => setBalances(prev => ({ ...prev, [current.id]: e.target.value }))}
                         className="w-40 rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-2 text-center text-2xl font-bold text-white outline-none focus:border-blue-500/50"
@@ -352,6 +353,7 @@ export default function SettingsPage() {
                   <div className="flex gap-2">
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={customPayday}
                       onChange={e => setCustomPayday(e.target.value)}
                       placeholder="Day (1–31)"

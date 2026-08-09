@@ -168,6 +168,7 @@ export default function GlobalFAB() {
                   <div className="flex-1 flex items-center gap-2">
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={hrs}
                       onChange={e => setHrs(e.target.value)}
                       placeholder="0"
@@ -179,6 +180,7 @@ export default function GlobalFAB() {
                   <div className="flex-1 flex items-center gap-2">
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={mins}
                       onChange={e => setMins(e.target.value)}
                       placeholder="0"
@@ -266,6 +268,7 @@ export default function GlobalFAB() {
                   <div className="flex-1 flex items-center gap-2">
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={hrs}
                       onChange={e => setHrs(e.target.value)}
                       placeholder="0"
@@ -277,6 +280,7 @@ export default function GlobalFAB() {
                   <div className="flex-1 flex items-center gap-2">
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={mins}
                       onChange={e => setMins(e.target.value)}
                       placeholder="0"

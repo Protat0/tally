@@ -111,6 +111,7 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
             </p>
             <input
               type="number"
+              inputMode="decimal"
               value={inputVal}
               onChange={e => setInputVal(e.target.value)}
               placeholder="Amount"

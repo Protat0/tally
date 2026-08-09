@@ -151,6 +151,7 @@ export default function AddDebtSheet({ onClose }: Props) {
       <p className="text-xs text-slate-500 mb-1">Amount</p>
       <input
         type="number"
+        inputMode="decimal"
         value={amount}
         onChange={e => setAmount(e.target.value)}
         placeholder="0.00"

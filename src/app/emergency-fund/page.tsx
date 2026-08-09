@@ -199,6 +199,7 @@ export default function EmergencyFundPage() {
             <p className="mb-2 text-xs text-slate-500">Amount</p>
             <input
               type="number"
+              inputMode="decimal"
               value={inputAmt}
               onChange={e => setInputAmt(e.target.value)}
               placeholder="0.00"
