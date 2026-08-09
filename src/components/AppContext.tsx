@@ -120,6 +120,22 @@ export interface Settings {
   // expenses already logged against them must keep resolving — so they're
   // hidden from the pickers and restorable.
   hiddenCategories: string[];
+  // Wallet the salary lands in. Lets the payday prompt be one tap instead of
+  // a form. null = not chosen yet, so the prompt asks which wallet.
+  cashflowWalletId: string | null;
+  // Which scheduled paydays have been accounted for, keyed by local ISO day.
+  // A payday absent from here that is already due is treated as NOT received.
+  paydayLog: Record<string, PaydayStatus>;
+}
+
+// 'received'  — confirmed, an `earned` move was written.
+// 'dismissed' — don't count it and stop asking. Covers both "it never came"
+//               and "I already logged it by hand on the Wallets page".
+export type PaydayStatus = 'received' | 'dismissed';
+
+export interface PendingPayday {
+  date: string;    // local ISO day, 'YYYY-MM-DD'
+  amount: number;  // monthlyIncome split across the month's paydays
 }
 
 interface EmergencyFund {
@@ -131,7 +147,25 @@ interface Computed {
   totalBalance: number;
   totalExpensesThisMonth: number;
   receivedThisMonth: number;
+  /**
+   * End-of-month savings, deliberately conservative. Every error term in the
+   * old formula pushed this number up — an unlogged expense, an untracked day,
+   * income assumed to have arrived — so the headline figure is now the
+   * pessimistic end and `optimisticSavings` is the stretch.
+   */
   projectedSavings: number;
+  /** Best case: every scheduled payday lands and nothing more is spent. */
+  optimisticSavings: number;
+  /** Income that was due but has not been confirmed. Excluded from the projection. */
+  unconfirmedIncome: number;
+  pendingPaydays: PendingPayday[];
+  /** Days this month that predate the first recorded expense. */
+  untrackedDays: number;
+  trackedDays: number;
+  /** What the untracked days were charged, at the user's own budgeted rate. */
+  blindSpend: number;
+  /** Recorded + blind + projected-remaining spending for the whole month. */
+  assumedSpending: number;
   spendingPacePercent: number;
   daysUntilPayday: number;
   nextPaydayDate: Date | null;
@@ -155,6 +189,10 @@ interface AppContextValue extends Computed {
   addExpense: (e: Omit<Expense, 'id' | 'date'>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   addIncome: (m: { walletId: string; amount: number; source: IncomeSource; note: string }) => Promise<void>;
+  /** Record a due payday as received: writes an `earned` move and logs the date. */
+  confirmPayday: (date: string, amount: number, walletId: string) => Promise<void>;
+  /** Stop counting and stop asking about a due payday. */
+  dismissPayday: (date: string) => Promise<void>;
   addWithdrawal: (m: { walletId: string; amount: number; note: string }) => Promise<void>;
   addTransfer: (m: { fromWalletId: string; toWalletId: string; amount: number; note: string }) => Promise<void>;
   deleteMoneyMove: (id: string) => Promise<void>;
@@ -220,6 +258,24 @@ function computeNextPayday(settings: Settings): Date | null {
   return null;
 }
 
+// Local ISO day. Deliberately not toISOString() — that converts to UTC first,
+// which in PH (UTC+8) reports the previous day for anything before 08:00.
+export function isoDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Every payday falling in a given month, ascending. A payday set to the 31st
+// still has to land in a 30-day month, so days are clamped to the month's end.
+export function paydaysInMonth(settings: Settings, year: number, month: number): Date[] {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const days =
+    settings.paydayCycle === '1st-15th' ? [1, 15]
+    : settings.paydayCycle === 'monthly' ? [1]
+    : settings.customPaydays;
+  const clamped = [...new Set(days.map(d => Math.min(Math.max(d, 1), lastDay)))];
+  return clamped.sort((a, b) => a - b).map(d => new Date(year, month, d));
+}
+
 function daysUntil(date: Date | null): number {
   if (!date) return 0;
   const now = new Date(); now.setHours(0, 0, 0, 0); date.setHours(0, 0, 0, 0);
@@ -249,6 +305,8 @@ function fromDBSettings(r: Row): Partial<Settings> {
     categoryBudgets:    (r.category_budgets || {}) as Partial<Record<Category, number>>,
     customCategories:   (r.custom_categories || []) as CustomCategory[],
     hiddenCategories:   (r.hidden_categories || []) as string[],
+    cashflowWalletId:   (r.cashflow_wallet_id ?? null) as string | null,
+    paydayLog:          (r.payday_log || {}) as Record<string, PaydayStatus>,
   };
 }
 
@@ -264,6 +322,8 @@ function toDBSettings(s: Partial<Settings>): Row {
   if ('categoryBudgets'     in s) m.category_budgets      = s.categoryBudgets;
   if ('customCategories'    in s) m.custom_categories     = s.customCategories;
   if ('hiddenCategories'    in s) m.hidden_categories     = s.hiddenCategories;
+  if ('cashflowWalletId'    in s) m.cashflow_wallet_id    = s.cashflowWalletId;
+  if ('paydayLog'           in s) m.payday_log            = s.paydayLog;
   return m;
 }
 
@@ -324,7 +384,14 @@ const defaultSettings: Settings = {
   categoryBudgets: {},
   customCategories: [],
   hiddenCategories: [],
+  cashflowWalletId: null,
+  paydayLog: {},
 };
+
+// Days of real data before the observed spending rate is trusted on its own.
+// Below this the projection leans on the user's own budgeted rate instead —
+// one grocery run on day 2 should not set the pace for the whole month.
+const RATE_RAMP_DAYS = 5;
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 
@@ -418,15 +485,67 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const totalBills = settings.bills.reduce((s, b) => s + b.amount, 0);
     const daysElapsed = today.getDate();
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    const projectedSpending = daysElapsed > 0 ? (totalExpensesThisMonth / daysElapsed) * daysInMonth : 0;
-    const projectedSavings = settings.monthlyIncome - totalBills - projectedSpending;
+
+    // ── Income ───────────────────────────────────────────────────────────────
+    // A payday that has come and gone without confirmation is NOT counted: the
+    // money was due and there is no evidence it arrived. Future paydays are
+    // counted — dropping those would be pessimistic rather than realistic.
+    const paydays = paydaysInMonth(settings, today.getFullYear(), today.getMonth());
+    const perPayday = paydays.length > 0 ? settings.monthlyIncome / paydays.length : 0;
+    const pendingPaydays: PendingPayday[] = paydays
+      .filter(d => d.getDate() <= daysElapsed && !settings.paydayLog[isoDay(d)])
+      .map(d => ({ date: isoDay(d), amount: perPayday }));
+    const unconfirmedIncome = pendingPaydays.reduce((s, p) => s + p.amount, 0);
+    const futureIncome = paydays.filter(d => d.getDate() > daysElapsed).length * perPayday;
+    // receivedThisMonth is real `earned` money, so a confirmed payday is already
+    // in it — adding perPayday again here would double-count.
+    const projectedIncome = receivedThisMonth + futureIncome;
+
+    // ── Spending ─────────────────────────────────────────────────────────────
+    // Tracking begins at the first expense ever recorded. Days in this month
+    // before that are unobserved, and charging them zero is what made the old
+    // projection wildly optimistic for anyone who signed up mid-month.
+    const firstExpenseDate = expenses.reduce<string | null>(
+      (min, e) => (min === null || e.date < min ? e.date : min), null,
+    );
+    const trackingStart = firstExpenseDate ? new Date(firstExpenseDate) : today;
+    const startedThisMonth =
+      trackingStart.getMonth() === today.getMonth() &&
+      trackingStart.getFullYear() === today.getFullYear();
+    const untrackedDays = startedThisMonth ? Math.max(0, trackingStart.getDate() - 1) : 0;
+    const trackedDays = Math.max(1, daysElapsed - untrackedDays);
+    const remainingDays = Math.max(0, daysInMonth - daysElapsed);
+
+    // What the user's own plan says a day costs, once bills and the savings
+    // target are set aside. Used both to price unobserved days and to steady
+    // the projection while there is too little real data to extrapolate from.
+    const budgetRate = Math.max(
+      0, settings.monthlyIncome - totalBills - settings.monthlySavingsTarget,
+    ) / daysInMonth;
+    const blindSpend = untrackedDays * budgetRate;
+    const observedRate = totalExpensesThisMonth / trackedDays;
+    const w = Math.min(trackedDays, RATE_RAMP_DAYS) / RATE_RAMP_DAYS;
+    const rate = w * observedRate + (1 - w) * budgetRate;
+    const assumedSpending = totalExpensesThisMonth + blindSpend + remainingDays * rate;
+
+    const projectedSavings = projectedIncome - totalBills - assumedSpending;
+    // Everything goes right: the due paydays did land, and nothing more is spent.
+    const optimisticSavings =
+      (projectedIncome + unconfirmedIncome) - totalBills - (totalExpensesThisMonth + blindSpend);
+
+    // Pace counts the blind days too, so this card and the projection tell the
+    // same story instead of contradicting each other.
     const discretionary = settings.monthlyIncome - totalBills;
     const expectedSoFar = discretionary * (daysElapsed / daysInMonth);
-    const spendingPacePercent = expectedSoFar > 0 ? (totalExpensesThisMonth / expectedSoFar) * 100 : 0;
+    const spendingPacePercent = expectedSoFar > 0
+      ? ((totalExpensesThisMonth + blindSpend) / expectedSoFar) * 100
+      : 0;
     const nextPaydayDate = computeNextPayday(settings);
     const pending = shopeeSchedule.filter(p => p.status !== 'paid');
     return {
       totalBalance, totalExpensesThisMonth, receivedThisMonth, projectedSavings, spendingPacePercent,
+      optimisticSavings, unconfirmedIncome, pendingPaydays,
+      untrackedDays, trackedDays, blindSpend, assumedSpending,
       daysUntilPayday: daysUntil(nextPaydayDate ? new Date(nextPaydayDate) : null),
       nextPaydayDate,
       electricBillEstimate: calcElectric(settings),
@@ -466,6 +585,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
   const deleteWallet = async (id: string) => {
     setWallets(prev => prev.filter(w => w.id !== id));
+    // Otherwise the payday prompt would prefill a wallet that no longer exists.
+    if (settings.cashflowWalletId === id) await updateSettings({ cashflowWalletId: null });
     await supabase.from('wallets').delete().eq('id', id);
   };
 
@@ -546,6 +667,18 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       { kind: 'earned', amount: m.amount, walletId: m.walletId, toWalletId: null, source: m.source, note: m.note },
       { [m.walletId]: balanceOf(m.walletId) + m.amount },
     );
+  };
+
+  // Payday confirmation. Schedule-driven but never schedule-assumed: the money
+  // only counts once the user says it landed, and confirming writes a real
+  // `earned` move so wallet balances stay true.
+  const confirmPayday = async (date: string, amount: number, walletId: string) => {
+    await addIncome({ walletId, amount, source: 'salary', note: `Payday ${date}` });
+    await updateSettings({ paydayLog: { ...settings.paydayLog, [date]: 'received' } });
+  };
+
+  const dismissPayday = async (date: string) => {
+    await updateSettings({ paydayLog: { ...settings.paydayLog, [date]: 'dismissed' } });
   };
 
   const addWithdrawal = async (m: { walletId: string; amount: number; note: string }) => {
@@ -1062,6 +1195,9 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       monthlySavingsTarget: 0,
       bills: [], budgetLines: [], appliances: [],
       categoryBudgets: {}, customCategories: [], hiddenCategories: [],
+      // The wallets it pointed at are gone, and last month's payday answers
+      // must not carry into a fresh account.
+      cashflowWalletId: null, paydayLog: {},
     }));
 
     const own = (table: string) => supabase.from(table).delete().eq('user_id', userId);
@@ -1082,6 +1218,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       category_budgets: {},
       custom_categories: [],
       hidden_categories: [],
+      cashflow_wallet_id: null,
+      payday_log: {},
       shopee_purchase_lock: false,
     }).eq('user_id', userId);
   };
@@ -1109,6 +1247,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       addWallet, updateWallet, deleteWallet,
       addExpense, deleteExpense,
       addIncome, addWithdrawal, addTransfer, deleteMoneyMove,
+      confirmPayday, dismissPayday,
       updateSettings,
       addShopeePayment, updateShopeePayment, deleteShopeePayment,
       setShopeeNewPurchaseLock,

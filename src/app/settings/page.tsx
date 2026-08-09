@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import NumberField from '@/components/NumberField';
+import WalletPicker from '@/components/WalletPicker';
 import { ScrollLock } from '@/components/ModalLock';
 import { PlusIcon, LogOutIcon, BoltIcon, ChevronLeftIcon, ChevronRightIcon, AlertIcon, XIcon } from '@/components/Icons';
 
@@ -281,7 +282,7 @@ function ResetModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function SettingsPage() {
-  const { settings, updateSettings, totalBalance } = useApp();
+  const { settings, updateSettings, totalBalance, wallets } = useApp();
   const { signOut, user } = useAuth();
 
   const [customPayday, setCustomPayday] = useState('');
@@ -340,6 +341,20 @@ export default function SettingsPage() {
                   </button>
                 ))}
               </div>
+              {/* Where the salary lands. Knowing this turns the payday
+                  confirmation prompt into a single tap. */}
+              <div className="mb-4">
+                <p className="text-xs text-slate-500 mb-2">Salary lands in</p>
+                {wallets.length === 0 ? (
+                  <p className="text-xs text-slate-600">Add a wallet first.</p>
+                ) : (
+                  <WalletPicker
+                    value={settings.cashflowWalletId ?? ''}
+                    onChange={id => updateSettings({ cashflowWalletId: id })}
+                  />
+                )}
+              </div>
+
               {settings.paydayCycle === 'custom' && (
                 <div>
                   <div className="flex flex-wrap gap-2 mb-3">

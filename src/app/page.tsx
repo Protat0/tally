@@ -5,12 +5,27 @@ import Link from 'next/link';
 import { useApp, fmt, getApplianceMinutes } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import ProgressBar from '@/components/ProgressBar';
-import { CogIcon, CalendarIcon, ShieldIcon, BoltIcon, TrendingUpIcon } from '@/components/Icons';
+import PaydaySheet from '@/components/PaydaySheet';
+import { CogIcon, CalendarIcon, ShieldIcon, BoltIcon, TrendingUpIcon, AlertIcon, ChevronRightIcon } from '@/components/Icons';
 
 function paceColor(pct: number): 'green' | 'amber' | 'red' {
   if (pct <= 80) return 'green';
   if (pct <= 110) return 'amber';
   return 'red';
+}
+
+// One line of the projection breakdown. The card claims a number; this is where
+// it shows its working.
+function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 flex-1">{label}</span>
+        <span className="shrink-0 tabular-nums text-slate-300">{value}</span>
+      </div>
+      {hint && <p className="mt-0.5 text-[11px] text-slate-600">{hint}</p>}
+    </div>
+  );
 }
 
 function paceLabel(pct: number): string {
@@ -22,6 +37,8 @@ function paceLabel(pct: number): string {
 export default function Dashboard() {
   const {
     wallets, settings, totalBalance, projectedSavings,
+    optimisticSavings, unconfirmedIncome, pendingPaydays,
+    untrackedDays, blindSpend, assumedSpending,
     spendingPacePercent, daysUntilPayday, nextPaydayDate,
     electricBillEstimate, emergencyFund,
     totalExpensesThisMonth, toggleAppliance, setAppliancePinned,
@@ -34,6 +51,12 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
+  // Oldest unanswered payday first — asking about the 15th while the 1st is
+  // still open would leave the older gap sitting there unresolved.
+  const [paydayOpen, setPaydayOpen] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
+  const nextPending = pendingPaydays[0];
+
   const { currency } = settings;
   const ef = emergencyFund;
 
@@ -43,6 +66,7 @@ export default function Dashboard() {
   const totalBills = settings.bills.reduce((s, b) => s + b.amount, 0);
   const discretionary = settings.monthlyIncome - totalBills;
   const expectedSoFar = discretionary > 0 ? discretionary * (daysElapsed / daysInMonth) : 0;
+  const monthLabel = today.toLocaleDateString('en-PH', { month: 'short' });
 
   const nextPaydayStr = nextPaydayDate
     ? nextPaydayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
@@ -112,14 +136,60 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Projected Savings */}
+            {/* Projected Savings — the conservative end, on purpose. Every way
+                this number can be wrong (an unlogged expense, an untracked day,
+                income that never arrived) pushes it up, so the headline is the
+                floor and the ceiling is shown underneath as the stretch. */}
             <div className="relative overflow-hidden rounded-2xl border border-emerald-800/30 bg-gradient-to-br from-[#0d2a20] to-[#0b1f18] p-6">
               <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-emerald-600/10 blur-3xl" />
               <p className="text-xs font-medium uppercase tracking-widest text-emerald-400/70 mb-1">Projected Savings</p>
               <p className={`text-4xl font-bold tabular-nums ${projectedSavings >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {fmt(projectedSavings, currency)}
               </p>
-              <p className="mt-1.5 text-xs text-slate-500">end-of-month estimate</p>
+              <p className="mt-1.5 text-xs text-slate-500">realistic — if your pace holds</p>
+
+              {optimisticSavings > projectedSavings && (
+                <p className="mt-3 text-xs text-slate-500">
+                  up to <span className="text-emerald-400/80 font-medium tabular-nums">{fmt(optimisticSavings, currency)}</span>
+                  {' '}if you spend nothing more
+                </p>
+              )}
+
+              {unconfirmedIncome > 0 && (
+                <button
+                  onClick={() => setPaydayOpen(true)}
+                  className="mt-3 flex w-full items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/25 px-3 py-2.5 text-left active:bg-amber-500/20 transition-colors"
+                >
+                  <AlertIcon className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="flex-1 min-w-0 text-xs text-amber-300">
+                    Excludes {fmt(unconfirmedIncome, currency)} — payday not confirmed
+                  </span>
+                  <ChevronRightIcon className="w-4 h-4 text-amber-400/70 shrink-0" />
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowBreakdown(v => !v)}
+                className="mt-3 text-xs text-emerald-400/70 hover:text-emerald-300 transition-colors"
+              >
+                {showBreakdown ? 'Hide maths' : 'How is this worked out?'}
+              </button>
+
+              {showBreakdown && (
+                <div className="mt-3 space-y-1.5 rounded-xl bg-black/20 px-3 py-3 text-xs text-slate-400">
+                  <Row label="Income counted" value={fmt(projectedSavings + totalBills + assumedSpending, currency)} />
+                  <Row label="Bills" value={`− ${fmt(totalBills, currency)}`} />
+                  <Row label="Logged so far" value={`− ${fmt(totalExpensesThisMonth, currency)}`} />
+                  {untrackedDays > 0 && (
+                    <Row
+                      label={`${monthLabel} 1–${untrackedDays} untracked`}
+                      value={`− ${fmt(blindSpend, currency)}`}
+                      hint="charged at your budget rate, not counted as zero"
+                    />
+                  )}
+                  <Row label="Rest of month, at your pace" value={`− ${fmt(assumedSpending - totalExpensesThisMonth - blindSpend, currency)}`} />
+                </div>
+              )}
             </div>
 
             {/* Payday chip */}
@@ -230,6 +300,9 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {paydayOpen && nextPending && (
+        <PaydaySheet payday={nextPending} onClose={() => setPaydayOpen(false)} />
+      )}
     </div>
   );
 }

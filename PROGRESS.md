@@ -16,8 +16,49 @@ A running log of what's been built and what's next, so we can pick up where we l
 | `money_moves` (table + index + RLS policy) | — | ✅ Applied 2026-08-08 |
 | `debt_people` + `debt_entries` (tables + indexes + RLS) | — | ✅ Applied 2026-08-09 |
 | `money_moves.kind` check widened + `debt_entries.wallet_id` / `move_id` / `settle_move_id` | — | ✅ Applied 2026-08-09 |
+| `cashflow_wallet_id` (uuid fk) + `payday_log` (jsonb, default `{}`) | `settings` | ✅ Applied 2026-08-09 |
 
 No outstanding migrations. Every schema object the app reads or writes exists.
+
+---
+
+## Done 2026-08-09 — Projected savings: realism over optimism — ⏳ manual verification pending
+
+Spec: `docs/superpowers/specs/2026-08-09-projected-savings-realism-design.md`
+
+**Why this exists.** Projected Savings was only accurate if the user recorded
+every expense and every peso of income — and every way it could be wrong pushed
+the number *up*. An unlogged expense, a day with no data counted as ₱0, planned
+income assumed received: all five error terms pointed the same way. A card that
+is most reassuring exactly when tracking is worst contradicts the point of the
+app.
+
+The cold start made it vivid: starting on Aug 9 with one day recorded,
+`daysElapsed` (9) was treated as days-with-data (1), understating spending
+9× — during the month a new user decides whether to trust the app.
+
+**What changed:**
+
+- **Income is schedule-driven but never schedule-assumed.** Past-due paydays are
+  excluded until confirmed and surfaced in an amber warning naming the amount;
+  future ones still count, because dropping them would be pessimistic rather
+  than realistic.
+- **Days before the first recorded expense are charged at the user's own
+  budgeted rate**, not counted as zero. Tracking start is derived from the
+  earliest expense — no extra column.
+- **A shrinkage weight** (`RATE_RAMP_DAYS = 5`) leans on the planned budget rate
+  until there is enough real data, so one grocery run on day 2 no longer sets
+  the pace for the whole month.
+- **The headline is now the conservative figure**; the optimistic ceiling sits
+  under it as a stretch, and a "How is this worked out?" toggle shows the
+  arithmetic.
+- **`PaydaySheet`** confirms a payday landed — writes a real `earned` move, so
+  wallet balances stay true — with `settings.cashflowWalletId` making it one tap.
+- **Spending Pace** now counts blind days too, so the two dashboard cards agree.
+
+Build passes; lint sits at the unchanged 2-error/6-warning baseline. Migration
+applied 2026-08-09. **The manual checks have not been run** — the card, the
+payday sheet and the settings picker have not yet been seen rendering.
 
 ---
 
