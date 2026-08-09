@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useApp, fmt } from './AppContext';
 import DebtEntryRow from './DebtEntryRow';
+import SettleUpSheet from './SettleUpSheet';
 import { TrashIcon } from './Icons';
 import type { PersonGroup } from '@/app/debts/page';
 
@@ -13,9 +14,10 @@ interface Props {
 }
 
 export default function DebtPersonSection({ group, currency, onDeletePerson }: Props) {
-  const { setDebtEntrySettled, deleteDebtEntry, settleUpPerson } = useApp();
+  const { setDebtEntrySettled, deleteDebtEntry } = useApp();
   const { person, open, settled, net } = group;
   const [showSettled, setShowSettled] = useState(false);
+  const [settleOpen, setSettleOpen] = useState(false);
 
   const label = net > 0 ? 'owes you' : net < 0 ? 'you owe' : 'settled up';
   const tone  = net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : 'text-slate-500';
@@ -40,7 +42,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
       <div className="flex items-center gap-2 mb-3">
         {open.length > 0 && (
           <button
-            onClick={() => settleUpPerson(person.id)}
+            onClick={() => setSettleOpen(true)}
             className="rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-white/10 transition-colors"
           >
             Settle up
@@ -96,6 +98,15 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
             </div>
           )}
         </div>
+      )}
+
+      {settleOpen && (
+        <SettleUpSheet
+          person={person}
+          net={net}
+          currency={currency}
+          onClose={() => setSettleOpen(false)}
+        />
       )}
     </div>
   );

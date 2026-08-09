@@ -187,7 +187,7 @@ interface AppContextValue extends Computed {
   }) => Promise<void>;
   deleteDebtEntry: (id: string) => Promise<void>;
   setDebtEntrySettled: (id: string, settled: boolean) => Promise<void>;
-  settleUpPerson: (personId: string) => Promise<void>;
+  settleUpPerson: (personId: string, walletId?: string | null) => Promise<void>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -692,14 +692,41 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('debt_entries').update({ settled_at: settledAt }).eq('id', id);
   };
 
-  // Clears every open entry for one person in a single write.
-  const settleUpPerson = async (personId: string) => {
+  // Clears every open entry for one person. With a wallet, the NET moves — not
+  // any row's face value — because squaring up is one exchange of one amount.
+  // A zero net means the entries cancel out and no money changes hands.
+  const settleUpPerson = async (personId: string, walletId?: string | null) => {
+    const open = debtEntries.filter(e => e.personId === personId && !e.settledAt);
+    if (open.length === 0) return;
+
+    const net = netOf(open);
     const settledAt = new Date().toISOString();
+    const name = debtPeople.find(p => p.id === personId)?.name ?? 'someone';
+
+    let moveId: string | null = null;
+    if (walletId && net !== 0) {
+      const incoming = net > 0;
+      const amount = Math.abs(net);
+      moveId = await recordMove(
+        {
+          kind: incoming ? 'debt_in' : 'debt_out',
+          amount, walletId, toWalletId: null, source: null,
+          note: incoming ? `${name} settled up` : `Settled up with ${name}`,
+        },
+        { [walletId]: balanceOf(walletId) + (incoming ? amount : -amount) },
+      );
+    }
+
     setDebtEntries(prev => prev.map(
-      e => e.personId === personId && !e.settledAt ? { ...e, settledAt } : e
+      e => e.personId === personId && !e.settledAt
+        ? { ...e, settledAt, settleMoveId: moveId }
+        : e
     ));
+
+    // Still filtered on the server by `settled_at is null` — the local state
+    // above has changed but the rows have not been written yet.
     await supabase.from('debt_entries')
-      .update({ settled_at: settledAt })
+      .update({ settled_at: settledAt, settle_move_id: moveId })
       .eq('person_id', personId)
       .is('settled_at', null);
   };
