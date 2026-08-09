@@ -17,7 +17,10 @@ export interface PersonGroup {
 }
 
 export default function DebtsPage() {
-  const { debtPeople, debtEntries, totalOwedToMe, totalIOwe, settings, deleteDebtPerson } = useApp();
+  const {
+    debtPeople, debtEntries, totalOwedToMe, totalIOwe,
+    totalBalance, settings, deleteDebtPerson,
+  } = useApp();
   const { currency } = settings;
 
   const [addOpen, setAddOpen] = useState(false);
@@ -63,7 +66,12 @@ export default function DebtsPage() {
             }
           />
 
-          <DebtSummary owedToMe={totalOwedToMe} iOwe={totalIOwe} currency={currency} />
+          <DebtSummary
+            owedToMe={totalOwedToMe}
+            iOwe={totalIOwe}
+            totalBalance={totalBalance}
+            currency={currency}
+          />
 
           <div className="mt-6 space-y-4">
             {groups.length === 0 ? (
