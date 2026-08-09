@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp, fmt } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
+import BottomSheet from '@/components/BottomSheet';
 import WalletCard from '@/components/WalletCard';
+import { WALLET_PRESET_GROUPS } from '@/lib/walletPresets';
 import { PlusIcon, WalletIcon, CogIcon } from '@/components/Icons';
 
 const ICONS = ['💳', '🏦', '💵', '💰', '🪙', '📱', '🏧', '💼'];
@@ -94,14 +96,32 @@ export default function WalletsPage() {
 
       {/* Add Wallet Sheet */}
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setShowAdd(false)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div
-            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-10 md:pb-6"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
-            <p className="mb-5 text-center font-semibold text-white text-lg">New Wallet</p>
+        <BottomSheet onClose={() => setShowAdd(false)}>
+          <p className="mb-5 text-center font-semibold text-white text-lg">New Wallet</p>
+
+            <p className="mb-2 text-xs text-slate-500">Quick pick</p>
+            <div className="mb-5 space-y-3">
+              {WALLET_PRESET_GROUPS.map(group => (
+                <div key={group.label}>
+                  <p className="mb-1.5 text-[11px] text-slate-600">{group.label}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.presets.map(p => (
+                      <button
+                        key={p.name}
+                        onClick={() => { setNewName(p.name); setNewIcon(p.icon); }}
+                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                          newName === p.name
+                            ? 'border-blue-500 bg-blue-500/15 text-white'
+                            : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <span>{p.icon}</span>{p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
 
             <p className="mb-2 text-xs text-slate-500">Icon</p>
             <div className="mb-4 flex gap-2 flex-wrap">
@@ -123,7 +143,6 @@ export default function WalletsPage() {
               onChange={e => setNewName(e.target.value)}
               placeholder="e.g. GCash, BPI, Cash"
               className="mb-4 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-blue-500/50 text-sm"
-              autoFocus
             />
 
             <p className="mb-2 text-xs text-slate-500">Starting Balance</p>
@@ -142,8 +161,7 @@ export default function WalletsPage() {
             >
               Add Wallet
             </button>
-          </div>
-        </div>
+        </BottomSheet>
       )}
 
       {/* Confirm Delete */}
