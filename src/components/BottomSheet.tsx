@@ -1,5 +1,7 @@
 'use client';
 
+import { useModalLock } from './ModalLock';
+
 interface Props {
   onClose: () => void;
   children: React.ReactNode;
@@ -8,6 +10,7 @@ interface Props {
 // The app's one sheet chrome: bottom-anchored on mobile, centered on desktop.
 // Backdrop click closes; clicks inside do not bubble out to it.
 export default function BottomSheet({ onClose, children }: Props) {
+  useModalLock();
   return (
     <div
       className="fixed inset-0 z-50 flex items-end md:items-center justify-center"

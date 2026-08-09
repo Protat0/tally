@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from './AppContext';
+import { ScrollLock, useAnyModalOpen } from './ModalLock';
 import { PlusIcon, XIcon, ReceiptIcon, BoltIcon } from './Icons';
 
 const HIDDEN = ['/auth', '/expenses/new'];
@@ -12,6 +13,8 @@ export default function GlobalFAB() {
   const pathname = usePathname();
   const { settings, logApplianceUsage, refundApplianceUsage } = useApp();
   const { appliances } = settings;
+  // Any modal anywhere — including this component's own two — covers the FAB.
+  const modalOpen = useAnyModalOpen();
 
   const [open, setOpen]         = useState(false);
   const [electric, setElectric] = useState(false);
@@ -47,8 +50,11 @@ export default function GlobalFAB() {
       {/* Backdrop — closes FAB menu on tap */}
       {open && <div className="fixed inset-0 z-40" onClick={closeAll} />}
 
-      {/* FAB stack */}
-      <div className="fixed z-50 flex flex-col items-end gap-2.5 bottom-20 md:bottom-8 right-4 md:right-8">
+      {/* FAB stack — hidden entirely while a modal is up, so it can't sit on
+          top of a sheet or be tapped through one. */}
+      <div className={`fixed z-50 flex-col items-end gap-2.5 bottom-20 md:bottom-8 right-4 md:right-8 ${
+        modalOpen ? 'hidden' : 'flex'
+      }`}>
 
         {/* Action pills — slide up when open */}
         {open && (
@@ -97,6 +103,7 @@ export default function GlobalFAB() {
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
           onClick={closeAll}
         >
+          <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
@@ -192,6 +199,7 @@ export default function GlobalFAB() {
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
           onClick={closeAll}
         >
+          <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"

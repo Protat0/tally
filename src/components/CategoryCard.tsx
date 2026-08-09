@@ -31,14 +31,16 @@ export default function CategoryCard({
   return (
     // The pencil is a sibling of the card button, not a child — buttons cannot
     // nest, and this way its click never has to be stopped from propagating.
+    // Its touch target is a full 44px square; the visible circle stays small.
+    // At 28px it was routinely missed on mobile.
     <div className="relative">
       <button
         onClick={onEdit}
         title={`Edit ${label} budget`}
         aria-label={`Edit ${label} budget`}
-        className="absolute top-2.5 right-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-full text-slate-500 hover:bg-white/10 hover:text-slate-200 transition-colors"
+        className="absolute top-0.5 right-0.5 z-10 flex h-11 w-11 items-center justify-center rounded-full text-slate-500 active:bg-white/10 hover:bg-white/10 hover:text-slate-200 transition-colors"
       >
-        <PencilIcon className="w-3.5 h-3.5" />
+        <PencilIcon className="w-4 h-4" />
       </button>
 
       <button

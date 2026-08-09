@@ -7,6 +7,7 @@ import PageHeader from '@/components/PageHeader';
 import DebtSummary from '@/components/DebtSummary';
 import DebtPersonSection from '@/components/DebtPersonSection';
 import AddDebtSheet from '@/components/AddDebtSheet';
+import { ScrollLock } from '@/components/ModalLock';
 import { PlusIcon, UsersIcon } from '@/components/Icons';
 
 export interface PersonGroup {
@@ -104,6 +105,7 @@ export default function DebtsPage() {
           className="fixed inset-0 z-50 flex items-center justify-center px-6"
           onClick={() => setConfirmDeletePerson(null)}
         >
+          <ScrollLock />
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"

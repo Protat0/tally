@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useApp, fmt, DebtEntry } from './AppContext';
 import DebtEntryRow from './DebtEntryRow';
 import SettleUpSheet from './SettleUpSheet';
+import { ScrollLock } from './ModalLock';
 import { TrashIcon } from './Icons';
 import type { PersonGroup } from '@/app/debts/page';
 
@@ -139,6 +140,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
             className="fixed inset-0 z-50 flex items-center justify-center px-6"
             onClick={() => setConfirmBatch(null)}
           >
+            <ScrollLock />
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
             <div
               className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"

@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import NumberField from '@/components/NumberField';
+import { ScrollLock } from '@/components/ModalLock';
 import { PlusIcon, LogOutIcon, BoltIcon, ChevronLeftIcon, ChevronRightIcon, AlertIcon, XIcon } from '@/components/Icons';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -61,6 +62,7 @@ function ResetAccountModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={onClose}>
+      <ScrollLock />
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6"
@@ -149,6 +151,7 @@ function ResetModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4" onClick={onClose}>
+      <ScrollLock />
       <div
         className="w-full md:max-w-md rounded-t-2xl md:rounded-2xl bg-[#111827] border border-[#1e2d40] max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}

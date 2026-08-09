@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useApp, fmt } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
+import { ScrollLock } from '@/components/ModalLock';
 import { PlusIcon, ShieldIcon } from '@/components/Icons';
 
 function ArcProgress({ value, max }: { value: number; max: number }) {
@@ -183,6 +184,7 @@ export default function EmergencyFundPage() {
       {/* Add contribution sheet */}
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setShowAdd(false)}>
+          <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-10 md:pb-6"

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useApp, fmt } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
+import { ScrollLock } from '@/components/ModalLock';
 import WalletCard from '@/components/WalletCard';
 import { WALLET_PRESET_GROUPS, ALL_WALLET_PRESETS } from '@/lib/walletPresets';
 import { PlusIcon, WalletIcon, CogIcon, ChevronDownIcon } from '@/components/Icons';
@@ -109,7 +110,7 @@ export default function WalletsPage() {
                   const found = ALL_WALLET_PRESETS.find(p => p.name === e.target.value);
                   if (found) { setNewName(found.name); setNewIcon(found.icon); }
                 }}
-                className="w-full appearance-none rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 pr-10 text-sm text-white outline-none focus:border-blue-500/50"
+                className="w-full min-h-[52px] appearance-none rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3.5 pr-10 text-base text-white outline-none focus:border-blue-500/50"
               >
                 <option value="" className="bg-[#111827]">Choose a bank or e-wallet…</option>
                 {WALLET_PRESET_GROUPS.map(group => (
@@ -131,7 +132,7 @@ export default function WalletsPage() {
                 <button
                   key={ico}
                   onClick={() => setNewIcon(ico)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl border transition-colors ${newIcon === ico ? 'border-blue-500 bg-blue-500/15' : 'border-[#1e2d40] bg-white/5'}`}
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl text-xl border transition-colors ${newIcon === ico ? 'border-blue-500 bg-blue-500/15' : 'border-[#1e2d40] bg-white/5'}`}
                 >
                   {ico}
                 </button>
@@ -148,8 +149,11 @@ export default function WalletsPage() {
             />
 
             <p className="mb-2 text-xs text-slate-500">Starting Balance</p>
+            {/* text + inputMode rather than type="number": no stepper on any
+                platform, and mobile still gets the numeric keypad. */}
             <input
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={newBalance}
               onChange={e => setNewBalance(e.target.value)}
               placeholder="0.00"
@@ -169,6 +173,7 @@ export default function WalletsPage() {
       {/* Confirm Delete */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={() => setConfirmDelete(null)}>
+          <ScrollLock />
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"

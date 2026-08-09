@@ -7,6 +7,7 @@ import {
 } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
+import { ScrollLock } from '@/components/ModalLock';
 import BudgetTile from '@/components/BudgetTile';
 import BillsSheet from '@/components/BillsSheet';
 import BudgetHero from '@/components/BudgetHero';
@@ -357,6 +358,7 @@ export default function BudgetPage() {
         const isCustom = customCategories.some(c => c.key === confirmDeleteCat);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={() => setConfirmDeleteCat(null)}>
+            <ScrollLock />
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
             <div
               className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"

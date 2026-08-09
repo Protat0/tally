@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useApp, fmt, Wallet, IncomeSource, INCOME_SOURCES } from './AppContext';
+import { ScrollLock } from './ModalLock';
 import { PlusIcon, ArrowUpIcon, ArrowDownIcon, SwitchIcon, TrashIcon } from './Icons';
 
 interface Props {
@@ -94,6 +95,7 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={closeModal}>
+          <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-[430px] rounded-t-3xl bg-[#111827] border-t border-[#1e2d40] p-6 pb-10"
