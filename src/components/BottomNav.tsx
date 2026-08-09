@@ -2,16 +2,21 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HomeIcon, WalletIcon, TrendingUpIcon, ReceiptIcon, CogIcon, LogOutIcon } from './Icons';
+import { HomeIcon, WalletIcon, TrendingUpIcon, ReceiptIcon, UsersIcon, CogIcon, LogOutIcon } from './Icons';
 import { useAuth } from './AuthContext';
 
 const links = [
-  { href: '/', label: 'Dashboard', Icon: HomeIcon },
-  { href: '/wallets', label: 'Wallets', Icon: WalletIcon },
-  { href: '/expenses', label: 'Budget', Icon: TrendingUpIcon },
-  { href: '/transactions', label: 'Activity', Icon: ReceiptIcon },
-  { href: '/settings', label: 'Settings', Icon: CogIcon },
+  { href: '/',             label: 'Dashboard', Icon: HomeIcon },
+  { href: '/wallets',      label: 'Wallets',   Icon: WalletIcon },
+  { href: '/expenses',     label: 'Budget',    Icon: TrendingUpIcon },
+  { href: '/transactions', label: 'Activity',  Icon: ReceiptIcon },
+  { href: '/debts',        label: 'Debts',     Icon: UsersIcon },
+  { href: '/settings',     label: 'Settings',  Icon: CogIcon },
 ];
+
+// The mobile bar fits five comfortably. Settings is the rarest destination and
+// is reachable from the cog in every page header, so it is the one to drop.
+const mobileLinks = links.filter(l => l.href !== '/settings');
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -22,7 +27,7 @@ export default function BottomNav() {
       {/* ── Mobile: fixed bottom bar ── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0e1420]/95 backdrop-blur-md border-t border-[#1e2d40]">
         <div className="flex items-center justify-around px-2 py-2 pb-2">
-          {links.map(({ href, label, Icon }) => {
+          {mobileLinks.map(({ href, label, Icon }) => {
             const active = pathname === href;
             return (
               <Link
