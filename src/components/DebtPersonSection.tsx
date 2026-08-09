@@ -14,10 +14,11 @@ interface Props {
 }
 
 export default function DebtPersonSection({ group, currency, onDeletePerson }: Props) {
-  const { setDebtEntrySettled, deleteDebtEntry } = useApp();
+  const { setDebtEntrySettled, deleteDebtEntry, reverseSettleBatch } = useApp();
   const { person, open, settled, net } = group;
   const [showSettled, setShowSettled] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
+  const [confirmBatch, setConfirmBatch] = useState<string | null>(null);
 
   const label = net > 0 ? 'owes you' : net < 0 ? 'you owe' : 'settled up';
   const tone  = net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : 'text-slate-500';
@@ -91,7 +92,11 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
                   key={e.id}
                   entry={e}
                   currency={currency}
-                  onToggleSettled={() => setDebtEntrySettled(e.id, false)}
+                  onToggleSettled={() =>
+                    e.settleMoveId
+                      ? setConfirmBatch(e.settleMoveId)
+                      : setDebtEntrySettled(e.id, false)
+                  }
                   onDelete={() => deleteDebtEntry(e.id)}
                 />
               ))}
@@ -108,6 +113,50 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
           onClose={() => setSettleOpen(false)}
         />
       )}
+
+      {confirmBatch && (() => {
+        const batch = settled.filter(e => e.settleMoveId === confirmBatch);
+        const batchNet = batch.reduce(
+          (s, e) => s + (e.direction === 'owed_to_me' ? e.amount : -e.amount), 0,
+        );
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-6"
+            onClick={() => setConfirmBatch(null)}
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <div
+              className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"
+              onClick={ev => ev.stopPropagation()}
+            >
+              <p className="font-semibold text-white mb-1">Reopen this settle-up?</p>
+              <p className="text-sm text-slate-500 mb-5">
+                {batch.length === 1
+                  ? 'This item was settled as a single payment.'
+                  : `This was settled together with ${batch.length - 1} other item${batch.length > 2 ? 's' : ''}. All ${batch.length} will reopen.`}
+                {batchNet !== 0 && ` ${fmt(Math.abs(batchNet), currency)} will be returned to the wallet it moved through.`}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmBatch(null)}
+                  className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    reverseSettleBatch(confirmBatch);
+                    setConfirmBatch(null);
+                  }}
+                  className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
+                >
+                  Reopen
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

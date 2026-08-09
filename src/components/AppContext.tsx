@@ -188,6 +188,7 @@ interface AppContextValue extends Computed {
   deleteDebtEntry: (id: string) => Promise<void>;
   setDebtEntrySettled: (id: string, settled: boolean) => Promise<void>;
   settleUpPerson: (personId: string, walletId?: string | null) => Promise<void>;
+  reverseSettleBatch: (settleMoveId: string) => Promise<void>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -636,11 +637,20 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     return data.id as string;
   };
 
-  // The DB cascades their entries; mirror that locally so the UI matches.
+  // The DB cascades their entries; mirror that locally, then undo every
+  // movement they caused. Each distinct settle batch is reversed exactly once,
+  // and all of it goes through one reverseMoves call so repeated hits on the
+  // same wallet accumulate instead of overwriting each other.
   const deleteDebtPerson = async (id: string) => {
+    const mine = debtEntries.filter(e => e.personId === id);
+    const moveIds = [...new Set(
+      mine.flatMap(e => [e.moveId, e.settleMoveId]).filter((m): m is string => Boolean(m))
+    )];
+
     setDebtPeople(prev => prev.filter(p => p.id !== id));
     setDebtEntries(prev => prev.filter(e => e.personId !== id));
     await supabase.from('debt_people').delete().eq('id', id);
+    await reverseMoves(moveIds);
   };
 
   // Not optimistic: with a wallet set it must await the move to learn its id,
@@ -682,8 +692,25 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   };
 
   const deleteDebtEntry = async (id: string) => {
+    const entry = debtEntries.find(e => e.id === id);
     setDebtEntries(prev => prev.filter(e => e.id !== id));
     await supabase.from('debt_entries').delete().eq('id', id);
+    if (entry?.moveId) await reverseMoves([entry.moveId]);
+  };
+
+  // Un-settle a whole settle-up batch. Reversing one row's share of a netted
+  // movement has no coherent meaning — ₱250 owed and ₱180 owing became a single
+  // ₱70 movement that no individual row owns — so the batch is the unit.
+  const reverseSettleBatch = async (settleMoveId: string) => {
+    setDebtEntries(prev => prev.map(
+      e => e.settleMoveId === settleMoveId
+        ? { ...e, settledAt: null, settleMoveId: null }
+        : e
+    ));
+    await supabase.from('debt_entries')
+      .update({ settled_at: null, settle_move_id: null })
+      .eq('settle_move_id', settleMoveId);
+    await reverseMoves([settleMoveId]);
   };
 
   const setDebtEntrySettled = async (id: string, settled: boolean) => {
@@ -1017,6 +1044,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       ...debtTotals,
       addDebtPerson, deleteDebtPerson,
       addDebtEntry, deleteDebtEntry, setDebtEntrySettled, settleUpPerson,
+      reverseSettleBatch,
     }}>
       {children}
     </AppContext.Provider>

@@ -93,6 +93,17 @@ export default function TransactionsPage() {
             amount: mm.amount,
           };
         }
+        if (mm.kind === 'debt_out' || mm.kind === 'debt_in') {
+          // flow 'moved' keeps these out of both month totals: lending is not
+          // consumption and a repayment is not income. The note carries the
+          // specifics ("Spotted Marco", "Marco settled up").
+          return {
+            id: mm.id, date: mm.date, flow: 'moved',
+            icon: '🤝', label: 'Debt',
+            sub: subtitle(mm.note, walletName(mm.walletId)),
+            amount: mm.amount,
+          };
+        }
         return {
           id: mm.id, date: mm.date, flow: 'moved',
           icon: '🔄', label: 'Transfer',
