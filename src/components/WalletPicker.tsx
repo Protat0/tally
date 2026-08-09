@@ -7,9 +7,8 @@ interface Props {
   onChange: (walletId: string) => void;
 }
 
-// Optional wallet chooser. "No wallet" is always first and is a real choice,
-// not an empty state — plenty of debts are cash that never touched a tracked
-// wallet, and those must move no balance.
+// Wallet chooser. There is deliberately no default selection — an extra tap
+// costs less than silently recording a movement against the wrong wallet.
 export default function WalletPicker({ value, onChange }: Props) {
   const { wallets } = useApp();
 
@@ -22,9 +21,6 @@ export default function WalletPicker({ value, onChange }: Props) {
 
   return (
     <div className="flex flex-wrap gap-2">
-      <button onClick={() => onChange('')} className={chip(value === '')}>
-        No wallet
-      </button>
       {wallets.map(w => (
         <button key={w.id} onClick={() => onChange(w.id)} className={chip(value === w.id)}>
           <span>{w.icon}</span>{w.name}

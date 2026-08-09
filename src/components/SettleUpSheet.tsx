@@ -25,6 +25,8 @@ export default function SettleUpSheet({
 
   const incoming = net > 0;
   const amount = Math.abs(net);
+  // A zero net moves nothing, so it has no wallet to ask about.
+  const canConfirm = (net === 0 || walletId.length > 0) && !saving;
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -56,12 +58,11 @@ export default function SettleUpSheet({
         <>
           <p className="text-xs text-slate-500 mb-2">
             {incoming ? 'Received into' : 'Paid from'}
-            <span className="text-slate-600"> · optional</span>
           </p>
           <WalletPicker value={walletId} onChange={setWalletId} />
           <p className="mt-2 text-[11px] text-slate-600">
             {walletId === ''
-              ? 'No balance will change.'
+              ? 'Pick the wallet the money moved through.'
               : `${fmt(amount, currency)} ${incoming ? 'enters' : 'leaves'} this wallet.`}
           </p>
         </>
@@ -69,7 +70,7 @@ export default function SettleUpSheet({
 
       <button
         onClick={handleConfirm}
-        disabled={saving}
+        disabled={!canConfirm}
         className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
       >
         {saving ? 'Settling…' : 'Mark settled'}

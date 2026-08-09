@@ -33,7 +33,8 @@ export default function AddDebtSheet({ onClose }: Props) {
 
   const amountValue = parseFloat(amount);
   const validPerson = creating ? newName.trim().length > 0 : personId.length > 0;
-  const canSave = validPerson && !isNaN(amountValue) && amountValue > 0 && !saving;
+  const canSave = validPerson && !isNaN(amountValue) && amountValue > 0
+    && walletId.length > 0 && !saving;
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -174,15 +175,14 @@ export default function AddDebtSheet({ onClose }: Props) {
         className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
       />
 
-      {/* Wallet — optional. Blank means no tracked wallet was involved. */}
+      {/* Wallet — required. The balance moves as soon as this is saved. */}
       <p className="text-xs text-slate-500 mt-4 mb-2">
         {direction === 'owed_to_me' ? 'Paid from' : 'Received into'}
-        <span className="text-slate-600"> · optional</span>
       </p>
       <WalletPicker value={walletId} onChange={setWalletId} />
       <p className="mt-2 text-[11px] text-slate-600">
         {walletId === ''
-          ? 'No balance will change. Pick a wallet if the money left or entered one.'
+          ? 'Pick the wallet the money moved through.'
           : direction === 'owed_to_me'
             ? `${fmt(amountValue > 0 ? amountValue : 0, settings.currency)} leaves this wallet now.`
             : `${fmt(amountValue > 0 ? amountValue : 0, settings.currency)} enters this wallet now.`}
