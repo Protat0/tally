@@ -183,6 +183,7 @@ interface AppContextValue extends Computed {
   addDebtEntry: (e: {
     personId: string; direction: DebtDirection;
     amount: number; note: string; date: string;
+    walletId?: string | null;
   }) => Promise<void>;
   deleteDebtEntry: (id: string) => Promise<void>;
   setDebtEntrySettled: (id: string, settled: boolean) => Promise<void>;
@@ -642,25 +643,42 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('debt_people').delete().eq('id', id);
   };
 
+  // Not optimistic: with a wallet set it must await the move to learn its id,
+  // and running two code paths — one optimistic, one not — is more bug surface
+  // than the sheet's existing "Saving…" state is worth.
   const addDebtEntry = async (e: {
     personId: string; direction: DebtDirection;
     amount: number; note: string; date: string;
+    walletId?: string | null;
   }) => {
     if (!userId) return;
-    const tempId = crypto.randomUUID();
-    setDebtEntries(prev => [{
-      ...e, id: tempId, settledAt: null,
-      walletId: null, moveId: null, settleMoveId: null,
-    }, ...prev]);
+    const walletId = e.walletId || null;
+    const name = debtPeople.find(p => p.id === e.personId)?.name ?? 'someone';
+
+    // The movement is inserted first so the entry can reference it. A failure
+    // between the two leaves a bare movement in the feed — visible and
+    // deletable — rather than an entry claiming a movement that never happened.
+    let moveId: string | null = null;
+    if (walletId) {
+      const out = e.direction === 'owed_to_me';
+      moveId = await recordMove(
+        {
+          kind: out ? 'debt_out' : 'debt_in',
+          amount: e.amount, walletId, toWalletId: null, source: null,
+          note: out ? `Spotted ${name}` : `Borrowed from ${name}`,
+        },
+        { [walletId]: balanceOf(walletId) + (out ? -e.amount : e.amount) },
+        e.date,
+      );
+    }
 
     const { data } = await supabase.from('debt_entries').insert({
       user_id: userId, person_id: e.personId, direction: e.direction,
       amount: e.amount, note: e.note, date: e.date,
+      wallet_id: walletId, move_id: moveId,
     }).select().single();
 
-    if (data) {
-      setDebtEntries(prev => prev.map(x => x.id === tempId ? fromDBDebtEntry(data) : x));
-    }
+    if (data) setDebtEntries(prev => [fromDBDebtEntry(data), ...prev]);
   };
 
   const deleteDebtEntry = async (id: string) => {

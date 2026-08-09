@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useApp, DebtDirection } from './AppContext';
+import { useApp, fmt, DebtDirection } from './AppContext';
 import BottomSheet from './BottomSheet';
 
 const PERSON_EMOJI = ['🧑','👩','👨','🧔','👧','👦','🙂','😎','🐱','🐶','⭐','🎯'];
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default function AddDebtSheet({ onClose }: Props) {
-  const { debtPeople, addDebtPerson, addDebtEntry } = useApp();
+  const { debtPeople, addDebtPerson, addDebtEntry, wallets, settings } = useApp();
 
   const [personId,  setPersonId]  = useState<string>(debtPeople[0]?.id ?? '');
   const [newName,   setNewName]   = useState('');
@@ -27,6 +27,7 @@ export default function AddDebtSheet({ onClose }: Props) {
   const [amount,    setAmount]    = useState('');
   const [note,      setNote]      = useState('');
   const [date,      setDate]      = useState(todayInputValue());
+  const [walletId,  setWalletId]  = useState<string>('');
   const [saving,    setSaving]    = useState(false);
 
   const amountValue = parseFloat(amount);
@@ -51,6 +52,7 @@ export default function AddDebtSheet({ onClose }: Props) {
       note: note.trim(),
       // Midday avoids the entry sliding to the previous day in UTC.
       date: new Date(`${date}T12:00:00`).toISOString(),
+      walletId: walletId || null,
     });
 
     setSaving(false);
@@ -170,6 +172,44 @@ export default function AddDebtSheet({ onClose }: Props) {
         onChange={e => setDate(e.target.value)}
         className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
       />
+
+      {/* Wallet — optional. Blank means no tracked wallet was involved. */}
+      <p className="text-xs text-slate-500 mt-4 mb-2">
+        {direction === 'owed_to_me' ? 'Paid from' : 'Received into'}
+        <span className="text-slate-600"> · optional</span>
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setWalletId('')}
+          className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+            walletId === ''
+              ? 'border-blue-500 bg-blue-500/15 text-white'
+              : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
+          }`}
+        >
+          No wallet
+        </button>
+        {wallets.map(w => (
+          <button
+            key={w.id}
+            onClick={() => setWalletId(w.id)}
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+              walletId === w.id
+                ? 'border-blue-500 bg-blue-500/15 text-white'
+                : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
+            }`}
+          >
+            <span>{w.icon}</span>{w.name}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-slate-600">
+        {walletId === ''
+          ? 'No balance will change. Pick a wallet if the money left or entered one.'
+          : direction === 'owed_to_me'
+            ? `${fmt(amountValue > 0 ? amountValue : 0, settings.currency)} leaves this wallet now.`
+            : `${fmt(amountValue > 0 ? amountValue : 0, settings.currency)} enters this wallet now.`}
+      </p>
 
       <button
         onClick={handleSave}
