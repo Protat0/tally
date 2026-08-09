@@ -41,6 +41,31 @@ input[type="number"] {
   appearance: textfield;
 }
 
+/* iOS Safari gives date/time inputs an intrinsic width from their native
+   control and ignores `width` entirely, so they overflow narrow containers
+   no matter what utility classes are applied. Resetting the appearance
+   restores normal box sizing; the value pseudo-element needs its own reset
+   because it defaults to right-aligned and pads itself out to full width. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+/* The calendar picker button is absolutely positioned on some builds and can
+   sit outside the box; keep it inside. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-left: 0;
+}
+
 ::-webkit-scrollbar {
   width: 3px;
 }

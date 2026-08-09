@@ -169,13 +169,14 @@ export default function AddDebtSheet({ onClose }: Props) {
 
       {/* Date */}
       <p className="text-xs text-slate-500 mb-1">Date</p>
-      {/* max-w-full because iOS gives date inputs an intrinsic width that
-          w-full alone does not always beat. */}
+      {/* block, not the default inline-block: an inline-block date input sizes
+          to its native control on iOS. The appearance reset that makes `width`
+          apply at all lives in globals.css. */}
       <input
         type="date"
         value={date}
         onChange={e => setDate(e.target.value)}
-        className="w-full max-w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+        className="block w-full max-w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
       />
 
       {/* Wallet — required. The balance moves as soon as this is saved. */}
