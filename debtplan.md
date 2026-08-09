@@ -107,13 +107,13 @@ create table if not exists debt_entries (
   direction  text not null check (direction in ('owed_to_me', 'i_owe')),
   amount     numeric not null check (amount > 0),
   note       text not null default '',
-  "date"     timestamptz not null default now(),
+  date       timestamptz not null default now(),
   settled_at timestamptz,
   created_at timestamptz not null default now()
 );
 
 create index if not exists debt_people_user_idx       on debt_people  (user_id, created_at);
-create index if not exists debt_entries_user_date_idx on debt_entries (user_id, "date" desc);
+create index if not exists debt_entries_user_date_idx on debt_entries (user_id, date desc);
 create index if not exists debt_entries_person_idx    on debt_entries (person_id);
 
 alter table debt_people  enable row level security;
@@ -131,11 +131,10 @@ create policy "own debt_entries" on debt_entries
 
 Expect "Success. No rows returned" — normal for DDL.
 
-`date` must be quoted as `"date"` in both the column definition and the index.
-Unquoted, `(user_id, date desc)` fails with `42601: syntax error at or near "create"`
-pointing at the *following* statement, and Postgres rejects the whole batch — nothing
-is applied. The column is still named `date`, so PostgREST and the app code are
-unaffected.
+**Paste the whole block.** Postgres parses the entire batch before executing any of
+it, so a truncated paste rejects everything with a `42601` syntax error pointing at
+the line *after* the cut — which reads like a bug in the SQL rather than a short
+paste. Check the last statement arrived intact before blaming the script.
 
 - [x] **Step 2: Add the types**
 
