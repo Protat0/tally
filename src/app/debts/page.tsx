@@ -5,6 +5,7 @@ import { useApp, netOf, DebtPerson, DebtEntry } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import DebtSummary from '@/components/DebtSummary';
+import DebtPersonSection from '@/components/DebtPersonSection';
 import { PlusIcon, UsersIcon } from '@/components/Icons';
 
 export interface PersonGroup {
@@ -19,6 +20,7 @@ export default function DebtsPage() {
   const { currency } = settings;
 
   const [addOpen, setAddOpen] = useState(false);
+  const [confirmDeletePerson, setConfirmDeletePerson] = useState<DebtPerson | null>(null);
 
   // People with an open balance first, most recently active at the top; fully
   // settled people sink to the bottom.
@@ -73,14 +75,12 @@ export default function DebtsPage() {
               </div>
             ) : (
               groups.map(g => (
-                <div key={g.person.id} className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-4">
-                  <p className="text-sm font-semibold text-white">
-                    {g.person.emoji} {g.person.name}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {g.open.length} open · net {g.net}
-                  </p>
-                </div>
+                <DebtPersonSection
+                  key={g.person.id}
+                  group={g}
+                  currency={currency}
+                  onDeletePerson={() => setConfirmDeletePerson(g.person)}
+                />
               ))
             )}
           </div>
