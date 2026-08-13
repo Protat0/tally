@@ -13,6 +13,7 @@
 - **Read the spec first:** `docs/superpowers/specs/2026-08-13-partial-debt-settlement-design.md`.
 - **This is NOT the Next.js you know.** Per `AGENTS.md`, read the relevant guide in `node_modules/next/dist/docs/` before writing framework-level code. Nothing in this plan touches routing, server components, or data fetching — it is all client-component state and markup inside existing `'use client'` files — so that lookup is likely unnecessary here. Do it anyway if you find yourself reaching for a framework API.
 - **There is no test framework.** `package.json` has only `dev`, `build`, `start`, `lint`. Do not add one; do not write test files. Verification in every task is `npx tsc --noEmit`, `npm run lint`, and a scripted manual pass in the browser. Steps below give the exact commands and the exact expected output.
+- **`npm run lint` is not clean on this repo, and that is not yours to fix.** The merge base already reports `✖ 8 problems (2 errors, 6 warnings)`, all in `AppContext.tsx`'s data-loading `useEffect`/`loadAll` block and unrelated to this feature. The bar for every task is **no new problems** — the count must still read 8 when you are done. Do not "fix" the pre-existing two; that is an unrelated change and will be rejected in review.
 - **Existing behavior is load-bearing.** The per-row ✓ button and the zero-net "these cancel out" case must render and behave exactly as they do today. Several steps exist only to confirm that.
 - **Money amounts are compared at 2 decimals.** Task 2 defines a `round2` helper for this. Never compare raw floats for the "is this the full amount" decision.
 - **Currency is never hardcoded.** Always format through `fmt(amount, currency)` from `AppContext`.
@@ -418,7 +419,7 @@ Run:
 npm run lint
 ```
 
-Expected: no errors.
+Expected: `✖ 8 problems (2 errors, 6 warnings)` — the pre-existing baseline, unchanged. Any higher count is yours.
 
 - [ ] **Step 5: Manual pass — partial payment toward you**
 
@@ -553,7 +554,7 @@ Run:
 npm run lint
 ```
 
-Expected: no errors.
+Expected: `✖ 8 problems (2 errors, 6 warnings)` — the pre-existing baseline, unchanged. Any higher count is yours.
 
 - [ ] **Step 3: Manual pass — tiles agree with the cards**
 
