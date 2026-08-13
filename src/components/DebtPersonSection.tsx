@@ -15,7 +15,8 @@ interface Props {
 }
 
 export default function DebtPersonSection({ group, currency, onDeletePerson }: Props) {
-  const { setDebtEntrySettled, deleteDebtEntry, settleUpPerson, reverseSettleBatch } = useApp();
+  const { setDebtEntrySettled, deleteDebtEntry, settleUpPerson, reverseSettleBatch,
+          recordDebtPayment } = useApp();
   const { person, open, settled, net } = group;
   const [showSettled, setShowSettled] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
@@ -113,7 +114,9 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
           personName={person.name}
           net={net}
           currency={currency}
+          allowPartial
           onConfirm={wid => settleUpPerson(person.id, wid)}
+          onPartial={(amt, wid) => recordDebtPayment(person.id, amt, wid)}
           onClose={() => setSettleOpen(false)}
         />
       )}
