@@ -13,6 +13,14 @@ interface Props {
 export default function DebtEntryRow({ entry, currency, onToggleSettled, onDelete }: Props) {
   const settled = Boolean(entry.settledAt);
   const owedToMe = entry.direction === 'owed_to_me';
+  // A row settled through a wallet was netted with the rest of its batch into
+  // one movement that belongs to no single row, so it cannot be pulled out on
+  // its own without the ledger losing the difference. Reopening the settle-up
+  // first restores every row and the money, and then this row deletes cleanly.
+  const inSettleBatch = Boolean(entry.settleMoveId);
+  const deleteLabel = inSettleBatch
+    ? 'Reopen the settle-up before deleting this'
+    : 'Delete entry';
   const day = new Date(entry.date).toLocaleDateString('en-PH', {
     month: 'short', day: 'numeric',
   });
@@ -53,11 +61,14 @@ export default function DebtEntryRow({ entry, currency, onToggleSettled, onDelet
 
       <button
         onClick={onDelete}
-        title="Delete entry"
-        aria-label="Delete entry"
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+        disabled={inSettleBatch}
+        title={deleteLabel}
+        aria-label={deleteLabel}
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${
+          inSettleBatch ? 'cursor-not-allowed' : 'hover:bg-white/10'
+        }`}
       >
-        <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
+        <TrashIcon className={`w-3.5 h-3.5 text-slate-600 ${inSettleBatch ? '' : 'hover:text-red-400'}`} />
       </button>
     </div>
   );

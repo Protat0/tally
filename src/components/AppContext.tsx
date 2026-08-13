@@ -873,8 +873,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     });
   };
 
+  // Refuses a row that was settled through a wallet. Its share of the settle
+  // movement cannot be handed back: the batch netted several rows into one
+  // amount that belongs to no single row, so removing one member would leave
+  // the movement standing at a figure nothing on the page accounts for and the
+  // wallet quietly wrong. The caller reverses the batch first — that restores
+  // the money and reopens every row — and deletes the row while it is open.
   const deleteDebtEntry = async (id: string) => {
     const entry = debtEntries.find(e => e.id === id);
+    if (entry?.settleMoveId) return;
     setDebtEntries(prev => prev.filter(e => e.id !== id));
     await supabase.from('debt_entries').delete().eq('id', id);
     if (entry?.moveId) await reverseMoves([entry.moveId]);
