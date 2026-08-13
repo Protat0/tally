@@ -559,14 +559,26 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   }, [wallets, expenses, moneyMoves, settings, shopeeSchedule]);
 
   // Open entries only — settled debts are history, not balance.
+  //
+  // Netted per person, not summed gross. One person cannot both owe you and be
+  // owed by you at the same time; only their balance is real. Summing face
+  // values would count a part-paid debt on both sides and report a position
+  // that matches no card on the page.
   const debtTotals = useMemo(() => {
-    const open = debtEntries.filter(e => !e.settledAt);
-    return {
-      totalOwedToMe: open.filter(e => e.direction === 'owed_to_me')
-                         .reduce((s, e) => s + e.amount, 0),
-      totalIOwe:     open.filter(e => e.direction === 'i_owe')
-                         .reduce((s, e) => s + e.amount, 0),
-    };
+    const netByPerson = new Map<string, number>();
+    for (const e of debtEntries) {
+      if (e.settledAt) continue;
+      const signed = e.direction === 'owed_to_me' ? e.amount : -e.amount;
+      netByPerson.set(e.personId, (netByPerson.get(e.personId) ?? 0) + signed);
+    }
+
+    let totalOwedToMe = 0;
+    let totalIOwe = 0;
+    for (const net of netByPerson.values()) {
+      if (net > 0) totalOwedToMe += net;
+      else if (net < 0) totalIOwe -= net;
+    }
+    return { totalOwedToMe, totalIOwe };
   }, [debtEntries]);
 
   // ── Wallets ───────────────────────────────────────────────────────────────
