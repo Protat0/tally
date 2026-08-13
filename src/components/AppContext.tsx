@@ -223,11 +223,15 @@ interface AppContextValue extends Computed {
     personId: string; direction: DebtDirection;
     amount: number; note: string; date: string;
     walletId?: string | null;
+    /** Overrides the money-move note. A repayment is not a new loan and
+     *  should not read like one in the transactions feed. */
+    moveNote?: string;
   }) => Promise<void>;
   deleteDebtEntry: (id: string) => Promise<void>;
   setDebtEntrySettled: (id: string, settled: boolean, walletId?: string | null) => Promise<void>;
   settleUpPerson: (personId: string, walletId?: string | null) => Promise<void>;
   reverseSettleBatch: (settleMoveId: string) => Promise<void>;
+  recordDebtPayment: (personId: string, amount: number, walletId: string) => Promise<void>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -794,6 +798,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     personId: string; direction: DebtDirection;
     amount: number; note: string; date: string;
     walletId?: string | null;
+    moveNote?: string;
   }) => {
     if (!userId) return;
     const walletId = e.walletId || null;
@@ -809,7 +814,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
         {
           kind: out ? 'debt_out' : 'debt_in',
           amount: e.amount, walletId, toWalletId: null, source: null,
-          note: out ? `Spotted ${name}` : `Borrowed from ${name}`,
+          note: e.moveNote ?? (out ? `Spotted ${name}` : `Borrowed from ${name}`),
         },
         { [walletId]: balanceOf(walletId) + (out ? -e.amount : e.amount) },
         e.date,
@@ -823,6 +828,34 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     }).select().single();
 
     if (data) setDebtEntries(prev => [fromDBDebtEntry(data), ...prev]);
+  };
+
+  // A payment against a person's balance. It is an ordinary entry pointing the
+  // other way, not a settlement: paying down a positive net is money coming in,
+  // which is exactly what `addDebtEntry` already books for an `i_owe` row. The
+  // originals keep their face values and nothing is marked settled — the new
+  // balance falls out of `netOf`, as it does for every other entry.
+  //
+  // The net is read here rather than passed in: the direction of the money
+  // depends on it, and a stale figure from a render would point the wallet
+  // movement the wrong way.
+  const recordDebtPayment = async (personId: string, amount: number, walletId: string) => {
+    const net = netOf(debtEntries.filter(e => e.personId === personId && !e.settledAt));
+    if (amount <= 0 || net === 0) return;
+
+    const incoming = net > 0;
+    const name = debtPeople.find(p => p.id === personId)?.name ?? 'someone';
+    const note = incoming ? `${name} paid you` : `Paid ${name}`;
+
+    await addDebtEntry({
+      personId,
+      direction: incoming ? 'i_owe' : 'owed_to_me',
+      amount,
+      note,
+      date: new Date().toISOString(),
+      walletId,
+      moveNote: note,
+    });
   };
 
   const deleteDebtEntry = async (id: string) => {
@@ -1260,7 +1293,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       ...debtTotals,
       addDebtPerson, deleteDebtPerson,
       addDebtEntry, deleteDebtEntry, setDebtEntrySettled, settleUpPerson,
-      reverseSettleBatch,
+      reverseSettleBatch, recordDebtPayment,
     }}>
       {children}
     </AppContext.Provider>
