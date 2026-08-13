@@ -864,7 +864,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       direction: incoming ? 'i_owe' : 'owed_to_me',
       amount,
       note,
-      date: new Date().toISOString(),
+      // Midday of today, as AddDebtSheet dates a hand-entered row: a bare
+      // toISOString() before 08:00 in PH stamps yesterday, which backdates the
+      // person on the debts list and reads as the wrong day on the row.
+      date: new Date(`${isoDay(new Date())}T12:00:00`).toISOString(),
       walletId,
       moveNote: note,
     });
@@ -946,7 +949,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     let moveId: string | null = null;
     if (walletId && net !== 0) {
       const incoming = net > 0;
-      const amount = Math.abs(net);
+      // Rounded before it moves: a net left at 166.66000000000003 by an earlier
+      // partial payment would otherwise carry its dust into the movement and
+      // the wallet balance, where nothing displays it but it never leaves.
+      const amount = Math.round(Math.abs(net) * 100) / 100;
       moveId = await recordMove(
         {
           kind: incoming ? 'debt_in' : 'debt_out',

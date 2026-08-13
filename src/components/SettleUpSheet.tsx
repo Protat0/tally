@@ -42,9 +42,13 @@ type Props = BaseProps & (
 export default function SettleUpSheet(props: Props) {
   const { title, personName, net, currency, onConfirm, onClose } = props;
   const incoming = net > 0;
+  // The sheet's one notion of the balance. Everything below asks `full` rather
+  // than `net`, so a balance of -2.84e-14 — float dust left by earlier payments,
+  // and ₱0.00 everywhere it is shown — behaves exactly like a true zero instead
+  // of offering an amount field prefilled with 0 that can never be confirmed.
   const full = round2(Math.abs(net));
-  // A zero net moves nothing, so there is nothing to take an amount for.
-  const partial = Boolean(props.allowPartial) && net !== 0;
+  // A zero balance moves nothing, so there is nothing to take an amount for.
+  const partial = Boolean(props.allowPartial) && full !== 0;
 
   // Prefilled with the whole balance so settling in full stays a single tap.
   const [amount, setAmount] = useState(partial ? String(full) : '');
@@ -61,7 +65,7 @@ export default function SettleUpSheet(props: Props) {
 
   const canConfirm = !saving && (
     partial ? valid && walletId.length > 0
-            : net === 0 || walletId.length > 0
+            : full === 0 || walletId.length > 0
   );
 
   const handleConfirm = async () => {
@@ -94,14 +98,18 @@ export default function SettleUpSheet(props: Props) {
     <BottomSheet onClose={onClose}>
       <p className="font-semibold text-white text-lg mb-1">{title}</p>
 
-      {net === 0 ? (
+      {full === 0 ? (
         <p className="text-sm text-slate-500 mb-5">
           These cancel out exactly — nothing changes hands. Everything will be
           marked settled.
         </p>
       ) : (
         <p className="text-sm text-slate-500 mb-5">
-          {incoming ? `${personName} owes you ` : `You owe ${personName} `}
+          {/* A balance the user is about to edit, versus a transaction about to
+              happen. The row sheet describes the payment it is confirming. */}
+          {partial
+            ? (incoming ? `${personName} owes you ` : `You owe ${personName} `)
+            : (incoming ? `${personName} pays you ` : `You pay ${personName} `)}
           <span className={incoming ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
             {fmt(full, currency)}
           </span>
@@ -144,7 +152,7 @@ export default function SettleUpSheet(props: Props) {
         </>
       )}
 
-      {net !== 0 && (
+      {full !== 0 && (
         <>
           <p className="text-xs text-slate-500 mb-2">
             {incoming ? 'Received into' : 'Paid from'}
