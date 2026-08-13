@@ -90,17 +90,29 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
           </button>
           {showSettled && (
             <div className="mt-2 space-y-2">
+              {/* A row settled through a wallet was netted with the rest of its
+                  batch into one movement that belongs to no single row, so it
+                  can be neither un-settled nor deleted on its own without the
+                  ledger losing the difference. Both buttons therefore lead to
+                  the same place: reopen the settle-up, which restores the money
+                  and every row, and then the row deletes cleanly from the open
+                  list. */}
               {settled.map(e => (
                 <DebtEntryRow
                   key={e.id}
                   entry={e}
                   currency={currency}
+                  deleteLabel={e.settleMoveId ? 'Reopen the settle-up to delete this' : undefined}
                   onToggleSettled={() =>
                     e.settleMoveId
                       ? setConfirmBatch(e.settleMoveId)
                       : setDebtEntrySettled(e.id, false)
                   }
-                  onDelete={() => deleteDebtEntry(e.id)}
+                  onDelete={() =>
+                    e.settleMoveId
+                      ? setConfirmBatch(e.settleMoveId)
+                      : deleteDebtEntry(e.id)
+                  }
                 />
               ))}
             </div>
