@@ -10,32 +10,41 @@ import WalletPicker from './WalletPicker';
 // ₱0.00 entry open forever.
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-interface Props {
+interface BaseProps {
   title: string;
   personName: string;
   /** Signed: positive means they pay you, negative means you pay them. */
   net: number;
   currency: string;
-  /** Person-level settle-up only. A single row is all-or-nothing. */
-  allowPartial?: boolean;
   onConfirm: (walletId: string | null) => Promise<void>;
-  /** Required when `allowPartial` is set and the user enters less or more
-   *  than the full net. */
-  onPartial?: (amount: number, walletId: string) => Promise<void>;
   onClose: () => void;
 }
+
+// `allowPartial` and `onPartial` are inseparable: a sheet that lets the user
+// edit the amount needs somewhere to send that amount. A plain optional pair
+// let a caller set one without the other, which would silently settle the
+// whole balance behind a button that reads "Record payment". The union makes
+// that combination fail to typecheck instead.
+type Props = BaseProps & (
+  | { allowPartial?: false; onPartial?: never }
+  | {
+      /** Person-level settle-up only. A single row is all-or-nothing. */
+      allowPartial: true;
+      /** The user entered less or more than the full net; send what they typed. */
+      onPartial: (amount: number, walletId: string) => Promise<void>;
+    }
+);
 
 // Used for both a person's whole settle-up and a single row. Either way the
 // question is the same: this much changes hands — which wallet, if any? With
 // `allowPartial`, "this much" becomes editable and the sheet turns into a
 // payoff tool: pay part of the balance, all of it, or more than it.
-export default function SettleUpSheet({
-  title, personName, net, currency, allowPartial, onConfirm, onPartial, onClose,
-}: Props) {
+export default function SettleUpSheet(props: Props) {
+  const { title, personName, net, currency, onConfirm, onClose } = props;
   const incoming = net > 0;
   const full = round2(Math.abs(net));
   // A zero net moves nothing, so there is nothing to take an amount for.
-  const partial = Boolean(allowPartial) && net !== 0;
+  const partial = Boolean(props.allowPartial) && net !== 0;
 
   // Prefilled with the whole balance so settling in full stays a single tap.
   const [amount, setAmount] = useState(partial ? String(full) : '');
@@ -57,8 +66,11 @@ export default function SettleUpSheet({
 
   const handleConfirm = async () => {
     setSaving(true);
-    if (partial && !isFull && onPartial) {
-      await onPartial(entered, walletId);
+    // `props.allowPartial` (not the derived `partial`) is what narrows
+    // `props.onPartial` to defined — that's the type-level guarantee from
+    // the Props union, not a runtime nullish check standing in for it.
+    if (props.allowPartial && partial && !isFull) {
+      await props.onPartial(entered, walletId);
     } else {
       await onConfirm(walletId || null);
     }
@@ -139,7 +151,7 @@ export default function SettleUpSheet({
           </p>
           <WalletPicker value={walletId} onChange={setWalletId} />
           <p className="mt-2 text-[11px] text-slate-600">
-            {walletId === ''
+            {walletId === '' || (partial && !valid)
               ? 'Pick the wallet the money moved through.'
               : `${fmt(moving, currency)} ${incoming ? 'enters' : 'leaves'} this wallet.`}
           </p>
