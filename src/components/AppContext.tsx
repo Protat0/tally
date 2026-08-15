@@ -228,6 +228,8 @@ interface AppContextValue extends Computed {
     /** Overrides the money-move note. A repayment is not a new loan and
      *  should not read like one in the transactions feed. */
     moveNote?: string;
+    expenseId?: string | null;
+    walletBalanceAfter?: number;
   }) => Promise<void>;
   deleteDebtEntry: (id: string) => Promise<void>;
   setDebtEntrySettled: (id: string, settled: boolean, walletId?: string | null) => Promise<void>;
@@ -823,6 +825,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     amount: number; note: string; date: string;
     walletId?: string | null;
     moveNote?: string;
+    expenseId?: string | null;
+    walletBalanceAfter?: number;
   }) => {
     if (!userId) return;
     const walletId = e.walletId || null;
@@ -834,13 +838,18 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     let moveId: string | null = null;
     if (walletId) {
       const out = e.direction === 'owed_to_me';
+      // A caller making several calls against one wallet must pass the balance
+      // itself: balanceOf reads React state, which does not update across
+      // awaits, so a second call would compute from the same stale figure and
+      // the last write would win. Single-call callers omit it.
+      const after = e.walletBalanceAfter ?? (balanceOf(walletId) + (out ? -e.amount : e.amount));
       moveId = await recordMove(
         {
           kind: out ? 'debt_out' : 'debt_in',
           amount: e.amount, walletId, toWalletId: null, source: null,
           note: e.moveNote ?? (out ? `Spotted ${name}` : `Borrowed from ${name}`),
         },
-        { [walletId]: balanceOf(walletId) + (out ? -e.amount : e.amount) },
+        { [walletId]: after },
         e.date,
       );
     }
@@ -849,6 +858,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       user_id: userId, person_id: e.personId, direction: e.direction,
       amount: e.amount, note: e.note, date: e.date,
       wallet_id: walletId, move_id: moveId,
+      expense_id: e.expenseId ?? null,
     }).select().single();
 
     if (data) setDebtEntries(prev => [fromDBDebtEntry(data), ...prev]);
