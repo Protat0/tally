@@ -860,7 +860,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     }
 
     const newBalances: Record<string, number> = {};
-    for (const [wid, d] of Object.entries(deltas)) newBalances[wid] = balanceOf(wid) + d;
+    // round2, because this sums several raw floats: 0.01 + 0.05 is
+    // 0.060000000000000005, and sub-centavo dust in a stored balance causes real
+    // misbehaviour later (a balance that should be zero never compares equal to it).
+    for (const [wid, d] of Object.entries(deltas)) newBalances[wid] = round2(balanceOf(wid) + d);
 
     setMoneyMoves(prev => prev.filter(m => !ids.includes(m.id)));
     setWallets(prev => prev.map(w => w.id in newBalances ? { ...w, balance: newBalances[w.id] } : w));
