@@ -2,9 +2,9 @@
 
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useApp, fmt, Category } from '@/components/AppContext';
+import { useApp, fmt, round2, Category } from '@/components/AppContext';
 import { XIcon } from '@/components/Icons';
-import SplitSheet, { SplitResult } from '@/components/SplitSheet';
+import SplitPanel, { SplitResult } from '@/components/SplitPanel';
 
 const CATEGORIES: { key: Category; label: string; icon: string; color: string }[] = [
   { key: 'food',      label: 'Food',      icon: '🍜', color: 'bg-orange-500/15 border-orange-500/40' },
@@ -37,11 +37,19 @@ function ExpenseForm() {
   const [walletId, setWalletId] = useState(presetWalletId || (wallets[0]?.id ?? ''));
   const [note,     setNote]     = useState('');
   const [split,     setSplit]     = useState<SplitResult | null>(null);
-  const [splitOpen, setSplitOpen] = useState(false);
 
+  const owedTotal = split?.mode === 'wallet'
+    ? split.owedToMe.reduce((s, o) => s + o.amount, 0)
+    : 0;
+  const myShare = round2((parseFloat(input) || 0) - owedTotal);
   const needsWallet = !split || split.mode === 'wallet';
+
   const canSubmit = parseFloat(input) > 0 && category !== null
-    && (!needsWallet || walletId !== '');
+    && (!needsWallet || walletId !== '')
+    // Re-checked against the CURRENT amount, not the amount when the split was made.
+    // Lowering the amount after splitting must disable the button, not silently
+    // discard the expense in addExpense's guard.
+    && myShare >= 0;
 
   const handleKey = (k: string) => {
     setInput(prev => {
@@ -102,57 +110,50 @@ function ExpenseForm() {
               No wallets yet — add one in Wallets.
             </p>
           ) : (
-            <>
-              <p className="text-xs text-slate-500 mb-2">Pay from</p>
+            <div className={split?.mode === 'person' ? 'opacity-40 pointer-events-none' : ''}>
+              <p className="text-xs text-slate-500 mb-2">
+                {split?.mode === 'person' ? 'No wallet involved' : 'Pay from'}
+              </p>
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                {wallets.map(w => (
-                  <button
-                    key={w.id}
-                    onClick={() => setWalletId(w.id)}
-                    className={`flex items-center gap-2 rounded-full shrink-0 pl-2.5 pr-3.5 py-2 border transition-colors ${
-                      walletId === w.id
-                        ? 'border-blue-500 bg-blue-500/15'
-                        : 'border-[#1e2d40] bg-white/5'
-                    }`}
-                  >
-                    <span className="text-base leading-none">{w.icon}</span>
-                    <div className="text-left">
-                      <p className={`text-xs font-medium leading-tight ${walletId === w.id ? 'text-blue-300' : 'text-white'}`}>
-                        {w.name}
-                      </p>
-                      <p className="text-[10px] text-slate-400 leading-tight">
-                        {fmt(w.balance, settings.currency)}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-                <button
-                  onClick={() => setSplitOpen(true)}
-                  className={`flex items-center gap-2 rounded-full shrink-0 pl-2.5 pr-3.5 py-2 border transition-colors ${
-                    split
-                      ? 'border-blue-500 bg-blue-500/15'
-                      : 'border-dashed border-[#1e2d40] bg-white/5'
-                  }`}
-                >
-                  <span className="text-base leading-none">🤝</span>
-                  <div className="text-left">
-                    <p className={`text-xs font-medium leading-tight ${split ? 'text-blue-300' : 'text-white'}`}>
-                      Split
-                    </p>
-                    <p className="text-[10px] text-slate-400 leading-tight">
-                      {split
-                        ? split.mode === 'person' ? 'someone paid' : `${split.owedToMe.length} owe you`
-                        : 'with someone'}
-                    </p>
-                  </div>
-                </button>
+                {wallets.map(w => {
+                  const selected = walletId === w.id && split?.mode !== 'person';
+                  return (
+                    <button
+                      key={w.id}
+                      onClick={() => setWalletId(w.id)}
+                      className={`flex items-center gap-2 rounded-full shrink-0 pl-2.5 pr-3.5 py-2 border transition-colors ${
+                        selected
+                          ? 'border-blue-500 bg-blue-500/15'
+                          : 'border-[#1e2d40] bg-white/5'
+                      }`}
+                    >
+                      <span className="text-base leading-none">{w.icon}</span>
+                      <div className="text-left">
+                        <p className={`text-xs font-medium leading-tight ${selected ? 'text-blue-300' : 'text-white'}`}>
+                          {w.name}
+                        </p>
+                        <p className="text-[10px] text-slate-400 leading-tight">
+                          {fmt(w.balance, settings.currency)}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-            </>
+            </div>
           )}
         </div>
 
         {/* ── Scrollable middle: category + note ── */}
         <div className="flex-1 overflow-y-auto px-5 space-y-4 min-h-0">
+
+          {/* Split */}
+          <SplitPanel
+            total={parseFloat(input) || 0}
+            currency={settings.currency}
+            value={split}
+            onChange={setSplit}
+          />
 
           {/* Category */}
           <div>
@@ -213,29 +214,10 @@ function ExpenseForm() {
               : split?.mode === 'person'
                 ? 'Log · someone else paid'
                 : split
-                  ? `Log · ${fmt(
-                      parseFloat(input) - split.owedToMe.reduce((s, o) => s + o.amount, 0),
-                      settings.currency,
-                    )} of ${fmt(parseFloat(input), settings.currency)}`
+                  ? `Log · ${fmt(myShare, settings.currency)} of ${fmt(parseFloat(input), settings.currency)}`
                   : `Log · ${selectedWallet ? selectedWallet.name : ''}`}
           </button>
         </div>
-
-        {splitOpen && (
-          <SplitSheet
-            total={parseFloat(input) || 0}
-            currency={settings.currency}
-            initial={split}
-            onClose={() => setSplitOpen(false)}
-            onApply={r => {
-              // An empty wallet-mode result means "never mind" — clear it so the
-              // chip goes back to its resting state rather than claiming a split
-              // of nobody.
-              setSplit(r.mode === 'wallet' && r.owedToMe.length === 0 ? null : r);
-              setSplitOpen(false);
-            }}
-          />
-        )}
       </div>
     </div>
   );
