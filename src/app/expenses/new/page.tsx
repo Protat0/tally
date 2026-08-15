@@ -46,6 +46,10 @@ function ExpenseForm() {
 
   const canSubmit = parseFloat(input) > 0 && category !== null
     && (!needsWallet || walletId !== '')
+    // Person mode books a debt against the payer instead of moving a wallet
+    // balance. With no payer there is no debt to book, and the expense would
+    // land with neither a funding wallet nor a debt row.
+    && (split?.mode !== 'person' || split.paidByPersonId !== null)
     // Re-checked against the CURRENT amount, not the amount when the split was made.
     // Lowering the amount after splitting must disable the button, not silently
     // discard the expense in addExpense's guard.
@@ -69,7 +73,9 @@ function ExpenseForm() {
       note: note.trim(),
       walletId: split?.mode === 'person' ? null : walletId,
       paidByPersonId: split?.mode === 'person' ? split.paidByPersonId : null,
-      owedToMe: split?.mode === 'wallet' ? split.owedToMe : [],
+      // A `+ Name` row starts at 0 and stays there until the user types an
+      // amount. Booking that as a debt writes a ₱0 entry and a ₱0 money_move.
+      owedToMe: split?.mode === 'wallet' ? split.owedToMe.filter(o => o.amount > 0) : [],
     });
     router.back();
   };

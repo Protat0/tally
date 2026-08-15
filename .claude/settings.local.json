@@ -71,7 +71,9 @@
       "Bash(grep -bo \"\\\\.sm\\\\\\\\\\\\\\\\:block{\" .next/static/chunks/0a3eyvhdokghy.css)",
       "Bash(grep -o \"\\\\.sm\\\\\\\\\\\\\\\\:hidden{[^}]*}\" .next/static/chunks/0a3eyvhdokghy.css)",
       "Bash(grep -o \"@media[^{]*{[^@]\\\\{0,200\\\\}sm.:hidden[^}]*}\" .next/static/chunks/0a3eyvhdokghy.css)",
-      "Bash(grep -bo \"@media \\(min-width:40rem\\){.sm..block\" .next/static/chunks/0a3eyvhdokghy.css)"
+      "Bash(grep -bo \"@media \\(min-width:40rem\\){.sm..block\" .next/static/chunks/0a3eyvhdokghy.css)",
+      "Read(//c/Users/ngjam/.claude/projects/C--Users-ngjam-Desktop-tally/memory//**)",
+      "Read(//c/Users/ngjam/.claude/projects/C--Users-ngjam-Desktop-tally/memory/**)"
     ]
   }
 }

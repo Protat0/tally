@@ -145,9 +145,15 @@ export default function SplitPanel({ total, currency, value, onChange }: Props) 
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-slate-600">
-                No wallet moves. You owe {value.paidByPersonId ? nameOf(value.paidByPersonId) : 'them'} {fmt(total, currency)}.
-              </p>
+              {value.paidByPersonId ? (
+                <p className="text-[11px] text-slate-600">
+                  No wallet moves. You owe {nameOf(value.paidByPersonId)} {fmt(total, currency)}.
+                </p>
+              ) : (
+                <p className="text-[11px] text-amber-500/80">
+                  Pick who paid — this expense needs someone to owe.
+                </p>
+              )}
             </>
           ) : (
             <>
