@@ -637,6 +637,11 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       ? e.amount - owed.reduce((s, o) => s + o.amount, 0)
       : e.amount);
 
+    // Over-allocating is incoherent: more is owed back to you than was paid out.
+    // The UI blocks it, but this is a money boundary and it defends itself rather
+    // than trusting every future caller.
+    if (myShare < 0) return;
+
     const now = new Date().toISOString();
 
     // Inserted first, and NOT optimistically: the debt rows below need the real
@@ -693,7 +698,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       // No wallet, so no movement and no balance to hand over.
       await addDebtEntry({
         personId: e.paidByPersonId, direction: 'i_owe',
-        amount: e.amount, note: e.note, date: now,
+        amount: myShare, note: e.note, date: now,
         walletId: null, expenseId,
       });
     }
