@@ -33,8 +33,7 @@ export default function AddDebtSheet({ onClose }: Props) {
 
   const amountValue = parseFloat(amount);
   const validPerson = creating ? newName.trim().length > 0 : personId.length > 0;
-  const canSave = validPerson && !isNaN(amountValue) && amountValue > 0
-    && walletId.length > 0 && !saving;
+  const canSave = validPerson && !isNaN(amountValue) && amountValue > 0 && !saving;
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -180,14 +179,24 @@ export default function AddDebtSheet({ onClose }: Props) {
         className="block w-full max-w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
       />
 
-      {/* Wallet — required. The balance moves as soon as this is saved. */}
+      {/* Wallet — optional. The balance moves only if a wallet is selected. */}
       <p className="text-xs text-slate-500 mt-4 mb-2">
         {direction === 'owed_to_me' ? 'Paid from' : 'Received into'}
       </p>
       <WalletPicker value={walletId} onChange={setWalletId} />
+      <button
+        onClick={() => setWalletId('')}
+        className={`mt-2 w-full rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+          walletId === ''
+            ? 'border-blue-500 bg-blue-500/15 text-white'
+            : 'border-[#1e2d40] bg-white/5 text-slate-400'
+        }`}
+      >
+        No wallet — this already happened
+      </button>
       <p className="mt-2 text-[11px] text-slate-600">
         {walletId === ''
-          ? 'Pick the wallet the money moved through.'
+          ? 'Records the debt only. No balance moves — use this for money that changed hands before you tracked it.'
           : direction === 'owed_to_me'
             ? `${fmt(amountValue > 0 ? amountValue : 0, settings.currency)} leaves this wallet now.`
             : `${fmt(amountValue > 0 ? amountValue : 0, settings.currency)} enters this wallet now.`}
