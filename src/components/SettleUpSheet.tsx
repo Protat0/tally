@@ -1,14 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { fmt } from './AppContext';
+import { fmt, round2 } from './AppContext';
 import BottomSheet from './BottomSheet';
 import WalletPicker from './WalletPicker';
-
-// Money compares at two decimals. A raw float comparison would send a ₱333.33
-// payment against a ₱333.33 balance down the partial path and leave a phantom
-// ₱0.00 entry open forever.
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 interface BaseProps {
   title: string;

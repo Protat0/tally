@@ -21,7 +21,8 @@ export interface Wallet {
 
 export interface Expense {
   id: string; amount: number; category: Category;
-  walletId: string; note: string; date: string;
+  // null means another person paid for this, so no wallet of yours moved.
+  walletId: string | null; note: string; date: string;
 }
 
 // Money that moves in or out of a wallet without being a categorised expense.
@@ -65,6 +66,7 @@ export interface DebtEntry {
   walletId: string | null;       // wallet the creation movement hit; null = none
   moveId: string | null;         // money_moves row created at creation
   settleMoveId: string | null;   // shared by every entry in one settle-up batch
+  expenseId: string | null;      // the expense that produced this row; null = standalone debt
 }
 
 // Positive = they owe you. Caller decides which entries to include; pass only
@@ -350,7 +352,7 @@ const fromDBAppliance  = (r: Row): Appliance  => ({
 });
 const fromDBExpense    = (r: Row): Expense    => ({
   id: r.id, amount: Number(r.amount), category: r.category as Category,
-  walletId: r.wallet_id, note: r.note || '', date: r.date,
+  walletId: r.wallet_id ?? null, note: r.note || '', date: r.date,
 });
 const fromDBMoneyMove  = (r: Row): MoneyMove  => ({
   id: r.id, kind: r.kind as MoneyMoveKind, amount: Number(r.amount),
@@ -376,6 +378,7 @@ const fromDBDebtEntry  = (r: Row): DebtEntry => ({
   walletId: r.wallet_id ?? null,
   moveId: r.move_id ?? null,
   settleMoveId: r.settle_move_id ?? null,
+  expenseId: r.expense_id ?? null,
 });
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
@@ -609,21 +612,25 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // ── Expenses ──────────────────────────────────────────────────────────────
   const addExpense = async (e: Omit<Expense, 'id' | 'date'>) => {
     if (!userId) return;
-    const wallet = wallets.find(w => w.id === e.walletId);
-    const newBalance = (wallet?.balance ?? 0) - e.amount;
+    // A wallet-less expense (someone else paid) moves no balance of yours.
+    const wallet = e.walletId ? wallets.find(w => w.id === e.walletId) : undefined;
+    const newBalance = wallet ? wallet.balance - e.amount : null;
     const now = new Date().toISOString();
     const tempId = crypto.randomUUID();
 
-    // Optimistic
     setExpenses(prev => [{ ...e, id: tempId, date: now }, ...prev]);
-    setWallets(prev => prev.map(w => w.id === e.walletId ? { ...w, balance: newBalance } : w));
+    if (newBalance !== null) {
+      setWallets(prev => prev.map(w => w.id === e.walletId ? { ...w, balance: newBalance } : w));
+    }
 
     const [expRes] = await Promise.all([
       supabase.from('expenses').insert({
         user_id: userId, wallet_id: e.walletId, amount: e.amount,
         category: e.category, note: e.note, date: now,
       }).select().single(),
-      supabase.from('wallets').update({ balance: newBalance }).eq('id', e.walletId),
+      ...(newBalance !== null && e.walletId
+        ? [supabase.from('wallets').update({ balance: newBalance }).eq('id', e.walletId)]
+        : []),
     ]);
     if (expRes.data) {
       setExpenses(prev => prev.map(ex => ex.id === tempId ? fromDBExpense(expRes.data) : ex));
@@ -633,12 +640,17 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const deleteExpense = async (id: string) => {
     const found = expenses.find(e => e.id === id);
     if (!found) return;
-    const newBalance = (wallets.find(w => w.id === found.walletId)?.balance ?? 0) + found.amount;
+    const wallet = found.walletId ? wallets.find(w => w.id === found.walletId) : undefined;
+    const newBalance = wallet ? wallet.balance + found.amount : null;
     setExpenses(prev => prev.filter(e => e.id !== id));
-    setWallets(prev => prev.map(w => w.id === found.walletId ? { ...w, balance: newBalance } : w));
+    if (newBalance !== null) {
+      setWallets(prev => prev.map(w => w.id === found.walletId ? { ...w, balance: newBalance } : w));
+    }
     await Promise.all([
       supabase.from('expenses').delete().eq('id', id),
-      supabase.from('wallets').update({ balance: newBalance }).eq('id', found.walletId),
+      ...(newBalance !== null && found.walletId
+        ? [supabase.from('wallets').update({ balance: newBalance }).eq('id', found.walletId)]
+        : []),
     ]);
   };
 
@@ -1336,3 +1348,9 @@ export function fmt(amount: number, currency = '₱'): string {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   })}`;
 }
+
+// One definition of how money rounds. Never compare raw floats for a
+// "is this the full amount" decision. A raw float comparison would send a
+// ₱333.33 payment against a ₱333.33 balance down the partial path and leave a
+// phantom ₱0.00 entry open forever.
+export const round2 = (n: number) => Math.round(n * 100) / 100;

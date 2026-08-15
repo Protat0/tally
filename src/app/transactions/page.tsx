@@ -48,7 +48,7 @@ export default function TransactionsPage() {
   const m = viewMonth.getMonth();
   const monthLabel = viewMonth.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
 
-  const walletName = (id: string) => wallets.find(w => w.id === id)?.name ?? '';
+  const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
 
   // Resolve a category key (built-in or user-defined) to its icon + label.
   const catMeta = (key: string): { icon: string; label: string } => {

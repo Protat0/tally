@@ -49,7 +49,7 @@ export default function CategoryDetailSheet({
 }: Props) {
   const { expenses, wallets } = useApp();
 
-  const walletName = (id: string) => wallets.find(w => w.id === id)?.name ?? '';
+  const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
 
   // Every expense ever logged against this category, newest first, grouped by
   // the month it fell in.
