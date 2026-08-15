@@ -1,15 +1,16 @@
 # Tally — Progress Log
 
-_Last updated: 2026-08-09_
+_Last updated: 2026-08-15_
 
 A running log of what's been built and what's next, so we can pick up where we left off.
 
 ---
 
-## Migration status — all applied ✅
+## Migration status — one outstanding ⚠️
 
 | Object | Table | Status |
 | --- | --- | --- |
+| `cash_wallet_id` (uuid fk, `on delete set null`) | `settings` | ⚠️ **NOT applied — blocks the Cash wallet work below** |
 | `custom_categories` (jsonb, default `[]`) | `settings` | ✅ Applied |
 | `category_budgets` (jsonb, default `{}`) | `settings` | ✅ Applied 2026-08-08 |
 | `hidden_categories` (jsonb, default `[]`) | `settings` | ✅ Applied 2026-08-08 |
@@ -18,7 +19,100 @@ A running log of what's been built and what's next, so we can pick up where we l
 | `money_moves.kind` check widened + `debt_entries.wallet_id` / `move_id` / `settle_move_id` | — | ✅ Applied 2026-08-09 |
 | `cashflow_wallet_id` (uuid fk) + `payday_log` (jsonb, default `{}`) | `settings` | ✅ Applied 2026-08-09 |
 
-No outstanding migrations. Every schema object the app reads or writes exists.
+Everything above the new row is applied. **`cash_wallet_id` is not**, and until it
+is, any settings write would fail on the unknown column — so it must be run
+*before* the Cash wallet code lands, not after:
+
+```sql
+alter table settings add column cash_wallet_id uuid references wallets(id) on delete set null;
+```
+
+---
+
+## Next up — Cash as the default wallet (designed, not built)
+
+Design agreed 2026-08-15; **no code written yet.** Three decisions were settled,
+so pick this up without re-opening them:
+
+1. **Identity: a `settings.cashWalletId` pointer.** Not a name match (breaks on
+   rename, and there is no rename UI to guard it) and not an `is_default` column
+   on `wallets` (bigger schema change, needs a uniqueness guarantee). Mirrors how
+   `cashflowWalletId` already works — note the two are unrelated and easy to
+   confuse: `cashflowWalletId` is only the payday-prefill pointer.
+2. **Withdraw becomes a plain transfer to Cash** — `addTransfer(wallet → Cash)`.
+   Accepted cost: withdrawals lose their distinct 🏧 label and render as
+   `🔄 Transfer · BPI → Cash` in the Activity feed.
+3. **Legacy `withdrawn` rows are left alone**, still counting as spent. They
+   predate the Cash wallet, so that money really did leave every tracked wallet;
+   reclassifying would silently move past months' spend totals.
+
+**The shape of the work:**
+
+- `Settings` gains `cashWalletId`, mapped as `cash_wallet_id` in
+  `fromDBSettings` / `toDBSettings` and defaulted in `defaultSettings`.
+- A new `ensureCashWallet()` fires when the pointer is null **or points at a
+  wallet that no longer exists**, inserting `{ name: 'Cash', icon: '💵',
+  balance: 0 }`. Call it from **two** places: the end of `loadAll`, and the end
+  of `resetAccount` — reset wipes every wallet and nulls the pointers, so
+  without the second call you end up with no Cash wallet and a dead Withdraw
+  button until the next reload.
+- `WalletCard` withdraw calls `addTransfer` with the Cash id; the button is
+  disabled on the Cash card itself and when no Cash wallet exists. The sheet
+  shows "→ 💵 Cash" as a non-interactive line, since the destination is implied
+  rather than chosen.
+- **Delete `addWithdrawal` outright** (type at ~196, body at ~700, wiring at
+  ~1307). `WalletCard` is its only caller, and leaving a live writer for a shape
+  we no longer consider valid is how inconsistent rows get created later. The
+  `'withdrawn'` *kind* stays — the two read sites
+  (`transactions/page.tsx:88`, `deleteMoneyMove`) still need it for old rows.
+- `wallets/page.tsx` hides the delete button on the Cash card. **This one is an
+  addition beyond what was asked** — flagged and not yet explicitly approved.
+
+---
+
+## Done 2026-08-15 — Category card: the spent figure fits on mobile — ⏳ uncommitted
+
+`src/components/CategoryCard.tsx`. Not committed yet; sits in the working tree
+alongside `.claude/settings.local.json`.
+
+**The bug.** On mobile every category card truncated its own headline number —
+`₱12,345.00` rendered as a couple of characters and an ellipsis.
+
+**Why it happened.** Not a font problem, which is why shrinking things wouldn't
+have fixed it. The arithmetic at a 390px viewport:
+
+| Step | Source | Width |
+| --- | --- | --- |
+| Container `max-w-5xl px-4` | `app/page.tsx:92` | 358px |
+| `grid-cols-2 gap-3` | `CategoryGrid.tsx:28` | 173px per card |
+| Card `p-4` | `CategoryCard.tsx` | 141px inner |
+| minus `gap-2` + gauge `w-[88px]` (`shrink-0`) | `CategoryCard.tsx` | **45px for the text** |
+
+The gauge was eating 62% of the card's inner width. The 2026-08-08 note above
+says the gauge "sits beside the icon/label/spent stack… cards got noticeably
+shorter" — true at `sm` and up, where there genuinely is dead space to the
+right. At 2-column mobile there is none, and `truncate` did the rest.
+
+**The fix.** Below `sm` the arc is dropped and the existing `ProgressBar` runs
+full-width under the amount, with the percentage beside it; at `sm` and up
+nothing changed. `ProgressBar` already had the same `green|amber|red` API as
+`HalfCircleProgress`, so `paceColor` feeds both untouched — no second colour
+scale. (Relevant to the "two arc implementations" idea below: this adds no
+third one.)
+
+**Trap:** the mobile percentage is `Math.min(pct, 100)`. `HalfCircleProgress`
+clamps its *own* readout at 100%, so without the clamp an over-budget card
+would read "150%" on mobile and "100%" on desktop for identical data. Overspend
+is already spelled out in red on the line beneath.
+
+**Verified:** `npm run build` passes; lint sits at the unchanged 2-error /
+6-warning baseline, all of it in `AppContext.tsx`, which wasn't touched. The
+breakpoint swap was checked against the *generated* stylesheet rather than
+assumed — `.hidden{display:none}` at byte 14067 and
+`@media (min-width:40rem){.sm\:block…}` at byte 52498, so equal specificity and
+later-wins puts the switch exactly at 640px. **Not seen rendering** — no
+browser automation was available (see below), so a real mobile viewport check
+is still outstanding.
 
 ---
 
@@ -343,6 +437,11 @@ Left as-is deliberately — see "Ideas / not yet done" for the alternatives.
 - **Income sources are fixed** — Salary/Freelance/Gift/Refund/Other are hardcoded in `INCOME_SOURCES`. Make them user-editable if the list starts chafing.
 - **Bills double-count in Allocated** — a budget on the built-in Bills category adds on top of Recurring Bills. Options: exclude the `bills` category from `totalCategoryBudgets`, or count whichever of the two is larger.
 - **Two arc implementations** — `src/components/HalfCircleProgress.tsx` (category cards) and a local `ArcProgress` inside `src/app/emergency-fund/page.tsx` do much the same job. Worth consolidating onto the shared one next time either is touched.
+- **Natural-language expense entry** — a written spec exists at
+  `docs/superpowers/specs/2026-08-09-natural-language-expense-entry-design.md`
+  but is **still untracked in git** and was never logged here, so it was easy to
+  lose. A parser that turns "500 groceries, GCash" into a *form prefill, never a
+  database write*; deliberately not a chat feature. No implementation plan yet.
 
 ---
 
@@ -357,3 +456,14 @@ Left as-is deliberately — see "Ideas / not yet done" for the alternatives.
 - Dev server: `npm run dev`
 - Type-check: `npx tsc --noEmit`
 - Lint a file: `npx eslint src/app/expenses/page.tsx`
+- **Browser testing: launch with `claude --chrome`.** `/chrome` reporting
+  "disabled" is a startup-flag matter, not a Chrome permissions one — the two
+  look alike and the extension's own permission page is a red herring. It can't
+  be toggled mid-session and there is no `settings.json` equivalent. The rest of
+  the setup was verified good on 2026-08-15: extension
+  `fcoeoabgfenejglbffodgkkbkcdhcgfn` installed and whitelisted in the native
+  host manifest, host registered under HKCU, binary present, nothing gated in
+  `remote-settings.json` / `policy-limits.json`. **Two gotchas:** the extension
+  lives in Chrome **Profile 4**, not `Default`, so drive a Profile 4 window; and
+  the native host is registered by the **Claude Desktop app** package, so
+  uninstalling Desktop takes the bridge with it.
