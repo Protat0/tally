@@ -196,7 +196,7 @@ interface AppContextValue extends Computed {
     paidByPersonId?: string | null;                   // set when walletId is null
     owedToMe?: { personId: string; amount: number }[];// set when a wallet paid
   }) => Promise<void>;
-  deleteExpense: (id: string) => Promise<void>;
+  deleteExpense: (id: string) => Promise<boolean>;
   addIncome: (m: { walletId: string; amount: number; source: IncomeSource; note: string }) => Promise<void>;
   /** Record a due payday as received: writes an `earned` move and logs the date. */
   confirmPayday: (date: string, amount: number, walletId: string) => Promise<void>;
@@ -704,21 +704,38 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     }
   };
 
-  const deleteExpense = async (id: string) => {
+  // Returns false when it refuses. The linked rows exist only because of this
+  // expense, so they go with it — but a row settled through a wallet owns no
+  // share of its batch's netted movement, so it cannot be handed back. The
+  // caller reopens the settle-up first, exactly as the debt board's own trash
+  // does, rather than refusing in silence.
+  const deleteExpense = async (id: string): Promise<boolean> => {
     const found = expenses.find(e => e.id === id);
-    if (!found) return;
-    const wallet = found.walletId ? wallets.find(w => w.id === found.walletId) : undefined;
-    const newBalance = wallet ? wallet.balance + found.amount : null;
+    if (!found) return false;
+
+    const linked = debtEntries.filter(d => d.expenseId === id);
+    if (linked.some(d => d.settleMoveId)) return false;
+
+    const seed: Record<string, number> = {};
+    if (found.walletId) seed[found.walletId] = found.amount;
+
+    const linkedIds = linked.map(d => d.id);
+    const moveIds = linked.map(d => d.moveId).filter((m): m is string => Boolean(m));
+
     setExpenses(prev => prev.filter(e => e.id !== id));
-    if (newBalance !== null) {
-      setWallets(prev => prev.map(w => w.id === found.walletId ? { ...w, balance: newBalance } : w));
-    }
+    setDebtEntries(prev => prev.filter(d => !linkedIds.includes(d.id)));
+
     await Promise.all([
       supabase.from('expenses').delete().eq('id', id),
-      ...(newBalance !== null && found.walletId
-        ? [supabase.from('wallets').update({ balance: newBalance }).eq('id', found.walletId)]
+      ...(linkedIds.length > 0
+        ? [supabase.from('debt_entries').delete().in('id', linkedIds)]
         : []),
     ]);
+
+    // One call, one balance computation per wallet — the refund and every
+    // linked movement together.
+    await reverseMoves(moveIds, seed);
+    return true;
   };
 
   // ── Money moves (top-ups, withdrawals, transfers) ─────────────────────────
@@ -828,13 +845,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // stale figure and the last write would win — silently corrupting the balance
   // whenever one wallet is hit twice (deleting a person with two linked entries
   // on the same wallet does exactly that).
-  const reverseMoves = async (moveIds: string[]) => {
+  // `seedDeltas` lets a caller fold in a balance change that is not itself a
+  // money_move — an expense refund — so it lands in the SAME accumulation as the
+  // movements. Patching the wallet separately would read a stale balanceOf.
+  const reverseMoves = async (moveIds: string[], seedDeltas?: Record<string, number>) => {
     const ids = moveIds.filter(Boolean);
-    if (ids.length === 0) return;
     const targets = moneyMoves.filter(m => ids.includes(m.id));
-    if (targets.length === 0) return;
+    if (targets.length === 0 && !seedDeltas) return;
 
-    const deltas: Record<string, number> = {};
+    const deltas: Record<string, number> = { ...(seedDeltas ?? {}) };
     for (const mv of targets) {
       deltas[mv.walletId] = (deltas[mv.walletId] ?? 0)
         + (mv.kind === 'debt_in' ? -mv.amount : mv.amount);
@@ -847,7 +866,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     setWallets(prev => prev.map(w => w.id in newBalances ? { ...w, balance: newBalances[w.id] } : w));
 
     await Promise.all([
-      supabase.from('money_moves').delete().in('id', ids),
+      ...(ids.length > 0 ? [supabase.from('money_moves').delete().in('id', ids)] : []),
       ...Object.entries(newBalances).map(([wid, balance]) =>
         supabase.from('wallets').update({ balance }).eq('id', wid)
       ),
