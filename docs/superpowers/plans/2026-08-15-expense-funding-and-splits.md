@@ -116,7 +116,7 @@ In `addExpense`, the balance patch must not run when no wallet paid. Replace the
   };
 ```
 
-Apply the same shape to `deleteExpense` — Task 3 rewrites this function completely, so here just make it compile without changing behaviour:
+Apply the same shape to `deleteExpense` — **Task 4** rewrites this function completely, so here just make it compile without changing behaviour:
 
 ```ts
   const deleteExpense = async (id: string) => {
@@ -194,20 +194,28 @@ git commit -m "refactor: an expense can exist without a wallet"
 
 ---
 
-### Task 2: `addDebtEntry` accepts an expense id
+### Task 2: `addDebtEntry` accepts an expense id and an explicit balance
 
-One-line capability that Task 3 depends on. Kept separate because it is the only change to a function the debt board already relies on, and a reviewer should be able to see it alone.
+Two small parameters Task 3 depends on. Kept separate because this is the only change to a function the debt board already relies on, and a reviewer should be able to see it alone.
+
+**The second parameter is not optional cleverness — it is the fix for a real bug.**
+`addDebtEntry` computes its wallet patch from `balanceOf(walletId)`, which reads the
+`wallets` React state captured in the current render. That value does **not** update
+across `await`s. Task 3 calls this function once per person, so two people sharing one
+wallet would both compute from the same stale balance and the last write would win —
+silently losing the difference. Every existing caller makes exactly one call, which is
+why the bug has never appeared. Task 3 is the first multi-call path.
 
 **Files:**
-- Modify: `src/components/AppContext.tsx` (`addDebtEntry` ~809, its context-type entry ~222, the provider value ~1320)
+- Modify: `src/components/AppContext.tsx` (`addDebtEntry` ~809, its context-type entry ~222)
 
 **Interfaces:**
 - Consumes: Task 1's `DebtEntry.expenseId`.
-- Produces: `addDebtEntry` gains an optional `expenseId?: string | null` argument, written to `debt_entries.expense_id`.
+- Produces: `addDebtEntry` gains `expenseId?: string | null` (written to `debt_entries.expense_id`) and `walletBalanceAfter?: number` (the wallet's balance once this entry's movement is applied; when omitted the existing `balanceOf` arithmetic is used, so all current callers are unaffected).
 
-- [ ] **Step 1: Add the parameter to the context type**
+- [ ] **Step 1: Add both parameters to the context type**
 
-In the `AppContextValue` interface (~222), add the field to `addDebtEntry`'s argument object, after `moveNote`:
+In the `AppContextValue` interface (~222), extend `addDebtEntry`'s argument object:
 
 ```ts
   addDebtEntry: (e: {
@@ -216,12 +224,36 @@ In the `AppContextValue` interface (~222), add the field to `addDebtEntry`'s arg
     walletId?: string | null;
     moveNote?: string;
     expenseId?: string | null;
+    walletBalanceAfter?: number;
   }) => Promise<void>;
 ```
 
-- [ ] **Step 2: Accept and persist it**
+- [ ] **Step 2: Use the explicit balance when given**
 
-In the implementation (~809), mirror the same field in the parameter type, then add it to the insert:
+In the implementation (~809), mirror both fields in the parameter type, then replace the `recordMove` balance argument. Keep the surrounding code and its comment exactly as they are:
+
+```ts
+    let moveId: string | null = null;
+    if (walletId) {
+      const out = e.direction === 'owed_to_me';
+      // A caller making several calls against one wallet must pass the balance
+      // itself: balanceOf reads React state, which does not update across
+      // awaits, so a second call would compute from the same stale figure and
+      // the last write would win. Single-call callers omit it.
+      const after = e.walletBalanceAfter ?? (balanceOf(walletId) + (out ? -e.amount : e.amount));
+      moveId = await recordMove(
+        {
+          kind: out ? 'debt_out' : 'debt_in',
+          amount: e.amount, walletId, toWalletId: null, source: null,
+          note: e.moveNote ?? (out ? `Spotted ${name}` : `Borrowed from ${name}`),
+        },
+        { [walletId]: after },
+        e.date,
+      );
+    }
+```
+
+- [ ] **Step 3: Persist the expense id**
 
 ```ts
     const { data } = await supabase.from('debt_entries').insert({
@@ -232,7 +264,7 @@ In the implementation (~809), mirror the same field in the parameter type, then 
     }).select().single();
 ```
 
-- [ ] **Step 3: Verify**
+- [ ] **Step 4: Verify**
 
 Run:
 ```bash
@@ -241,11 +273,13 @@ npm run lint
 ```
 Expected: `tsc` exits 0. Lint reads `✖ 8 problems (2 errors, 6 warnings)`.
 
-- [ ] **Step 4: Manual pass — the debt board still works**
+Confirm by inspection that **no existing caller passes `walletBalanceAfter`** — `addDebtEntry` is called from `recordDebtPayment` and from `AddDebtSheet`, both single-call sites that must keep using the `balanceOf` fallback. If either now passes the new field, you have changed behaviour that this task must not change.
 
-Run `npm run dev`, open `/debts`, add a debt with a wallet, and confirm the wallet balance moves and the row appears. Delete it and confirm the balance returns. Existing behaviour must be identical.
+- [ ] **Step 5: Manual pass — the debt board still works**
 
-- [ ] **Step 5: Commit**
+Run `npm run dev`, open `/debts`, add a debt with a wallet, and confirm the wallet balance moves by exactly the amount and the row appears. Delete it and confirm the balance returns to the figure you started from. Existing behaviour must be identical.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/components/AppContext.tsx
@@ -304,10 +338,19 @@ The whole function, including the comments explaining the two orderings a review
     // expense id as a foreign key. A share of zero (you spotted someone the
     // whole thing) writes no expense at all rather than a ₱0 row that would
     // clutter the feed and the category totals.
+    // ONE running balance owns every deduction below. `balanceOf` and the
+    // `wallets` state both read the value captured in this render and do NOT
+    // update across awaits, so reading either one again after the first write
+    // would compute from a stale figure and the last write would win —
+    // silently losing the difference. Read the wallet exactly once, here.
+    let running = e.walletId
+      ? (wallets.find(w => w.id === e.walletId)?.balance ?? 0)
+      : 0;
+
     let expenseId: string | null = null;
     if (myShare > 0) {
-      const wallet = e.walletId ? wallets.find(w => w.id === e.walletId) : undefined;
-      const newBalance = wallet ? round2(wallet.balance - myShare) : null;
+      const newBalance = e.walletId ? round2(running - myShare) : null;
+      if (newBalance !== null) running = newBalance;
 
       const [expRes] = await Promise.all([
         supabase.from('expenses').insert({
@@ -328,18 +371,21 @@ The whole function, including the comments explaining the two orderings a review
       }
     }
 
-    // Sequential on purpose. Each addDebtEntry books its own movement off
-    // balanceOf, which reads React state — firing them together would compute
-    // every new balance from the same stale figure and the last write would win.
+    // Sequential, and each call is handed the balance it must leave behind.
+    // Letting addDebtEntry compute its own would reintroduce the stale read
+    // described above the moment two people share a wallet.
     if (e.walletId) {
       for (const o of owed) {
+        running = round2(running - o.amount);
         await addDebtEntry({
           personId: o.personId, direction: 'owed_to_me',
           amount: o.amount, note: e.note, date: now,
           walletId: e.walletId, expenseId,
+          walletBalanceAfter: running,
         });
       }
     } else if (e.paidByPersonId) {
+      // No wallet, so no movement and no balance to hand over.
       await addDebtEntry({
         personId: e.paidByPersonId, direction: 'i_owe',
         amount: e.amount, note: e.note, date: now,
@@ -500,7 +546,8 @@ A self-contained component. It owns no persistence — it hands a funding descri
 - Reference (do not modify): `src/components/BottomSheet.tsx`, `src/components/AddDebtSheet.tsx` (person-picker markup to copy)
 
 **Interfaces:**
-- Consumes: `useApp()` for `debtPeople`, `addDebtPerson`, `settings`; `BottomSheet`; `fmt`.
+- Consumes: `useApp()` for `debtPeople` only; `BottomSheet`; `fmt`.
+- **Known limitation, deliberate:** this sheet picks from people who already exist on the debt board; it has no "+ New person" affordance. Someone with an empty board adds people on `/debts` first. Adding inline creation here means duplicating `AddDebtSheet`'s person-creation block, which is not worth it until the flow proves annoying in use.
 - Produces:
   ```ts
   export interface SplitResult {
@@ -838,7 +885,7 @@ Replace the button's label expression:
             {!canSubmit
               ? 'Log Expense'
               : split?.mode === 'person'
-                ? `Log · owe ${split.owedToMe.length === 0 ? 'them' : ''}`.trim()
+                ? 'Log · someone else paid'
                 : split
                   ? `Log · ${fmt(
                       parseFloat(input) - split.owedToMe.reduce((s, o) => s + o.amount, 0),
@@ -862,7 +909,9 @@ Expected: `tsc` exits 0. Lint reads `✖ 8 problems (2 errors, 6 warnings)`. Bui
 Run `npm run dev`. You need at least two people on `/debts` first (add them there if the board is empty). Note GCash's balance as `B` before each case and check it after.
 
 1. **Normal expense.** ₱1,000, Food, GCash, no split → wallet `B − 1000`, expense ₱1,000 on `/transactions`, no new debt row.
-2. **Shared meal.** ₱1,500, Food, GCash, Split → I paid → John ₱500, Mia ₱500. "Your share" must read ₱500. Log it. Wallet must read `B − 1500`. `/transactions` shows a ₱500 Food expense. `/debts` shows John and Mia each owing ₱500.
+2. **Shared meal — the stale-balance check.** ₱1,500, Food, GCash, Split → I paid → John ₱500, Mia ₱500. "Your share" must read ₱500. Log it. **Wallet must read `B − 1500`.** `/transactions` shows a ₱500 Food expense. `/debts` shows John and Mia each owing ₱500.
+
+   **If the wallet reads `B − 1000` (or `B − 500`), the running balance in `addExpense` is not being threaded through `walletBalanceAfter` and a stale `balanceOf` is being read instead.** That is the exact failure Task 2 exists to prevent — stop and re-read Task 2's preamble rather than adjusting the number.
 3. **Someone paid.** ₱300, Food, Split → Someone paid → John. The wallet strip requirement must drop away. Log it. **Every wallet balance is unchanged.** `/transactions` shows a ₱300 Food expense. `/debts` shows you owing John ₱300.
 4. **Spotted entirely.** ₱500, Food, GCash, Split → I paid → John ₱500. "Your share" reads ₱0. Log it. Wallet reads `B − 500`, `/debts` shows John owing ₱500, and **no ₱500 Food expense appears** on `/transactions`.
 5. **Split evenly.** ₱1,000, add John and Mia, tap Split evenly → each reads ₱333.33 and your share reads ₱333.34 (the remainder cent is yours). The three must sum to exactly ₱1,000.
