@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp, fmt, Category } from '@/components/AppContext';
 import { XIcon } from '@/components/Icons';
+import SplitSheet, { SplitResult } from '@/components/SplitSheet';
 
 const CATEGORIES: { key: Category; label: string; icon: string; color: string }[] = [
   { key: 'food',      label: 'Food',      icon: '🍜', color: 'bg-orange-500/15 border-orange-500/40' },
@@ -35,8 +36,12 @@ function ExpenseForm() {
   const [category, setCategory] = useState<Category | null>(null);
   const [walletId, setWalletId] = useState(presetWalletId || (wallets[0]?.id ?? ''));
   const [note,     setNote]     = useState('');
+  const [split,     setSplit]     = useState<SplitResult | null>(null);
+  const [splitOpen, setSplitOpen] = useState(false);
 
-  const canSubmit = parseFloat(input) > 0 && category !== null && walletId !== '';
+  const needsWallet = !split || split.mode === 'wallet';
+  const canSubmit = parseFloat(input) > 0 && category !== null
+    && (!needsWallet || walletId !== '');
 
   const handleKey = (k: string) => {
     setInput(prev => {
@@ -50,7 +55,14 @@ function ExpenseForm() {
 
   const handleSubmit = () => {
     if (!canSubmit || !category) return;
-    addExpense({ amount: parseFloat(input), category, walletId, note: note.trim() });
+    addExpense({
+      amount: parseFloat(input),
+      category,
+      note: note.trim(),
+      walletId: split?.mode === 'person' ? null : walletId,
+      paidByPersonId: split?.mode === 'person' ? split.paidByPersonId : null,
+      owedToMe: split?.mode === 'wallet' ? split.owedToMe : [],
+    });
     router.back();
   };
 
@@ -114,6 +126,26 @@ function ExpenseForm() {
                     </div>
                   </button>
                 ))}
+                <button
+                  onClick={() => setSplitOpen(true)}
+                  className={`flex items-center gap-2 rounded-full shrink-0 pl-2.5 pr-3.5 py-2 border transition-colors ${
+                    split
+                      ? 'border-blue-500 bg-blue-500/15'
+                      : 'border-dashed border-[#1e2d40] bg-white/5'
+                  }`}
+                >
+                  <span className="text-base leading-none">🤝</span>
+                  <div className="text-left">
+                    <p className={`text-xs font-medium leading-tight ${split ? 'text-blue-300' : 'text-white'}`}>
+                      Split
+                    </p>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      {split
+                        ? split.mode === 'person' ? 'someone paid' : `${split.owedToMe.length} owe you`
+                        : 'with someone'}
+                    </p>
+                  </div>
+                </button>
               </div>
             </>
           )}
@@ -176,12 +208,34 @@ function ExpenseForm() {
             disabled={!canSubmit}
             className="w-full rounded-2xl bg-blue-600 py-4 font-bold text-white text-base active:bg-blue-700 disabled:opacity-30 transition-colors mt-1"
           >
-            {canSubmit
-              ? `Log · ${selectedWallet ? selectedWallet.name : ''}`
-              : 'Log Expense'}
+            {!canSubmit
+              ? 'Log Expense'
+              : split?.mode === 'person'
+                ? 'Log · someone else paid'
+                : split
+                  ? `Log · ${fmt(
+                      parseFloat(input) - split.owedToMe.reduce((s, o) => s + o.amount, 0),
+                      settings.currency,
+                    )} of ${fmt(parseFloat(input), settings.currency)}`
+                  : `Log · ${selectedWallet ? selectedWallet.name : ''}`}
           </button>
         </div>
 
+        {splitOpen && (
+          <SplitSheet
+            total={parseFloat(input) || 0}
+            currency={settings.currency}
+            initial={split}
+            onClose={() => setSplitOpen(false)}
+            onApply={r => {
+              // An empty wallet-mode result means "never mind" — clear it so the
+              // chip goes back to its resting state rather than claiming a split
+              // of nobody.
+              setSplit(r.mode === 'wallet' && r.owedToMe.length === 0 ? null : r);
+              setSplitOpen(false);
+            }}
+          />
+        )}
       </div>
     </div>
   );
