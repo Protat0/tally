@@ -188,7 +188,14 @@ interface AppContextValue extends Computed {
   addWallet: (w: Omit<Wallet, 'id'>) => Promise<void>;
   updateWallet: (id: string, updates: Partial<Wallet>) => Promise<void>;
   deleteWallet: (id: string) => Promise<void>;
-  addExpense: (e: Omit<Expense, 'id' | 'date'>) => Promise<void>;
+  addExpense: (e: {
+    amount: number;                                   // what the payer paid out
+    category: Category;
+    note: string;
+    walletId: string | null;                          // null = a person paid
+    paidByPersonId?: string | null;                   // set when walletId is null
+    owedToMe?: { personId: string; amount: number }[];// set when a wallet paid
+  }) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   addIncome: (m: { walletId: string; amount: number; source: IncomeSource; note: string }) => Promise<void>;
   /** Record a due payday as received: writes an `earned` move and logs the date. */
@@ -612,30 +619,83 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   };
 
   // ── Expenses ──────────────────────────────────────────────────────────────
-  const addExpense = async (e: Omit<Expense, 'id' | 'date'>) => {
+  // An expense records what YOU consumed. The amount passed here is what the
+  // payer handed over; anything owed back to you becomes debt rows instead.
+  //
+  //   wallet paid → your share is the amount minus what others owe you
+  //   person paid → the total is irrelevant (you do not track their finances),
+  //                 so the amount IS your share and you owe all of it
+  const addExpense = async (e: {
+    amount: number; category: Category; note: string;
+    walletId: string | null;
+    paidByPersonId?: string | null;
+    owedToMe?: { personId: string; amount: number }[];
+  }) => {
     if (!userId) return;
-    // A wallet-less expense (someone else paid) moves no balance of yours.
-    const wallet = e.walletId ? wallets.find(w => w.id === e.walletId) : undefined;
-    const newBalance = wallet ? wallet.balance - e.amount : null;
-    const now = new Date().toISOString();
-    const tempId = crypto.randomUUID();
+    const owed = e.walletId ? (e.owedToMe ?? []) : [];
+    const myShare = round2(e.walletId
+      ? e.amount - owed.reduce((s, o) => s + o.amount, 0)
+      : e.amount);
 
-    setExpenses(prev => [{ ...e, id: tempId, date: now }, ...prev]);
-    if (newBalance !== null) {
-      setWallets(prev => prev.map(w => w.id === e.walletId ? { ...w, balance: newBalance } : w));
+    const now = new Date().toISOString();
+
+    // Inserted first, and NOT optimistically: the debt rows below need the real
+    // expense id as a foreign key. A share of zero (you spotted someone the
+    // whole thing) writes no expense at all rather than a ₱0 row that would
+    // clutter the feed and the category totals.
+    // ONE running balance owns every deduction below. `balanceOf` and the
+    // `wallets` state both read the value captured in this render and do NOT
+    // update across awaits, so reading either one again after the first write
+    // would compute from a stale figure and the last write would win —
+    // silently losing the difference. Read the wallet exactly once, here.
+    let running = e.walletId
+      ? (wallets.find(w => w.id === e.walletId)?.balance ?? 0)
+      : 0;
+
+    let expenseId: string | null = null;
+    if (myShare > 0) {
+      const newBalance = e.walletId ? round2(running - myShare) : null;
+      if (newBalance !== null) running = newBalance;
+
+      const [expRes] = await Promise.all([
+        supabase.from('expenses').insert({
+          user_id: userId, wallet_id: e.walletId, amount: myShare,
+          category: e.category, note: e.note, date: now,
+        }).select().single(),
+        ...(newBalance !== null && e.walletId
+          ? [supabase.from('wallets').update({ balance: newBalance }).eq('id', e.walletId)]
+          : []),
+      ]);
+
+      if (expRes.data) {
+        expenseId = expRes.data.id as string;
+        setExpenses(prev => [fromDBExpense(expRes.data), ...prev]);
+      }
+      if (newBalance !== null) {
+        setWallets(prev => prev.map(w => w.id === e.walletId ? { ...w, balance: newBalance } : w));
+      }
     }
 
-    const [expRes] = await Promise.all([
-      supabase.from('expenses').insert({
-        user_id: userId, wallet_id: e.walletId, amount: e.amount,
-        category: e.category, note: e.note, date: now,
-      }).select().single(),
-      ...(newBalance !== null && e.walletId
-        ? [supabase.from('wallets').update({ balance: newBalance }).eq('id', e.walletId)]
-        : []),
-    ]);
-    if (expRes.data) {
-      setExpenses(prev => prev.map(ex => ex.id === tempId ? fromDBExpense(expRes.data) : ex));
+    // Sequential, and each call is handed the balance it must leave behind.
+    // Letting addDebtEntry compute its own would reintroduce the stale read
+    // described above the moment two people share a wallet.
+    if (e.walletId) {
+      for (const o of owed) {
+        running = round2(running - o.amount);
+        await addDebtEntry({
+          personId: o.personId, direction: 'owed_to_me',
+          amount: o.amount, note: e.note, date: now,
+          walletId: e.walletId, expenseId,
+          walletBalanceAfter: running,
+        });
+      }
+    } else if (e.paidByPersonId) {
+      // No wallet, so no movement and no balance to hand over.
+      await addDebtEntry({
+        personId: e.paidByPersonId, direction: 'i_owe',
+        amount: e.amount, note: e.note, date: now,
+        walletId: null, expenseId,
+      });
     }
   };
 
