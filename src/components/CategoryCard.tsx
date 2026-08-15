@@ -2,6 +2,7 @@
 
 import { fmt } from './AppContext';
 import HalfCircleProgress from './HalfCircleProgress';
+import ProgressBar from './ProgressBar';
 import { PencilIcon } from './Icons';
 
 function paceColor(pct: number): 'green' | 'amber' | 'red' {
@@ -48,9 +49,16 @@ export default function CategoryCard({
         aria-label={`${label} details`}
         className="flex w-full flex-col rounded-2xl bg-[#111827] border border-[#1e2d40] p-4 text-left hover:border-slate-600 hover:bg-[#141d2e] transition-colors"
       >
-        {/* The gauge sits alongside the icon/label/spent stack rather than under
-            it, so the card stays short and the dead space to the right is used.
-            Bottom-aligned, which keeps the top-right corner clear for the pencil. */}
+        {/* From sm up the gauge sits alongside the icon/label/spent stack rather
+            than under it, so the card stays short and the dead space to the right
+            is used. Bottom-aligned, which keeps the top-right corner clear for the
+            pencil.
+
+            Below sm there is no dead space: the two-column grid leaves the card
+            ~141px of inner width, and an 88px gauge left ~45px for the amount —
+            enough to truncate every peso figure to a couple of characters. So the
+            arc is dropped there in favour of the flat bar below, which reads the
+            same but costs no width. */}
         <div className="flex w-full items-end gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-lg mb-2.5 shrink-0">
@@ -67,10 +75,22 @@ export default function CategoryCard({
               value={spent}
               max={budget}
               color={paceColor(pct)}
-              className="w-[88px] sm:w-[104px] lg:w-[120px]"
+              className="hidden sm:block sm:w-[104px] lg:w-[120px]"
             />
           )}
         </div>
+
+        {hasBudget && (
+          <div className="mt-2 flex w-full items-center gap-2 sm:hidden">
+            <ProgressBar value={spent} max={budget} color={paceColor(pct)} />
+            {/* Clamped, so this reads the same as the arc's own label at sm+ —
+                HalfCircleProgress caps its readout at 100%. Overspend is already
+                spelled out in red on the line below. */}
+            <span className="shrink-0 text-[11px] font-semibold text-white tabular-nums">
+              {Math.min(pct, 100).toFixed(0)}%
+            </span>
+          </div>
+        )}
 
         {hasBudget ? (
           <p className="mt-2 w-full text-[11px] text-slate-500 truncate">
