@@ -179,7 +179,7 @@ npx tsc --noEmit
 npm run lint
 npm run build
 ```
-Expected: `tsc` exits 0 with no output. Lint reads `✖ 8 problems (2 errors, 6 warnings)`. Build compiles and prerenders all 13 routes.
+Expected: `tsc` exits 0 with no output. Lint reads `✖ 8 problems (2 errors, 6 warnings)`. Build exits 0, reports `Generating static pages … (13/13)`, and prints a route table of **11** rows. (13 is the static-page count, 11 the route count — they are different numbers and both are correct.)
 
 - [ ] **Step 7: Manual pass — the app is unchanged**
 
@@ -902,7 +902,7 @@ npx tsc --noEmit
 npm run lint
 npm run build
 ```
-Expected: `tsc` exits 0. Lint reads `✖ 8 problems (2 errors, 6 warnings)`. Build prerenders all 13 routes.
+Expected: `tsc` exits 0. Lint reads `✖ 8 problems (2 errors, 6 warnings)`. Build exits 0, reports `Generating static pages … (13/13)`, and prints an 11-row route table.
 
 - [ ] **Step 7: Manual pass — the spec's case table, end to end**
 
@@ -1043,7 +1043,7 @@ npx tsc --noEmit
 npm run lint
 npm run build
 ```
-Expected: `tsc` exits 0. Lint reads `✖ 8 problems (2 errors, 6 warnings)`. Build prerenders all 13 routes.
+Expected: `tsc` exits 0. Lint reads `✖ 8 problems (2 errors, 6 warnings)`. Build exits 0, reports `Generating static pages … (13/13)`, and prints an 11-row route table.
 
 - [ ] **Step 4: Manual pass**
 
