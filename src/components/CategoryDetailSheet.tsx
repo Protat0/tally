@@ -47,9 +47,18 @@ interface MonthGroup {
 export default function CategoryDetailSheet({
   categoryKey, icon, label, budget, spent, currency, metered = false, onClose,
 }: Props) {
-  const { expenses, wallets } = useApp();
+  const { expenses, wallets, debtEntries, debtPeople } = useApp();
 
   const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
+
+  // A wallet-less expense was paid by someone else; name them where the wallet
+  // name would otherwise go, so the subtitle is never blank.
+  const fundedBy = (e: { id: string; walletId: string | null }) => {
+    if (e.walletId) return walletName(e.walletId);
+    const link = debtEntries.find(d => d.expenseId === e.id);
+    const person = link && debtPeople.find(p => p.id === link.personId);
+    return person ? `paid by ${person.name}` : '';
+  };
 
   // Every expense ever logged against this category, newest first, grouped by
   // the month it fell in.
@@ -171,7 +180,7 @@ export default function CategoryDetailSheet({
                   const day = d.toLocaleDateString('en-PH', {
                     weekday: 'short', month: 'short', day: 'numeric',
                   });
-                  const wallet = walletName(e.walletId);
+                  const wallet = fundedBy(e);
                   return (
                     <div
                       key={e.id}

@@ -37,7 +37,7 @@ interface FeedItem {
 }
 
 export default function TransactionsPage() {
-  const { expenses, moneyMoves, wallets, settings } = useApp();
+  const { expenses, moneyMoves, wallets, settings, debtEntries, debtPeople } = useApp();
   const { currency } = settings;
 
   const today = new Date();
@@ -49,6 +49,15 @@ export default function TransactionsPage() {
   const monthLabel = viewMonth.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
 
   const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
+
+  // A wallet-less expense was paid by someone else; name them where the wallet
+  // name would otherwise go, so the subtitle is never blank.
+  const fundedBy = (e: { id: string; walletId: string | null }) => {
+    if (e.walletId) return walletName(e.walletId);
+    const link = debtEntries.find(d => d.expenseId === e.id);
+    const person = link && debtPeople.find(p => p.id === link.personId);
+    return person ? `paid by ${person.name}` : '';
+  };
 
   // Resolve a category key (built-in or user-defined) to its icon + label.
   const catMeta = (key: string): { icon: string; label: string } => {
@@ -72,7 +81,7 @@ export default function TransactionsPage() {
         id: e.id, date: e.date, flow: 'spent',
         icon: catMeta(e.category).icon,
         label: catMeta(e.category).label,
-        sub: subtitle(e.note, walletName(e.walletId)),
+        sub: subtitle(e.note, fundedBy(e)),
         amount: e.amount,
       })),
       ...moneyMoves.filter(mm => inMonth(mm.date)).map((mm): FeedItem => {
@@ -129,7 +138,7 @@ export default function TransactionsPage() {
       monthEarned: items.filter(i => i.flow === 'earned').reduce((s, i) => s + i.amount, 0),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, moneyMoves, wallets, settings.customCategories, y, m]);
+  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, y, m]);
 
   // Calendar cells: leading blanks then each day of the month.
   const cells = useMemo(() => {
