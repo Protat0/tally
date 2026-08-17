@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useApp, fmt, round2 } from './AppContext';
+import { PERSON_EMOJI } from '@/lib/personEmoji';
 
 // Split `total` into `n` parts at 2 decimals. Remainder cents go to the earliest
 // parts so the parts always sum back to exactly `total`.
@@ -29,7 +31,15 @@ interface Props {
 // calls onChange immediately with the new value. State lives in the parent —
 // this component only renders `value` and total.
 export default function SplitPanel({ total, currency, value, onChange }: Props) {
-  const { debtPeople } = useApp();
+  const { debtPeople, addDebtPerson } = useApp();
+
+  // Someone's first appearance is often the split that created the debt, so a
+  // person can be named here rather than sending the user to the debt board and
+  // back. Local state: a half-typed name is not part of the split.
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName]   = useState('');
+  const [newEmoji, setNewEmoji] = useState(PERSON_EMOJI[0]);
+  const [saving, setSaving]     = useState(false);
 
   const owedTotal = value?.mode === 'wallet'
     ? value.owedToMe.reduce((s, o) => s + o.amount, 0)
@@ -70,6 +80,74 @@ export default function SplitPanel({ total, currency, value, onChange }: Props) 
       owedToMe: value.owedToMe.map(o => o.personId === personId ? { ...o, amount } : o),
     });
   };
+
+  const cancelCreate = () => { setCreating(false); setNewName(''); setNewEmoji(PERSON_EMOJI[0]); };
+
+  // Create, then do the thing the user opened the form to do: name the payer in
+  // person mode, or start them owing you in wallet mode.
+  const createPerson = async () => {
+    const name = newName.trim();
+    if (!name || saving || !value) return;
+    setSaving(true);
+    const id = await addDebtPerson({ name, emoji: newEmoji });
+    setSaving(false);
+    if (!id) return;
+    if (value.mode === 'person') setPaidBy(id);
+    else addRow(id);
+    cancelCreate();
+  };
+
+  // The chip that opens the form, and the form itself. Both people rows show
+  // them, so a person can be added from whichever side of the split needs one.
+  const newPersonUI = (
+    <>
+      <button
+        onClick={() => (creating ? cancelCreate() : setCreating(true))}
+        className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+          creating
+            ? 'border-blue-500 bg-blue-500/15 text-white'
+            : 'border-dashed border-[#1e2d40] bg-white/5 text-blue-400'
+        }`}
+      >
+        + New person
+      </button>
+      {creating && (
+        <div className="mt-1 w-full rounded-xl border border-[#1e2d40] bg-white/5 p-3">
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {PERSON_EMOJI.map(em => (
+              <button
+                key={em}
+                onClick={() => setNewEmoji(em)}
+                className={`h-8 w-8 rounded-lg text-base border transition-colors ${
+                  newEmoji === em ? 'border-blue-500 bg-blue-500/15' : 'border-[#1e2d40] bg-white/5'
+                }`}
+              >
+                {em}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') createPerson(); }}
+              placeholder="Name"
+              autoFocus
+              className="flex-1 min-w-0 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50"
+            />
+            <button
+              onClick={createPerson}
+              disabled={!newName.trim() || saving}
+              className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   const evenly = () => {
     if (!value) return;
@@ -148,6 +226,7 @@ export default function SplitPanel({ total, currency, value, onChange }: Props) 
                     <span className="truncate">{p.name}</span>
                   </button>
                 ))}
+                {newPersonUI}
               </div>
               {value.paidByPersonId ? (
                 <p className="text-[11px] text-slate-600">
@@ -197,6 +276,7 @@ export default function SplitPanel({ total, currency, value, onChange }: Props) 
                       <span className="truncate">+ {p.name}</span>
                     </button>
                   ))}
+                {newPersonUI}
                 {value.owedToMe.length > 0 && (
                   <button
                     onClick={evenly}

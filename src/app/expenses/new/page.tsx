@@ -15,8 +15,6 @@ const CATEGORIES: { key: Category; label: string; icon: string; color: string }[
   { key: 'other',     label: 'Other',     icon: '✦',  color: 'bg-slate-500/15  border-slate-500/40' },
 ];
 
-const KEYS = [['7','8','9'],['4','5','6'],['1','2','3'],['.','0','⌫']];
-
 function ExpenseForm() {
   const { wallets, addExpense, settings } = useApp();
   // Built-in categories plus any user-defined custom ones (given a neutral
@@ -32,7 +30,9 @@ function ExpenseForm() {
   const searchParams = useSearchParams();
   const presetWalletId = searchParams.get('walletId') ?? '';
 
-  const [input,    setInput]    = useState('0');
+  // Empty rather than '0': the field is typed into directly now, and a leading
+  // zero the user has to clear first is friction the keypad used to absorb.
+  const [input,    setInput]    = useState('');
   const [category, setCategory] = useState<Category | null>(null);
   // Cash is what most spending comes out of, so it is the default unless the
   // caller named a wallet. Falls back to the oldest wallet only if cash is gone.
@@ -58,16 +58,6 @@ function ExpenseForm() {
     // Lowering the amount after splitting must disable the button, not silently
     // discard the expense in addExpense's guard.
     && myShare >= 0;
-
-  const handleKey = (k: string) => {
-    setInput(prev => {
-      if (k === '⌫') return prev.length <= 1 ? '0' : prev.slice(0, -1);
-      if (k === '.') return prev.includes('.') ? prev : prev + '.';
-      if (prev === '0') return k;
-      if (prev.includes('.') && prev.split('.')[1].length >= 2) return prev;
-      return prev + k;
-    });
-  };
 
   const handleSubmit = () => {
     if (!canSubmit || !category) return;
@@ -105,12 +95,22 @@ function ExpenseForm() {
         {/* ── Amount ── */}
         <div className="flex flex-col items-center py-2 md:py-5 shrink-0">
           <p className="text-xs text-slate-500 mb-1.5 uppercase tracking-widest">Amount</p>
-          <p className="text-4xl md:text-5xl font-bold text-white tabular-nums">
-            {settings.currency}{input === '0' ? '0' : parseFloat(input).toLocaleString('en-PH', {
-              minimumFractionDigits: input.includes('.') ? input.split('.')[1].length : 0,
-              maximumFractionDigits: 2,
-            })}
-          </p>
+          {/* The field sizes to a fixed width rather than growing, so the
+              currency and the number stay centred together as one unit. */}
+          <div className="flex items-baseline justify-center gap-1.5">
+            <span className="text-3xl md:text-4xl font-bold text-slate-500 shrink-0">{settings.currency}</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="0"
+              min="0"
+              step="0.01"
+              autoFocus
+              className="w-40 md:w-48 bg-transparent text-left text-4xl md:text-5xl font-bold text-white placeholder-slate-700 tabular-nums outline-none border-0 p-0"
+            />
+          </div>
         </div>
 
         {/* ── Wallet strip — always visible ── */}
@@ -199,25 +199,12 @@ function ExpenseForm() {
           </div>
         </div>
 
-        {/* ── Keypad ── */}
-        <div className="px-4 pt-1 pb-3 shrink-0">
-          {KEYS.map((row, ri) => (
-            <div key={ri} className="flex gap-2 mb-1.5">
-              {row.map(k => (
-                <button
-                  key={k}
-                  onClick={() => handleKey(k)}
-                  className="flex-1 flex items-center justify-center rounded-2xl bg-[#111827] md:bg-white/5 border border-[#1e2d40] h-12 md:h-14 text-lg font-semibold text-white active:bg-[#1a2332] transition-colors"
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-          ))}
+        {/* ── Submit ── */}
+        <div className="px-4 pt-1 pb-5 shrink-0">
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="w-full rounded-2xl bg-blue-600 py-4 font-bold text-white text-base active:bg-blue-700 disabled:opacity-30 transition-colors mt-1"
+            className="w-full rounded-2xl bg-blue-600 py-4 font-bold text-white text-base active:bg-blue-700 disabled:opacity-30 transition-colors"
           >
             {!canSubmit
               ? 'Log Expense'

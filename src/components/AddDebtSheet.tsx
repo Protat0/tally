@@ -4,8 +4,7 @@ import { useState } from 'react';
 import { useApp, fmt, DebtDirection } from './AppContext';
 import BottomSheet from './BottomSheet';
 import WalletPicker from './WalletPicker';
-
-const PERSON_EMOJI = ['🧑','👩','👨','🧔','👧','👦','🙂','😎','🐱','🐶','⭐','🎯'];
+import { PERSON_EMOJI } from '@/lib/personEmoji';
 
 function todayInputValue(): string {
   const d = new Date();
