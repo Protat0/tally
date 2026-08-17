@@ -22,13 +22,12 @@ type Action = {
   chip: string;
   tint: string;
   href?: string;
-  opens?: 'electric' | 'refund';
+  opens?: 'electric';
 };
 
 const ACTIONS: Action[] = [
   { label: 'Expense',        Icon: ReceiptIcon,     chip: 'bg-blue-500/15',    tint: 'text-blue-400',    href: '/expenses/new' },
-  { label: 'Log electric',   Icon: BoltIcon,        chip: 'bg-amber-500/15',   tint: 'text-amber-400',   opens: 'electric' },
-  { label: 'Refund electric', Icon: BoltIcon,       chip: 'bg-rose-500/15',    tint: 'text-rose-400',    opens: 'refund' },
+  { label: 'Electric usage', Icon: BoltIcon,        chip: 'bg-amber-500/15',   tint: 'text-amber-400',   opens: 'electric' },
   { label: 'Debt',           Icon: UsersIcon,       chip: 'bg-violet-500/15',  tint: 'text-violet-400',  href: '/debts' },
   { label: 'Money in / out', Icon: WalletIcon,      chip: 'bg-emerald-500/15', tint: 'text-emerald-400', href: '/wallets' },
   { label: 'Instalment',     Icon: ArrowDownIcon,   chip: 'bg-purple-500/15',  tint: 'text-purple-400',  href: '/instalments' },
@@ -45,18 +44,18 @@ export default function GlobalFAB() {
 
   const [open, setOpen]         = useState(false);
   const [electric, setElectric] = useState(false);
-  const [refund, setRefund]     = useState(false);
+  // Adding and removing appliance time ask for exactly the same two answers, so
+  // they are one modal with a direction rather than two near-identical sheets.
+  const [refunding, setRefunding] = useState(false);
   const [appId, setAppId]       = useState('');
   const [hrs, setHrs]           = useState('');
   const [mins, setMins]         = useState('');
 
   const closeAll = () => {
-    setOpen(false); setElectric(false); setRefund(false);
+    setOpen(false); setElectric(false); setRefunding(false);
     setAppId(''); setHrs(''); setMins('');
   };
 
-  // Both modals close the same way, so one gesture instance serves both —
-  // only ever one of them is mounted at a time.
   const swipe = useSwipeToClose(closeAll);
 
   // Every hook must run before this early return, or the hook order changes
@@ -66,17 +65,17 @@ export default function GlobalFAB() {
   const totalMinutes = (parseFloat(hrs) || 0) * 60 + (parseFloat(mins) || 0);
   const canLog = !!appId && totalMinutes > 0;
 
-  const handleLog = () => {
+  const handleSubmit = () => {
     if (!canLog) return;
-    logApplianceUsage(appId, totalMinutes);
+    if (refunding) refundApplianceUsage(appId, totalMinutes);
+    else logApplianceUsage(appId, totalMinutes);
     closeAll();
   };
 
-  const handleRefund = () => {
-    if (!canLog) return;
-    refundApplianceUsage(appId, totalMinutes);
-    closeAll();
-  };
+  // One accent for the whole modal, so the direction is legible at a glance.
+  const tone = refunding
+    ? { ring: 'border-rose-500/50 bg-rose-500/10', icon: 'text-rose-400', focus: 'focus:border-rose-500/50', cta: 'bg-rose-600 hover:bg-rose-500 text-white' }
+    : { ring: 'border-amber-500/50 bg-amber-500/10', icon: 'text-amber-400', focus: 'focus:border-amber-500/50', cta: 'bg-amber-500 hover:bg-amber-400 text-black' };
 
   return (
     <>
@@ -133,11 +132,7 @@ export default function GlobalFAB() {
                 ) : (
                   <button
                     key={a.label}
-                    onClick={() => {
-                      setOpen(false);
-                      if (a.opens === 'electric') setElectric(true);
-                      if (a.opens === 'refund') setRefund(true);
-                    }}
+                    onClick={() => { setOpen(false); setElectric(true); }}
                     className={cls}
                   >
                     {body}
@@ -149,107 +144,7 @@ export default function GlobalFAB() {
         </div>
       )}
 
-      {/* Refund electric usage modal */}
-      {refund && (
-        <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
-          onClick={closeAll}
-        >
-          <ScrollLock />
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div
-            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
-            onClick={e => e.stopPropagation()}
-            style={swipe.style}
-            {...swipe.handlers}
-          >
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 md:hidden" />
-
-            <div className="flex items-start justify-between mb-1">
-              <p className="font-semibold text-white text-lg">Refund Electric Usage</p>
-              <button onClick={closeAll} className="text-slate-500 hover:text-slate-300 transition-colors">
-                <XIcon className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-xs text-slate-500 mb-5">
-              Logged too much by mistake? Remove the time manually.
-            </p>
-
-            {appliances.length === 0 ? (
-              <div className="py-4 text-center">
-                <p className="text-sm text-slate-500 mb-3">No appliances set up yet.</p>
-                <Link href="/expenses#electric" onClick={closeAll}
-                  className="text-sm text-blue-400 underline underline-offset-2">
-                  Set up appliances →
-                </Link>
-              </div>
-            ) : (
-              <>
-                {/* Appliance picker */}
-                <p className="text-xs text-slate-500 mb-2">Which appliance?</p>
-                <div className="grid grid-cols-2 gap-2 mb-5">
-                  {appliances.map(a => (
-                    <button
-                      key={a.id}
-                      onClick={() => setAppId(a.id)}
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                        appId === a.id
-                          ? 'border-rose-500/50 bg-rose-500/10'
-                          : 'border-[#1e2d40] bg-white/5 hover:bg-white/8'
-                      }`}
-                    >
-                      <BoltIcon className={`w-4 h-4 shrink-0 ${appId === a.id ? 'text-rose-400' : 'text-slate-500'}`} />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{a.name}</p>
-                        <p className="text-[10px] text-slate-500">{a.wattage}W</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Duration */}
-                <p className="text-xs text-slate-500 mb-2">How much time to remove?</p>
-                <div className="flex gap-3 mb-5">
-                  <div className="flex-1 flex items-center gap-2">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={hrs}
-                      onChange={e => setHrs(e.target.value)}
-                      placeholder="0"
-                      min="0" max="24"
-                      className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none focus:border-rose-500/50"
-                    />
-                    <span className="text-sm text-slate-500 shrink-0">hr</span>
-                  </div>
-                  <div className="flex-1 flex items-center gap-2">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={mins}
-                      onChange={e => setMins(e.target.value)}
-                      placeholder="0"
-                      min="0" max="59"
-                      className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none focus:border-rose-500/50"
-                    />
-                    <span className="text-sm text-slate-500 shrink-0">min</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleRefund}
-                  disabled={!canLog}
-                  className="w-full rounded-xl bg-rose-600 py-3.5 font-semibold text-white disabled:opacity-30 hover:bg-rose-500 transition-colors"
-                >
-                  Remove Usage
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Electric usage modal */}
+      {/* Electric usage — one sheet, two directions */}
       {electric && (
         <div
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
@@ -265,14 +160,36 @@ export default function GlobalFAB() {
           >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 md:hidden" />
 
-            <div className="flex items-start justify-between mb-1">
-              <p className="font-semibold text-white text-lg">Log Electric Usage</p>
+            <div className="flex items-start justify-between mb-4">
+              <p className="font-semibold text-white text-lg">Electric Usage</p>
               <button onClick={closeAll} className="text-slate-500 hover:text-slate-300 transition-colors">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Direction */}
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                onClick={() => setRefunding(false)}
+                className={`rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                  refunding ? 'border-[#1e2d40] bg-white/5 text-slate-400' : 'border-amber-500/50 bg-amber-500/10 text-white'
+                }`}
+              >
+                Add time
+              </button>
+              <button
+                onClick={() => setRefunding(true)}
+                className={`rounded-xl border px-3 py-2.5 text-sm transition-colors ${
+                  refunding ? 'border-rose-500/50 bg-rose-500/10 text-white' : 'border-[#1e2d40] bg-white/5 text-slate-400'
+                }`}
+              >
+                Remove time
+              </button>
+            </div>
             <p className="text-xs text-slate-500 mb-5">
-              Forgot to toggle an appliance? Add the time manually.
+              {refunding
+                ? 'Logged too much by mistake? Remove the time manually.'
+                : 'Forgot to toggle an appliance? Add the time manually.'}
             </p>
 
             {appliances.length === 0 ? (
@@ -293,12 +210,10 @@ export default function GlobalFAB() {
                       key={a.id}
                       onClick={() => setAppId(a.id)}
                       className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                        appId === a.id
-                          ? 'border-amber-500/50 bg-amber-500/10'
-                          : 'border-[#1e2d40] bg-white/5 hover:bg-white/8'
+                        appId === a.id ? tone.ring : 'border-[#1e2d40] bg-white/5 hover:bg-white/8'
                       }`}
                     >
-                      <BoltIcon className={`w-4 h-4 shrink-0 ${appId === a.id ? 'text-amber-400' : 'text-slate-500'}`} />
+                      <BoltIcon className={`w-4 h-4 shrink-0 ${appId === a.id ? tone.icon : 'text-slate-500'}`} />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-white truncate">{a.name}</p>
                         <p className="text-[10px] text-slate-500">{a.wattage}W</p>
@@ -308,7 +223,9 @@ export default function GlobalFAB() {
                 </div>
 
                 {/* Duration */}
-                <p className="text-xs text-slate-500 mb-2">How long was it on?</p>
+                <p className="text-xs text-slate-500 mb-2">
+                  {refunding ? 'How much time to remove?' : 'How long was it on?'}
+                </p>
                 <div className="flex gap-3 mb-5">
                   <div className="flex-1 flex items-center gap-2">
                     <input
@@ -318,7 +235,7 @@ export default function GlobalFAB() {
                       onChange={e => setHrs(e.target.value)}
                       placeholder="0"
                       min="0" max="24"
-                      className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none focus:border-amber-500/50"
+                      className={`w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none ${tone.focus}`}
                     />
                     <span className="text-sm text-slate-500 shrink-0">hr</span>
                   </div>
@@ -330,18 +247,18 @@ export default function GlobalFAB() {
                       onChange={e => setMins(e.target.value)}
                       placeholder="0"
                       min="0" max="59"
-                      className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none focus:border-amber-500/50"
+                      className={`w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none ${tone.focus}`}
                     />
                     <span className="text-sm text-slate-500 shrink-0">min</span>
                   </div>
                 </div>
 
                 <button
-                  onClick={handleLog}
+                  onClick={handleSubmit}
                   disabled={!canLog}
-                  className="w-full rounded-xl bg-amber-500 py-3.5 font-semibold text-black disabled:opacity-30 hover:bg-amber-400 transition-colors"
+                  className={`w-full rounded-xl py-3.5 font-semibold disabled:opacity-30 transition-colors ${tone.cta}`}
                 >
-                  Add Usage
+                  {refunding ? 'Remove Usage' : 'Add Usage'}
                 </button>
               </>
             )}
