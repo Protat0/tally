@@ -93,9 +93,13 @@ export default function SplitPanel({ total, currency, value, onChange }: Props) 
             value ? 'bg-blue-600' : 'bg-white/10'
           }`}
         >
+          {/* `left-0.5` anchors the knob: without a horizontal anchor an absolute
+              child starts from its static position, which a button's centred text
+              alignment puts mid-track — the knob then reads as "on" at rest and
+              slides out of the track when it really is on. */}
           <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-              value ? 'translate-x-5' : 'translate-x-0.5'
+            className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+              value ? 'translate-x-5' : 'translate-x-0'
             }`}
           />
         </button>
