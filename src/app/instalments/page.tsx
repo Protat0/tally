@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useApp, fmt, ShopeePayment } from '@/components/AppContext';
+import { useApp, fmt, InstalmentPayment } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import { ScrollLock } from '@/components/ModalLock';
 import { useSwipeToClose } from '@/components/useSwipeToClose';
 import { PlusIcon, BagIcon, AlertIcon, CheckIcon, TrashIcon } from '@/components/Icons';
 
-const STATUS_STYLE: Record<ShopeePayment['status'], string> = {
+const STATUS_STYLE: Record<InstalmentPayment['status'], string> = {
   paid: 'bg-emerald-500/15 text-emerald-400',
   pending: 'bg-amber-500/15 text-amber-400',
   upcoming: 'bg-slate-500/15 text-slate-400',
@@ -19,11 +19,11 @@ function formatMonth(m: string): string {
   return new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
 }
 
-export default function ShopeePage() {
+export default function InstalmentsPage() {
   const {
-    shopeeSchedule, shopeeRemainingBalance, shopeeDebtFreeDate,
-    shopeeNewPurchaseLock, setShopeeNewPurchaseLock,
-    addShopeePayment, updateShopeePayment, deleteShopeePayment,
+    instalmentSchedule, instalmentRemainingBalance, instalmentDebtFreeDate,
+    instalmentNewPurchaseLock, setInstalmentNewPurchaseLock,
+    addInstalmentPayment, updateInstalmentPayment, deleteInstalmentPayment,
     settings,
   } = useApp();
 
@@ -34,13 +34,13 @@ export default function ShopeePage() {
 
   const handleAdd = () => {
     if (!newMonth || !newAmount) return;
-    addShopeePayment({ month: newMonth, amount: parseFloat(newAmount), status: 'upcoming' });
+    addInstalmentPayment({ month: newMonth, amount: parseFloat(newAmount), status: 'upcoming' });
     setShowAdd(false);
     setNewMonth('');
     setNewAmount('');
   };
 
-  const sorted = [...shopeeSchedule].sort((a, b) => a.month.localeCompare(b.month));
+  const sorted = [...instalmentSchedule].sort((a, b) => a.month.localeCompare(b.month));
 
   return (
     <div className="min-h-screen bg-[#0b0f1a]">
@@ -50,7 +50,7 @@ export default function ShopeePage() {
         <div className="mx-auto max-w-3xl px-4 md:px-8 pb-28 md:pb-12">
 
           <PageHeader
-            title="Shopee Pay Later"
+            title="Instalments"
             right={
               <button
                 onClick={() => setShowAdd(true)}
@@ -64,32 +64,32 @@ export default function ShopeePage() {
 
           <div className="space-y-4">
             {/* Lock warning */}
-            {shopeeNewPurchaseLock && (
+            {instalmentNewPurchaseLock && (
               <div className="flex items-start gap-3 rounded-2xl bg-red-500/10 border border-red-500/20 px-4 py-3.5">
                 <AlertIcon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-red-400">New purchase lock is active</p>
-                  <p className="text-xs text-red-400/70 mt-0.5">Avoid adding new Shopee items until your balance clears.</p>
+                  <p className="text-xs text-red-400/70 mt-0.5">Avoid adding new instalment purchases until your balance clears.</p>
                 </div>
-                <button onClick={() => setShopeeNewPurchaseLock(false)} className="text-xs text-red-400/60 shrink-0">
+                <button onClick={() => setInstalmentNewPurchaseLock(false)} className="text-xs text-red-400/60 shrink-0">
                   Dismiss
                 </button>
               </div>
             )}
 
             {/* Summary card */}
-            {shopeeSchedule.length > 0 ? (
+            {instalmentSchedule.length > 0 ? (
               <div className="rounded-2xl bg-gradient-to-br from-[#1a1030] to-[#110d28] border border-purple-800/30 p-6 md:p-8">
                 <p className="text-xs text-purple-400/70 uppercase tracking-widest mb-1">Remaining Balance</p>
-                <p className="text-4xl md:text-5xl font-bold text-white mb-1">{fmt(shopeeRemainingBalance, settings.currency)}</p>
-                {shopeeDebtFreeDate && (
+                <p className="text-4xl md:text-5xl font-bold text-white mb-1">{fmt(instalmentRemainingBalance, settings.currency)}</p>
+                {instalmentDebtFreeDate && (
                   <p className="text-xs text-slate-500">
-                    Debt-free by <span className="text-purple-400">{formatMonth(shopeeDebtFreeDate)}</span>
+                    Debt-free by <span className="text-purple-400">{formatMonth(instalmentDebtFreeDate)}</span>
                   </p>
                 )}
-                {!shopeeNewPurchaseLock && shopeeRemainingBalance > 0 && (
+                {!instalmentNewPurchaseLock && instalmentRemainingBalance > 0 && (
                   <button
-                    onClick={() => setShopeeNewPurchaseLock(true)}
+                    onClick={() => setInstalmentNewPurchaseLock(true)}
                     className="mt-4 text-xs text-amber-400/80 underline underline-offset-2"
                   >
                     Enable new purchase lock
@@ -102,7 +102,7 @@ export default function ShopeePage() {
                   <BagIcon className="w-10 h-10 text-slate-600" />
                 </div>
                 <p className="text-white font-semibold text-lg mb-2">No schedule set up</p>
-                <p className="text-sm text-slate-500 max-w-xs mb-6">Add your monthly Shopee Pay Later instalments.</p>
+                <p className="text-sm text-slate-500 max-w-xs mb-6">Add your monthly instalment payments.</p>
                 <button
                   onClick={() => setShowAdd(true)}
                   className="flex items-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white"
@@ -127,14 +127,14 @@ export default function ShopeePage() {
                     </span>
                     {p.status !== 'paid' && (
                       <button
-                        onClick={() => updateShopeePayment(p.id, { status: 'paid' })}
+                        onClick={() => updateInstalmentPayment(p.id, { status: 'paid' })}
                         className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 active:bg-emerald-500/20"
                       >
                         <CheckIcon className="w-4 h-4 text-emerald-400" />
                       </button>
                     )}
                     <button
-                      onClick={() => deleteShopeePayment(p.id)}
+                      onClick={() => deleteInstalmentPayment(p.id)}
                       className="flex h-8 w-8 items-center justify-center rounded-full active:bg-white/10"
                     >
                       <TrashIcon className="w-4 h-4 text-slate-600" />

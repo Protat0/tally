@@ -327,8 +327,8 @@ derived total (`totalAllocated`, `unallocated`, `allocatedPct`) is unchanged.
 
 **Behaviour changes worth remembering:**
 
-- **Shopee and Emergency Fund no longer have editors on the Budget page.** Their
-  tiles link to `/shopee` and `/emergency-fund`, deleting ~270 lines that were
+- **Instalments and Emergency Fund no longer have editors on the Budget page.** Their
+  tiles link to `/instalments` and `/emergency-fund`, deleting ~270 lines that were
   duplicated from those routes. Their figures still feed `totalAllocated`.
 - **Category delete moved** from a per-row trash icon into the Edit Budget sheet
   ("Delete category" for custom, "Remove category" for built-ins).
@@ -396,7 +396,7 @@ correctly on the Activity page via the built-in icon map.
 "Allocated" on the Budget page was summing `budgetLines` — the dead data layer
 behind the UI removed last session — so setting a Category Budget moved nothing.
 
-- `totalAllocated` = Bills + **Category Budgets** + Shopee + Savings target.
+- `totalAllocated` = Bills + **Category Budgets** + Instalments + Savings target.
 - Stale budgets for deleted custom categories are excluded; only categories that
   currently exist are counted.
 - Added a compact breakdown row under the progress bar so Allocated isn't an

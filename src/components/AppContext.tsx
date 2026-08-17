@@ -12,7 +12,7 @@ export interface CustomCategory {
   key: string; label: string; icon: string;
 }
 export type PaydayCycle = '1st-15th' | 'monthly' | 'custom';
-export type ShopeeStatus = 'paid' | 'pending' | 'upcoming';
+export type InstalmentStatus = 'paid' | 'pending' | 'upcoming';
 export type BudgetType = 'needs' | 'wants' | 'savings';
 
 export interface Wallet {
@@ -97,8 +97,8 @@ export interface Appliance {
   pinnedToHome: boolean;
 }
 
-export interface ShopeePayment {
-  id: string; month: string; amount: number; status: ShopeeStatus;
+export interface InstalmentPayment {
+  id: string; month: string; amount: number; status: InstalmentStatus;
 }
 
 export interface EmergencyFundEntry {
@@ -172,8 +172,8 @@ interface Computed {
   daysUntilPayday: number;
   nextPaydayDate: Date | null;
   electricBillEstimate: number;
-  shopeeRemainingBalance: number;
-  shopeeDebtFreeDate: string | null;
+  instalmentRemainingBalance: number;
+  instalmentDebtFreeDate: string | null;
 }
 
 interface AppContextValue extends Computed {
@@ -181,8 +181,8 @@ interface AppContextValue extends Computed {
   expenses: Expense[];
   moneyMoves: MoneyMove[];
   settings: Settings;
-  shopeeSchedule: ShopeePayment[];
-  shopeeNewPurchaseLock: boolean;
+  instalmentSchedule: InstalmentPayment[];
+  instalmentNewPurchaseLock: boolean;
   emergencyFund: EmergencyFund;
   dataLoading: boolean;
   addWallet: (w: Omit<Wallet, 'id'>) => Promise<void>;
@@ -206,10 +206,10 @@ interface AppContextValue extends Computed {
   addTransfer: (m: { fromWalletId: string; toWalletId: string; amount: number; note: string }) => Promise<void>;
   deleteMoneyMove: (id: string) => Promise<void>;
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
-  addShopeePayment: (p: Omit<ShopeePayment, 'id'>) => Promise<void>;
-  updateShopeePayment: (id: string, updates: Partial<ShopeePayment>) => Promise<void>;
-  deleteShopeePayment: (id: string) => Promise<void>;
-  setShopeeNewPurchaseLock: (locked: boolean) => Promise<void>;
+  addInstalmentPayment: (p: Omit<InstalmentPayment, 'id'>) => Promise<void>;
+  updateInstalmentPayment: (id: string, updates: Partial<InstalmentPayment>) => Promise<void>;
+  deleteInstalmentPayment: (id: string) => Promise<void>;
+  setInstalmentNewPurchaseLock: (locked: boolean) => Promise<void>;
   addEmergencyFundEntry: (e: Omit<EmergencyFundEntry, 'id' | 'date'>) => Promise<void>;
   addBudgetLine: (b: Omit<BudgetLine, 'id'>) => Promise<void>;
   updateBudgetLine: (id: string, updates: Partial<BudgetLine>) => Promise<void>;
@@ -369,9 +369,9 @@ const fromDBMoneyMove  = (r: Row): MoneyMove  => ({
   source: (r.source ?? null) as IncomeSource | null,
   note: r.note || '', date: r.date,
 });
-const fromDBShopee     = (r: Row): ShopeePayment => ({
+const fromDBInstalment = (r: Row): InstalmentPayment => ({
   id: r.id, month: String(r.month || '').slice(0, 7),
-  amount: Number(r.amount), status: r.status as ShopeeStatus,
+  amount: Number(r.amount), status: r.status as InstalmentStatus,
 });
 const fromDBEFEntry    = (r: Row): EmergencyFundEntry => ({
   id: r.id, amount: Number(r.amount), note: r.note || '', date: r.date,
@@ -420,8 +420,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const [expenses,             setExpenses]             = useState<Expense[]>([]);
   const [moneyMoves,           setMoneyMoves]           = useState<MoneyMove[]>([]);
   const [settings,             setSettings]             = useState<Settings>(defaultSettings);
-  const [shopeeSchedule,       setShopeeSchedule]       = useState<ShopeePayment[]>([]);
-  const [shopeeNewPurchaseLock, setLock]                = useState(false);
+  const [instalmentSchedule,   setInstalmentSchedule]   = useState<InstalmentPayment[]>([]);
+  const [instalmentNewPurchaseLock, setLock]            = useState(false);
   const [emergencyFund,        setEmergencyFund]        = useState<EmergencyFund>({ entries: [], currentAmount: 0 });
   const [dataLoading,          setDataLoading]          = useState(false);
   const [debtPeople,           setDebtPeople]           = useState<DebtPerson[]>([]);
@@ -431,7 +431,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   useEffect(() => {
     if (!userId) {
       setWallets([]); setExpenses([]); setMoneyMoves([]); setSettings(defaultSettings);
-      setShopeeSchedule([]); setLock(false);
+      setInstalmentSchedule([]); setLock(false);
       setEmergencyFund({ entries: [], currentAmount: 0 });
       setDebtPeople([]); setDebtEntries([]);
       return;
@@ -442,7 +442,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
   async function loadAll(uid: string) {
     setDataLoading(true);
-    const [sRes, wRes, eRes, mmRes, bRes, blRes, aRes, spRes, efRes, dpRes, deRes] = await Promise.all([
+    const [sRes, wRes, eRes, mmRes, bRes, blRes, aRes, ipRes, efRes, dpRes, deRes] = await Promise.all([
       supabase.from('settings').select('*').eq('user_id', uid).single(),
       supabase.from('wallets').select('*').eq('user_id', uid).order('created_at'),
       supabase.from('expenses').select('*').eq('user_id', uid).order('date', { ascending: false }),
@@ -450,7 +450,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       supabase.from('bills').select('*').eq('user_id', uid),
       supabase.from('budget_lines').select('*').eq('user_id', uid).order('sort_order'),
       supabase.from('appliances').select('*').eq('user_id', uid),
-      supabase.from('shopee_payments').select('*').eq('user_id', uid).order('month'),
+      supabase.from('instalment_payments').select('*').eq('user_id', uid).order('month'),
       supabase.from('emergency_fund_entries').select('*').eq('user_id', uid).order('date', { ascending: false }),
       supabase.from('debt_people').select('*').eq('user_id', uid).order('created_at'),
       supabase.from('debt_entries').select('*').eq('user_id', uid).order('date', { ascending: false }),
@@ -464,13 +464,13 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
         budgetLines: (blRes.data || []).map(fromDBBudgetLine),
         appliances:  (aRes.data  || []).map(fromDBAppliance),
       });
-      setLock(Boolean(sRes.data.shopee_purchase_lock));
+      setLock(Boolean(sRes.data.instalment_purchase_lock));
     }
 
     if (wRes.data)  setWallets(wRes.data.map(fromDBWallet));
     if (eRes.data)  setExpenses(eRes.data.map(fromDBExpense));
     if (mmRes.data) setMoneyMoves(mmRes.data.map(fromDBMoneyMove));
-    if (spRes.data) setShopeeSchedule(spRes.data.map(fromDBShopee));
+    if (ipRes.data) setInstalmentSchedule(ipRes.data.map(fromDBInstalment));
     if (efRes.data) {
       const entries = efRes.data.map(fromDBEFEntry);
       setEmergencyFund({ entries, currentAmount: entries.reduce((s, e) => s + e.amount, 0) });
@@ -557,7 +557,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       ? ((totalExpensesThisMonth + blindSpend) / expectedSoFar) * 100
       : 0;
     const nextPaydayDate = computeNextPayday(settings);
-    const pending = shopeeSchedule.filter(p => p.status !== 'paid');
+    const pending = instalmentSchedule.filter(p => p.status !== 'paid');
     return {
       totalBalance, totalExpensesThisMonth, receivedThisMonth, projectedSavings, spendingPacePercent,
       optimisticSavings, unconfirmedIncome, pendingPaydays,
@@ -565,10 +565,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       daysUntilPayday: daysUntil(nextPaydayDate ? new Date(nextPaydayDate) : null),
       nextPaydayDate,
       electricBillEstimate: calcElectric(settings),
-      shopeeRemainingBalance: pending.reduce((s, p) => s + p.amount, 0),
-      shopeeDebtFreeDate: pending.length > 0 ? pending[pending.length - 1].month : null,
+      instalmentRemainingBalance: pending.reduce((s, p) => s + p.amount, 0),
+      instalmentDebtFreeDate: pending.length > 0 ? pending[pending.length - 1].month : null,
     };
-  }, [wallets, expenses, moneyMoves, settings, shopeeSchedule]);
+  }, [wallets, expenses, moneyMoves, settings, instalmentSchedule]);
 
   // Open entries only — settled debts are history, not balance.
   //
@@ -1155,17 +1155,17 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     }
   };
 
-  // ── Shopee ────────────────────────────────────────────────────────────────
-  const addShopeePayment = async (p: Omit<ShopeePayment, 'id'>) => {
+  // ── Instalments ───────────────────────────────────────────────────────────
+  const addInstalmentPayment = async (p: Omit<InstalmentPayment, 'id'>) => {
     if (!userId) return;
-    const { data } = await supabase.from('shopee_payments')
+    const { data } = await supabase.from('instalment_payments')
       .insert({ user_id: userId, month: p.month + '-01', amount: p.amount, status: p.status })
       .select().single();
-    if (data) setShopeeSchedule(prev => [...prev, fromDBShopee(data)]);
+    if (data) setInstalmentSchedule(prev => [...prev, fromDBInstalment(data)]);
   };
 
-  const updateShopeePayment = async (id: string, updates: Partial<ShopeePayment>) => {
-    setShopeeSchedule(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+  const updateInstalmentPayment = async (id: string, updates: Partial<InstalmentPayment>) => {
+    setInstalmentSchedule(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
     const db: Row = {};
     if ('status' in updates) {
       db.status = updates.status;
@@ -1173,17 +1173,17 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     }
     if ('amount' in updates) db.amount = updates.amount;
     if ('month'  in updates) db.month  = updates.month + '-01';
-    await supabase.from('shopee_payments').update(db).eq('id', id);
+    await supabase.from('instalment_payments').update(db).eq('id', id);
   };
 
-  const deleteShopeePayment = async (id: string) => {
-    setShopeeSchedule(prev => prev.filter(p => p.id !== id));
-    await supabase.from('shopee_payments').delete().eq('id', id);
+  const deleteInstalmentPayment = async (id: string) => {
+    setInstalmentSchedule(prev => prev.filter(p => p.id !== id));
+    await supabase.from('instalment_payments').delete().eq('id', id);
   };
 
-  const setShopeeNewPurchaseLock = async (locked: boolean) => {
+  const setInstalmentNewPurchaseLock = async (locked: boolean) => {
     setLock(locked);
-    if (userId) await supabase.from('settings').update({ shopee_purchase_lock: locked }).eq('user_id', userId);
+    if (userId) await supabase.from('settings').update({ instalment_purchase_lock: locked }).eq('user_id', userId);
   };
 
   // ── Emergency Fund ────────────────────────────────────────────────────────
@@ -1352,7 +1352,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
     // Local first so the UI empties immediately rather than after ten writes.
     setWallets([]); setExpenses([]); setMoneyMoves([]);
-    setShopeeSchedule([]); setLock(false);
+    setInstalmentSchedule([]); setLock(false);
     setEmergencyFund({ entries: [], currentAmount: 0 });
     setDebtPeople([]); setDebtEntries([]);
     setSettings(prev => ({
@@ -1373,7 +1373,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // reference wallets, and debt_entries reference debt_people.
     await Promise.all([own('debt_entries'), own('expenses'), own('money_moves')]);
     await Promise.all([
-      own('debt_people'), own('shopee_payments'), own('emergency_fund_entries'),
+      own('debt_people'), own('instalment_payments'), own('emergency_fund_entries'),
       own('bills'), own('budget_lines'), own('appliances'),
     ]);
     await own('wallets');
@@ -1387,7 +1387,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       hidden_categories: [],
       cashflow_wallet_id: null,
       payday_log: {},
-      shopee_purchase_lock: false,
+      instalment_purchase_lock: false,
     }).eq('user_id', userId);
   };
 
@@ -1408,7 +1408,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
   return (
     <AppContext.Provider value={{
-      wallets, expenses, moneyMoves, settings, shopeeSchedule, shopeeNewPurchaseLock,
+      wallets, expenses, moneyMoves, settings, instalmentSchedule, instalmentNewPurchaseLock,
       emergencyFund, dataLoading,
       ...computed,
       addWallet, updateWallet, deleteWallet,
@@ -1416,8 +1416,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       addIncome, addWithdrawal, addTransfer, deleteMoneyMove,
       confirmPayday, dismissPayday,
       updateSettings,
-      addShopeePayment, updateShopeePayment, deleteShopeePayment,
-      setShopeeNewPurchaseLock,
+      addInstalmentPayment, updateInstalmentPayment, deleteInstalmentPayment,
+      setInstalmentNewPurchaseLock,
       addEmergencyFundEntry,
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
       toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, toggleBillPaid,

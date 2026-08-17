@@ -70,7 +70,7 @@ function InlineAmountInput({
 export default function BudgetPage() {
   const {
     settings, expenses, updateSettings,
-    shopeeSchedule, shopeeRemainingBalance, shopeeDebtFreeDate,
+    instalmentSchedule, instalmentRemainingBalance, instalmentDebtFreeDate,
     emergencyFund,
     updateBill,
     receivedThisMonth,
@@ -187,24 +187,24 @@ export default function BudgetPage() {
 
   // ── budget totals ──
   const totalBills    = bills.reduce((s, b) => s + b.amount, 0);
-  const nextShopee    = [...shopeeSchedule]
+  const nextInstalment = [...instalmentSchedule]
     .filter(p => p.status !== 'paid')
     .sort((a, b) => a.month.localeCompare(b.month))[0];
-  const shopeeMonthly = nextShopee?.amount ?? 0;
+  const instalmentMonthly = nextInstalment?.amount ?? 0;
   // Only budgets for categories that still exist count — a stale entry left by a
   // deleted custom category shouldn't quietly inflate the total.
   const totalCategoryBudgets = allCategories
     .reduce((s, c) => s + (categoryBudgets[c.key] ?? 0), 0);
-  const totalAllocated   = totalBills + shopeeMonthly + totalCategoryBudgets + monthlySavingsTarget;
+  const totalAllocated   = totalBills + instalmentMonthly + totalCategoryBudgets + monthlySavingsTarget;
   const unallocated      = monthlyIncome - totalAllocated;
   const allocatedPct     = monthlyIncome > 0 ? (totalAllocated / monthlyIncome) * 100 : 0;
 
   // Named parts of totalAllocated, for the breakdown under the progress bar.
   const allocationParts = [
-    { label: 'Bills',      value: totalBills },
-    { label: 'Categories', value: totalCategoryBudgets },
-    { label: 'Shopee',     value: shopeeMonthly },
-    { label: 'Savings',    value: monthlySavingsTarget },
+    { label: 'Bills',       value: totalBills },
+    { label: 'Categories',  value: totalCategoryBudgets },
+    { label: 'Instalments', value: instalmentMonthly },
+    { label: 'Savings',     value: monthlySavingsTarget },
   ].filter(p => p.value > 0);
 
   // ── collapsed-section sheets ──
@@ -307,16 +307,16 @@ export default function BudgetPage() {
               />
 
               <BudgetTile
-                icon="🛍️"
-                label="Shopee"
-                value={shopeeMonthly > 0 ? fmt(shopeeMonthly, currency) : 'Nothing due'}
+                icon="💳"
+                label="Instalments"
+                value={instalmentMonthly > 0 ? fmt(instalmentMonthly, currency) : 'Nothing due'}
                 status={
-                  shopeeRemainingBalance > 0
-                    ? `${fmt(shopeeRemainingBalance, currency)} left${shopeeDebtFreeDate ? ` · ${formatMonth(shopeeDebtFreeDate)}` : ''}`
+                  instalmentRemainingBalance > 0
+                    ? `${fmt(instalmentRemainingBalance, currency)} left${instalmentDebtFreeDate ? ` · ${formatMonth(instalmentDebtFreeDate)}` : ''}`
                     : 'all paid off'
                 }
-                statusTone={shopeeRemainingBalance > 0 ? 'default' : 'good'}
-                href="/shopee"
+                statusTone={instalmentRemainingBalance > 0 ? 'default' : 'good'}
+                href="/instalments"
               />
 
               <BudgetTile
