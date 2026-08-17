@@ -6,9 +6,35 @@ import { usePathname } from 'next/navigation';
 import { useApp } from './AppContext';
 import { ScrollLock, useAnyModalOpen } from './ModalLock';
 import { useSwipeToClose } from './useSwipeToClose';
-import { PlusIcon, XIcon, ReceiptIcon, BoltIcon } from './Icons';
+import {
+  PlusIcon, XIcon, ReceiptIcon, BoltIcon, UsersIcon, ShieldIcon,
+  WalletIcon, ArrowDownIcon, TrendingUpIcon,
+} from './Icons';
 
 const HIDDEN = ['/auth', '/expenses/new'];
+
+// The action sheet's contents. `href` hands off to the page that owns the flow;
+// `opens` raises one of this component's own modals. Ordered by how often the
+// thing gets logged, not by where it lives in the nav.
+type Action = {
+  label: string;
+  Icon: (p: { className?: string }) => React.ReactElement;
+  chip: string;
+  tint: string;
+  href?: string;
+  opens?: 'electric' | 'refund';
+};
+
+const ACTIONS: Action[] = [
+  { label: 'Expense',        Icon: ReceiptIcon,     chip: 'bg-blue-500/15',    tint: 'text-blue-400',    href: '/expenses/new' },
+  { label: 'Log electric',   Icon: BoltIcon,        chip: 'bg-amber-500/15',   tint: 'text-amber-400',   opens: 'electric' },
+  { label: 'Refund electric', Icon: BoltIcon,       chip: 'bg-rose-500/15',    tint: 'text-rose-400',    opens: 'refund' },
+  { label: 'Debt',           Icon: UsersIcon,       chip: 'bg-violet-500/15',  tint: 'text-violet-400',  href: '/debts' },
+  { label: 'Money in / out', Icon: WalletIcon,      chip: 'bg-emerald-500/15', tint: 'text-emerald-400', href: '/wallets' },
+  { label: 'Instalment',     Icon: ArrowDownIcon,   chip: 'bg-purple-500/15',  tint: 'text-purple-400',  href: '/instalments' },
+  { label: 'Emergency fund', Icon: ShieldIcon,      chip: 'bg-sky-500/15',     tint: 'text-sky-400',     href: '/emergency-fund' },
+  { label: 'Budget',         Icon: TrendingUpIcon,  chip: 'bg-teal-500/15',    tint: 'text-teal-400',    href: '/expenses' },
+];
 
 export default function GlobalFAB() {
   const pathname = usePathname();
@@ -54,55 +80,74 @@ export default function GlobalFAB() {
 
   return (
     <>
-      {/* Backdrop — closes FAB menu on tap */}
-      {open && <div className="fixed inset-0 z-40" onClick={closeAll} />}
-
-      {/* FAB stack — hidden entirely while a modal is up, so it can't sit on
-          top of a sheet or be tapped through one. */}
-      <div className={`fixed z-50 flex-col items-end gap-2.5 bottom-20 md:bottom-8 right-4 md:right-8 ${
-        modalOpen ? 'hidden' : 'flex'
+      {/* FAB — hidden entirely while a modal is up, so it can't sit on top of a
+          sheet or be tapped through one. The action sheet counts as a modal, so
+          this also hides the button while its own menu is open. */}
+      <div className={`fixed z-50 bottom-20 md:bottom-8 right-4 md:right-8 ${
+        modalOpen ? 'hidden' : 'block'
       }`}>
-
-        {/* Action pills — slide up when open */}
-        {open && (
-          <>
-            <button
-              onClick={() => { setOpen(false); setRefund(true); }}
-              className="flex items-center gap-2.5 rounded-full bg-[#0e1420]/95 backdrop-blur border border-[#1e2d40] pl-4 pr-5 py-2.5 shadow-xl"
-            >
-              <BoltIcon className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="text-sm font-medium text-white whitespace-nowrap">Refund Electric Usage</span>
-            </button>
-            <button
-              onClick={() => { setOpen(false); setElectric(true); }}
-              className="flex items-center gap-2.5 rounded-full bg-[#0e1420]/95 backdrop-blur border border-[#1e2d40] pl-4 pr-5 py-2.5 shadow-xl"
-            >
-              <BoltIcon className="w-4 h-4 text-amber-400 shrink-0" />
-              <span className="text-sm font-medium text-white whitespace-nowrap">Log Electric Usage</span>
-            </button>
-            <Link
-              href="/expenses/new"
-              onClick={closeAll}
-              className="flex items-center gap-2.5 rounded-full bg-[#0e1420]/95 backdrop-blur border border-[#1e2d40] pl-4 pr-5 py-2.5 shadow-xl"
-            >
-              <ReceiptIcon className="w-4 h-4 text-blue-400 shrink-0" />
-              <span className="text-sm font-medium text-white whitespace-nowrap">Log Expense</span>
-            </Link>
-          </>
-        )}
-
-        {/* Main button */}
         <button
-          onClick={() => setOpen(v => !v)}
-          className={`flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-200 ${
-            open
-              ? 'bg-white/10 border border-white/10 rotate-45'
-              : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/50'
-          }`}
+          onClick={() => setOpen(true)}
+          aria-label="Log something"
+          className="flex h-14 w-14 items-center justify-center rounded-full shadow-lg bg-blue-600 hover:bg-blue-500 shadow-blue-900/50 transition-colors"
         >
           <PlusIcon className="w-7 h-7 text-white" />
         </button>
       </div>
+
+      {/* Action sheet — every way into the app's data, in one place. Actions
+          that write here open their own modal; the rest hand off to the page
+          that owns the flow rather than duplicating it. */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={closeAll}>
+          <ScrollLock />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
+            onClick={e => e.stopPropagation()}
+            style={swipe.style}
+            {...swipe.handlers}
+          >
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 md:hidden" />
+
+            <div className="flex items-start justify-between mb-5">
+              <p className="font-semibold text-white text-lg">What are you logging?</p>
+              <button onClick={closeAll} className="text-slate-500 hover:text-slate-300 transition-colors">
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5">
+              {ACTIONS.map(a => {
+                const body = (
+                  <>
+                    <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${a.chip}`}>
+                      <a.Icon className={`w-5 h-5 ${a.tint}`} />
+                    </span>
+                    <span className="text-[11px] leading-tight text-center text-slate-300">{a.label}</span>
+                  </>
+                );
+                const cls = 'flex flex-col items-center gap-2 rounded-2xl border border-[#1e2d40] bg-white/5 px-2 py-3.5 transition-colors hover:bg-white/10 active:bg-white/10';
+                return a.href ? (
+                  <Link key={a.label} href={a.href} onClick={closeAll} className={cls}>{body}</Link>
+                ) : (
+                  <button
+                    key={a.label}
+                    onClick={() => {
+                      setOpen(false);
+                      if (a.opens === 'electric') setElectric(true);
+                      if (a.opens === 'refund') setRefund(true);
+                    }}
+                    className={cls}
+                  >
+                    {body}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Refund electric usage modal */}
       {refund && (
