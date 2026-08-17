@@ -17,7 +17,7 @@ interface ActionModal {
 }
 
 export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
-  const { wallets, addIncome, addWithdrawal, addTransfer } = useApp();
+  const { wallets, addIncome, addWithdrawal, addTransfer, settings } = useApp();
   const [modal, setModal] = useState<ActionModal | null>(null);
   const [inputVal, setInputVal] = useState('');
   const [targetId, setTargetId] = useState('');
@@ -50,6 +50,21 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
 
   const others = wallets.filter(w => w.id !== wallet.id);
 
+  // Withdrawing means moving money into the cash wallet, so it is meaningless on
+  // the cash wallet itself and impossible while there is no cash wallet at all.
+  // Transfer still covers both cases.
+  const cashWallet = wallets.find(w => w.id === settings.cashWalletId) ?? null;
+  const canWithdraw = cashWallet !== null && cashWallet.id !== wallet.id;
+
+  const actions = [
+    { label: 'Add', Icon: PlusIcon, action: () => setModal({ type: 'add' as const }) },
+    { label: 'Expense', Icon: ArrowDownIcon, action: onExpense },
+    ...(canWithdraw
+      ? [{ label: 'Withdraw', Icon: ArrowUpIcon, action: () => setModal({ type: 'withdraw' as const }) }]
+      : []),
+    { label: 'Transfer', Icon: SwitchIcon, action: () => setModal({ type: 'transfer' as const }) },
+  ];
+
   return (
     <>
       <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
@@ -77,13 +92,8 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
             )}
           </div>
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: 'Add', Icon: PlusIcon, action: () => setModal({ type: 'add' }) },
-            { label: 'Expense', Icon: ArrowDownIcon, action: onExpense },
-            { label: 'Withdraw', Icon: ArrowUpIcon, action: () => setModal({ type: 'withdraw' }) },
-            { label: 'Transfer', Icon: SwitchIcon, action: () => setModal({ type: 'transfer' }) },
-          ].map(({ label, Icon, action }) => (
+        <div className={`grid gap-2 ${canWithdraw ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {actions.map(({ label, Icon, action }) => (
             <button
               key={label}
               onClick={action}
@@ -106,9 +116,14 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
             style={swipe.style}
             {...swipe.handlers}
           >
-            <p className="mb-4 text-center font-semibold text-white capitalize">
+            <p className={`text-center font-semibold text-white capitalize ${modal.type === 'withdraw' ? 'mb-1' : 'mb-4'}`}>
               {modal.type === 'add' ? 'Add Funds' : modal.type === 'withdraw' ? 'Withdraw' : 'Transfer'}
             </p>
+            {modal.type === 'withdraw' && cashWallet && (
+              <p className="mb-4 text-center text-xs text-slate-500">
+                Moves into {cashWallet.icon} {cashWallet.name} — you still have the money.
+              </p>
+            )}
             <input
               type="number"
               inputMode="decimal"

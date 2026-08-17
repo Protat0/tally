@@ -34,7 +34,11 @@ function ExpenseForm() {
 
   const [input,    setInput]    = useState('0');
   const [category, setCategory] = useState<Category | null>(null);
-  const [walletId, setWalletId] = useState(presetWalletId || (wallets[0]?.id ?? ''));
+  // Cash is what most spending comes out of, so it is the default unless the
+  // caller named a wallet. Falls back to the oldest wallet only if cash is gone.
+  const cashId = settings.cashWalletId;
+  const defaultWalletId = cashId && wallets.some(w => w.id === cashId) ? cashId : (wallets[0]?.id ?? '');
+  const [walletId, setWalletId] = useState(presetWalletId || defaultWalletId);
   const [note,     setNote]     = useState('');
   const [split,     setSplit]     = useState<SplitResult | null>(null);
 

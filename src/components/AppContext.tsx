@@ -27,7 +27,11 @@ export interface Expense {
 
 // Money that moves in or out of a wallet without being a categorised expense.
 //   earned    — money in.  walletId is the destination. `source` is set.
-//   withdrawn — money out. walletId is the source.
+//   withdrawn — cash taken out. walletId is the source, toWalletId the cash
+//               wallet it lands in, so it is net-zero like `moved` and kept out
+//               of spending. Rows written before cash had a destination have a
+//               null toWalletId and still mean the money left; readers branch on
+//               that field, never on the kind alone.
 //   moved     — wallet-to-wallet. walletId → toWalletId. Net-zero overall,
 //               so it is deliberately excluded from earned/spent totals.
 // debt_out / debt_in — a debt board movement. Excluded from earned and spent
@@ -125,6 +129,11 @@ export interface Settings {
   // Wallet the salary lands in. Lets the payday prompt be one tap instead of
   // a form. null = not chosen yet, so the prompt asks which wallet.
   cashflowWalletId: string | null;
+  // The wallet that stands for money in your pocket: the default funding wallet,
+  // and the destination a withdrawal lands in. Every account has one — if this is
+  // null on load the app adopts a wallet already named Cash, or creates one. It
+  // is only null in the moment between deleting that wallet and the next load.
+  cashWalletId: string | null;
   // Which scheduled paydays have been accounted for, keyed by local ISO day.
   // A payday absent from here that is already due is treated as NOT received.
   paydayLog: Record<string, PaydayStatus>;
@@ -321,6 +330,7 @@ function fromDBSettings(r: Row): Partial<Settings> {
     customCategories:   (r.custom_categories || []) as CustomCategory[],
     hiddenCategories:   (r.hidden_categories || []) as string[],
     cashflowWalletId:   (r.cashflow_wallet_id ?? null) as string | null,
+    cashWalletId:       (r.cash_wallet_id ?? null) as string | null,
     paydayLog:          (r.payday_log || {}) as Record<string, PaydayStatus>,
   };
 }
@@ -338,6 +348,7 @@ function toDBSettings(s: Partial<Settings>): Row {
   if ('customCategories'    in s) m.custom_categories     = s.customCategories;
   if ('hiddenCategories'    in s) m.hidden_categories     = s.hiddenCategories;
   if ('cashflowWalletId'    in s) m.cashflow_wallet_id    = s.cashflowWalletId;
+  if ('cashWalletId'        in s) m.cash_wallet_id        = s.cashWalletId;
   if ('paydayLog'           in s) m.payday_log            = s.paydayLog;
   return m;
 }
@@ -401,8 +412,12 @@ const defaultSettings: Settings = {
   customCategories: [],
   hiddenCategories: [],
   cashflowWalletId: null,
+  cashWalletId: null,
   paydayLog: {},
 };
+
+// The wallet seeded for accounts that have never had one.
+const CASH_WALLET = { name: 'Cash', icon: '💵' };
 
 // Days of real data before the observed spending rate is trusted on its own.
 // Below this the projection leans on the user's own budgeted rate instead —
@@ -478,6 +493,33 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     if (dpRes.data) setDebtPeople(dpRes.data.map(fromDBDebtPerson));
     if (deRes.data) setDebtEntries(deRes.data.map(fromDBDebtEntry));
     setDataLoading(false);
+
+    await ensureCashWallet(uid, (wRes.data || []).map(fromDBWallet), sRes.data?.cash_wallet_id ?? null);
+  }
+
+  // Every account has a wallet standing for money in your pocket. Accounts made
+  // before this existed already have one under some name, so an existing wallet
+  // called Cash is adopted rather than duplicated; only an account with none
+  // gets a new one. Runs after the load has painted, so a first-time user sees
+  // their data immediately and the wallet appears a moment later.
+  async function ensureCashWallet(uid: string, loaded: Wallet[], pointer: string | null) {
+    if (pointer && loaded.some(w => w.id === pointer)) return;
+
+    const existing = loaded.find(w => w.name.trim().toLowerCase() === 'cash');
+    if (existing) {
+      setSettings(prev => ({ ...prev, cashWalletId: existing.id }));
+      await supabase.from('settings').update({ cash_wallet_id: existing.id }).eq('user_id', uid);
+      return;
+    }
+
+    const { data } = await supabase.from('wallets')
+      .insert({ user_id: uid, name: CASH_WALLET.name, icon: CASH_WALLET.icon, balance: 0 })
+      .select().single();
+    if (!data) return;
+
+    setWallets(prev => [...prev, fromDBWallet(data)]);
+    setSettings(prev => ({ ...prev, cashWalletId: data.id }));
+    await supabase.from('settings').update({ cash_wallet_id: data.id }).eq('user_id', uid);
   }
 
   // ── Computed ─────────────────────────────────────────────────────────────
@@ -615,6 +657,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     setWallets(prev => prev.filter(w => w.id !== id));
     // Otherwise the payday prompt would prefill a wallet that no longer exists.
     if (settings.cashflowWalletId === id) await updateSettings({ cashflowWalletId: null });
+    // Withdraw hides itself while this is null; the next load seeds a new Cash.
+    if (settings.cashWalletId === id) await updateSettings({ cashWalletId: null });
     await supabase.from('wallets').delete().eq('id', id);
   };
 
@@ -793,10 +837,20 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await updateSettings({ paydayLog: { ...settings.paydayLog, [date]: 'dismissed' } });
   };
 
+  // Withdrawing does not spend the money, it changes where the money is: out of
+  // the bank and into your pocket. So it credits the cash wallet as it debits the
+  // source, and the total balance does not move. Rows written before this landed
+  // carry no destination; they still mean "money left", and every reader below
+  // branches on toWalletId rather than on the kind alone.
   const addWithdrawal = async (m: { walletId: string; amount: number; note: string }) => {
+    const cashId = settings.cashWalletId;
+    if (!cashId || cashId === m.walletId) return;
     await recordMove(
-      { kind: 'withdrawn', amount: m.amount, walletId: m.walletId, toWalletId: null, source: null, note: m.note },
-      { [m.walletId]: balanceOf(m.walletId) - m.amount },
+      { kind: 'withdrawn', amount: m.amount, walletId: m.walletId, toWalletId: cashId, source: null, note: m.note },
+      {
+        [m.walletId]: balanceOf(m.walletId) - m.amount,
+        [cashId]:     balanceOf(cashId)     + m.amount,
+      },
     );
   };
 
@@ -818,11 +872,13 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const updates: Record<string, number> = {};
     if (found.kind === 'earned') {
       updates[found.walletId] = balanceOf(found.walletId) - found.amount;
-    } else if (found.kind === 'withdrawn') {
-      updates[found.walletId] = balanceOf(found.walletId) + found.amount;
     } else if (found.toWalletId) {
+      // Transfers, and withdrawals from the point they started landing in cash.
       updates[found.walletId]   = balanceOf(found.walletId)   + found.amount;
       updates[found.toWalletId] = balanceOf(found.toWalletId) - found.amount;
+    } else if (found.kind === 'withdrawn') {
+      // A withdrawal from before cash had a destination: the money just left.
+      updates[found.walletId] = balanceOf(found.walletId) + found.amount;
     }
 
     setMoneyMoves(prev => prev.filter(m => m.id !== id));
@@ -1364,7 +1420,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       categoryBudgets: {}, customCategories: [], hiddenCategories: [],
       // The wallets it pointed at are gone, and last month's payday answers
       // must not carry into a fresh account.
-      cashflowWalletId: null, paydayLog: {},
+      cashflowWalletId: null, cashWalletId: null, paydayLog: {},
     }));
 
     const own = (table: string) => supabase.from(table).delete().eq('user_id', userId);
@@ -1386,9 +1442,13 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       custom_categories: [],
       hidden_categories: [],
       cashflow_wallet_id: null,
+      cash_wallet_id: null,
       payday_log: {},
       instalment_purchase_lock: false,
     }).eq('user_id', userId);
+
+    // A reset account is a new account, so it gets its Cash wallet back.
+    await ensureCashWallet(userId, [], null);
   };
 
   const refundApplianceUsage = async (id: string, minutes: number) => {

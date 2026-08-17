@@ -26,9 +26,9 @@ function abbrev(n: number): string {
 
 // One row in the unified activity feed. Expenses and money moves are different
 // tables, so they get normalised into this shape before display.
-//   spent — expenses and wallet withdrawals
+//   spent — expenses, and withdrawals from before they landed in cash
 //   earned — wallet top-ups
-//   moved — wallet-to-wallet transfers. Net-zero, so excluded from both totals.
+//   moved — transfers and withdrawals. Net-zero, so excluded from both totals.
 type Flow = 'spent' | 'earned' | 'moved';
 
 interface FeedItem {
@@ -95,6 +95,17 @@ export default function TransactionsPage() {
           };
         }
         if (mm.kind === 'withdrawn') {
+          // A withdrawal now lands in the cash wallet, so it is net-zero like a
+          // transfer and shows both ends. Rows written before that carry no
+          // destination: for them the money really did leave, and they stay spent.
+          if (mm.toWalletId) {
+            return {
+              id: mm.id, date: mm.date, flow: 'moved',
+              icon: '🏧', label: 'Withdrawal',
+              sub: subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId)}`),
+              amount: mm.amount,
+            };
+          }
           return {
             id: mm.id, date: mm.date, flow: 'spent',
             icon: '🏧', label: 'Withdrawal',
