@@ -66,6 +66,35 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   margin-left: 0;
 }
 
+/* The action sheet warps out of the plus button rather than sliding in from
+   nowhere, so the button visibly becomes the panel. Phone only: on desktop the
+   sheet is centred and has no button to grow from. The origin is the FAB's
+   centre measured from the sheet's own bottom-right — right-4 + half of h-14
+   across, bottom-20 + half of h-14 up. */
+@media (max-width: 767px) {
+  @keyframes sheet-warp {
+    from { opacity: 0; transform: scale(0.12); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes scrim-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .warp-panel {
+    transform-origin: calc(100% - 2.75rem) calc(100% - 6.75rem);
+    animation: sheet-warp 260ms cubic-bezier(0.2, 0.9, 0.25, 1);
+  }
+  .warp-scrim {
+    animation: scrim-in 200ms ease-out;
+  }
+}
+
+/* Motion is decoration here; the sheet must still arrive for anyone who has
+   asked the system to keep animation to a minimum. */
+@media (prefers-reduced-motion: reduce) {
+  .warp-panel, .warp-scrim { animation: none; }
+}
+
 ::-webkit-scrollbar {
   width: 3px;
 }

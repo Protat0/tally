@@ -100,9 +100,9 @@ export default function GlobalFAB() {
       {open && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={closeAll}>
           <ScrollLock />
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm warp-scrim" />
           <div
-            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
+            className="warp-panel relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
             onClick={e => e.stopPropagation()}
             style={swipe.style}
             {...swipe.handlers}
