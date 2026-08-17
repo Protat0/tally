@@ -111,7 +111,10 @@ export default function GlobalFAB() {
 
             <div className="flex items-start justify-between mb-5">
               <p className="font-semibold text-white text-lg">What are you logging?</p>
-              <button onClick={closeAll} className="text-slate-500 hover:text-slate-300 transition-colors">
+              {/* Desktop only: on a phone the grab handle, the swipe down and the
+                  tap outside all already close this, and a target in the far
+                  corner is the worst of the four to reach. */}
+              <button onClick={closeAll} className="hidden md:block text-slate-500 hover:text-slate-300 transition-colors">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -162,7 +165,7 @@ export default function GlobalFAB() {
 
             <div className="flex items-start justify-between mb-4">
               <p className="font-semibold text-white text-lg">Electric Usage</p>
-              <button onClick={closeAll} className="text-slate-500 hover:text-slate-300 transition-colors">
+              <button onClick={closeAll} className="hidden md:block text-slate-500 hover:text-slate-300 transition-colors">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
