@@ -131,8 +131,8 @@ export interface Settings {
   cashflowWalletId: string | null;
   // The wallet that stands for money in your pocket: the default funding wallet,
   // and the destination a withdrawal lands in. Every account has one — if this is
-  // null on load the app adopts a wallet already named Cash, or creates one. It
-  // is only null in the moment between deleting that wallet and the next load.
+  // null on load the app adopts a wallet already named Cash, or creates one — and
+  // it cannot be deleted, so this is only null before an account has been seeded.
   cashWalletId: string | null;
   // Which scheduled paydays have been accounted for, keyed by local ISO day.
   // A payday absent from here that is already due is treated as NOT received.
@@ -654,11 +654,12 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   };
 
   const deleteWallet = async (id: string) => {
+    // The cash wallet cannot be deleted. The Wallets page gives it no delete
+    // control, and this guard means no other caller can take it away either.
+    if (id === settings.cashWalletId) return;
     setWallets(prev => prev.filter(w => w.id !== id));
     // Otherwise the payday prompt would prefill a wallet that no longer exists.
     if (settings.cashflowWalletId === id) await updateSettings({ cashflowWalletId: null });
-    // Withdraw hides itself while this is null; the next load seeds a new Cash.
-    if (settings.cashWalletId === id) await updateSettings({ cashWalletId: null });
     await supabase.from('wallets').delete().eq('id', id);
   };
 

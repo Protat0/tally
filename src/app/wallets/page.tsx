@@ -84,7 +84,14 @@ export default function WalletsPage() {
                   key={wallet.id}
                   wallet={wallet}
                   onExpense={() => router.push(`/expenses/new?walletId=${wallet.id}`)}
-                  onDelete={() => setConfirmDelete(wallet.id)}
+                  // The cash wallet is a fixture of the account: it is the default
+                  // funding wallet and the place withdrawals land, so it has no
+                  // delete control. Omitting the handler hides the trash entirely.
+                  onDelete={
+                    wallet.id === settings.cashWalletId
+                      ? undefined
+                      : () => setConfirmDelete(wallet.id)
+                  }
                 />
               ))}
             </div>
