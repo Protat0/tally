@@ -41,7 +41,7 @@ export default function Dashboard() {
     untrackedDays, blindSpend, assumedSpending,
     spendingPacePercent, daysUntilPayday, nextPaydayDate,
     electricBillEstimate, emergencyFund,
-    totalExpensesThisMonth, toggleAppliance, setAppliancePinned,
+    totalSpentThisMonth, toggleAppliance, setAppliancePinned,
   } = useApp();
 
   // Live ticker — keeps appliance costs fresh every 10 s
@@ -179,7 +179,7 @@ export default function Dashboard() {
                 <div className="mt-3 space-y-1.5 rounded-xl bg-black/20 px-3 py-3 text-xs text-slate-400">
                   <Row label="Income counted" value={fmt(projectedSavings + totalBills + assumedSpending, currency)} />
                   <Row label="Bills" value={`− ${fmt(totalBills, currency)}`} />
-                  <Row label="Logged so far" value={`− ${fmt(totalExpensesThisMonth, currency)}`} />
+                  <Row label="Logged so far" value={`− ${fmt(totalSpentThisMonth, currency)}`} />
                   {untrackedDays > 0 && (
                     <Row
                       label={`${monthLabel} 1–${untrackedDays} untracked`}
@@ -187,7 +187,7 @@ export default function Dashboard() {
                       hint="charged at your budget rate, not counted as zero"
                     />
                   )}
-                  <Row label="Rest of month, at your pace" value={`− ${fmt(assumedSpending - totalExpensesThisMonth - blindSpend, currency)}`} />
+                  <Row label="Rest of month, at your pace" value={`− ${fmt(assumedSpending - totalSpentThisMonth - blindSpend, currency)}`} />
                 </div>
               )}
             </div>
@@ -226,7 +226,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mt-3">
                 <p className="text-xs text-slate-500">{paceLabel(spendingPacePercent)}</p>
                 <p className="text-xs text-slate-500">
-                  {fmt(totalExpensesThisMonth, currency)} / {fmt(expectedSoFar, currency)}
+                  {fmt(totalSpentThisMonth, currency)} / {fmt(expectedSoFar, currency)}
                 </p>
               </div>
             </div>

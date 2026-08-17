@@ -22,10 +22,11 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
   const [inputVal, setInputVal] = useState('');
   const [targetId, setTargetId] = useState('');
   const [note, setNote] = useState('');
+  const [feeVal, setFeeVal] = useState('');
   const [source, setSource] = useState<IncomeSource>('salary');
 
   const closeModal = () => {
-    setModal(null); setInputVal(''); setTargetId(''); setNote(''); setSource('salary');
+    setModal(null); setInputVal(''); setTargetId(''); setNote(''); setFeeVal(''); setSource('salary');
   };
 
   const swipe = useSwipeToClose(closeModal);
@@ -34,13 +35,17 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
     const amt = parseFloat(inputVal);
     if (isNaN(amt) || amt <= 0) return;
     const trimmed = note.trim();
+    // Blank, junk or negative all mean no fee. It is charged on top of the
+    // amount, so a stray minus must never quietly credit the wallet.
+    const parsedFee = parseFloat(feeVal);
+    const fee = isNaN(parsedFee) || parsedFee <= 0 ? 0 : parsedFee;
     if (modal?.type === 'add') {
       addIncome({ walletId: wallet.id, amount: amt, source, note: trimmed });
     } else if (modal?.type === 'withdraw') {
-      addWithdrawal({ walletId: wallet.id, amount: amt, note: trimmed });
+      addWithdrawal({ walletId: wallet.id, amount: amt, note: trimmed, fee });
     } else if (modal?.type === 'transfer') {
       if (!targetId) return;
-      addTransfer({ fromWalletId: wallet.id, toWalletId: targetId, amount: amt, note: trimmed });
+      addTransfer({ fromWalletId: wallet.id, toWalletId: targetId, amount: amt, note: trimmed, fee });
     }
     closeModal();
   };
@@ -168,6 +173,17 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
                   ))
                 )}
               </div>
+            )}
+
+            {(modal.type === 'withdraw' || modal.type === 'transfer') && (
+              <input
+                type="number"
+                inputMode="decimal"
+                value={feeVal}
+                onChange={e => setFeeVal(e.target.value)}
+                placeholder="Fee (optional)"
+                className="mb-3 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 text-sm outline-none focus:border-blue-500/50"
+              />
             )}
 
             <input

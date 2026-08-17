@@ -34,6 +34,10 @@ type Flow = 'spent' | 'earned' | 'moved';
 interface FeedItem {
   id: string; date: string; flow: Flow;
   icon: string; label: string; sub: string; amount: number;
+  // A bank fee paid on top of `amount`. It counts as spent even when the move
+  // itself is net-zero, which is why the day totals below cannot skip `moved`
+  // rows outright.
+  fee?: number;
 }
 
 export default function TransactionsPage() {
@@ -69,6 +73,10 @@ export default function TransactionsPage() {
   // Join a note and a wallet name into the one-line subtitle, skipping blanks.
   const subtitle = (note: string, wallet: string) => [note, wallet].filter(Boolean).join(' · ');
 
+  // A fee only earns a mention when there was one.
+  const withFee = (sub: string, fee: number) =>
+    fee > 0 ? [sub, `${fmt(fee, currency)} fee`].filter(Boolean).join(' · ') : sub;
+
   // Everything in the displayed month, normalised and bucketed by day.
   const { monthItems, totals, monthSpent, monthEarned } = useMemo(() => {
     const inMonth = (iso: string) => {
@@ -102,8 +110,8 @@ export default function TransactionsPage() {
             return {
               id: mm.id, date: mm.date, flow: 'moved',
               icon: '🏧', label: 'Withdrawal',
-              sub: subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId)}`),
-              amount: mm.amount,
+              sub: withFee(subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId)}`), mm.fee),
+              amount: mm.amount, fee: mm.fee,
             };
           }
           return {
@@ -127,8 +135,8 @@ export default function TransactionsPage() {
         return {
           id: mm.id, date: mm.date, flow: 'moved',
           icon: '🔄', label: 'Transfer',
-          sub: subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId ?? '')}`),
-          amount: mm.amount,
+          sub: withFee(subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId ?? '')}`), mm.fee),
+          amount: mm.amount, fee: mm.fee,
         };
       }),
     ];
@@ -137,15 +145,18 @@ export default function TransactionsPage() {
     // counting them either way would misreport the month.
     const totals: Record<string, { spent: number; earned: number }> = {};
     for (const it of items) {
-      if (it.flow === 'moved') continue;
       const k = dayKey(new Date(it.date));
+      // The fee on a transfer or withdrawal is real spending even though the
+      // move itself nets to zero, so it lands in the day's spent column.
+      if (it.fee) (totals[k] ??= { spent: 0, earned: 0 }).spent += it.fee;
+      if (it.flow === 'moved') continue;
       (totals[k] ??= { spent: 0, earned: 0 })[it.flow] += it.amount;
     }
 
     return {
       monthItems: items,
       totals,
-      monthSpent:  items.filter(i => i.flow === 'spent').reduce((s, i) => s + i.amount, 0),
+      monthSpent:  items.reduce((s, i) => s + (i.flow === 'spent' ? i.amount : 0) + (i.fee ?? 0), 0),
       monthEarned: items.filter(i => i.flow === 'earned').reduce((s, i) => s + i.amount, 0),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

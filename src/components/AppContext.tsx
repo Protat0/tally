@@ -51,6 +51,10 @@ export const INCOME_SOURCES: { key: IncomeSource; label: string; icon: string }[
 export interface MoneyMove {
   id: string; kind: MoneyMoveKind; amount: number;
   walletId: string; toWalletId: string | null;
+  // What the bank kept for making the move. Charged to the source wallet on top
+  // of the amount, so the destination still receives the full amount. Unlike the
+  // amount itself this money is gone, so it counts as spending. 0 when free.
+  fee: number;
   source: IncomeSource | null; note: string; date: string;
 }
 
@@ -156,7 +160,8 @@ interface EmergencyFund {
 
 interface Computed {
   totalBalance: number;
-  totalExpensesThisMonth: number;
+  /** Expenses logged this month plus any bank fees paid on moves. */
+  totalSpentThisMonth: number;
   receivedThisMonth: number;
   /**
    * End-of-month savings, deliberately conservative. Every error term in the
@@ -211,8 +216,9 @@ interface AppContextValue extends Computed {
   confirmPayday: (date: string, amount: number, walletId: string) => Promise<void>;
   /** Stop counting and stop asking about a due payday. */
   dismissPayday: (date: string) => Promise<void>;
-  addWithdrawal: (m: { walletId: string; amount: number; note: string }) => Promise<void>;
-  addTransfer: (m: { fromWalletId: string; toWalletId: string; amount: number; note: string }) => Promise<void>;
+  /** `fee` is charged to the source on top of `amount`; the destination gets the full amount. */
+  addWithdrawal: (m: { walletId: string; amount: number; note: string; fee?: number }) => Promise<void>;
+  addTransfer: (m: { fromWalletId: string; toWalletId: string; amount: number; note: string; fee?: number }) => Promise<void>;
   deleteMoneyMove: (id: string) => Promise<void>;
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
   addInstalmentPayment: (p: Omit<InstalmentPayment, 'id'>) => Promise<void>;
@@ -377,6 +383,7 @@ const fromDBExpense    = (r: Row): Expense    => ({
 const fromDBMoneyMove  = (r: Row): MoneyMove  => ({
   id: r.id, kind: r.kind as MoneyMoveKind, amount: Number(r.amount),
   walletId: r.wallet_id, toWalletId: r.to_wallet_id ?? null,
+  fee: Number(r.fee) || 0,
   source: (r.source ?? null) as IncomeSource | null,
   note: r.note || '', date: r.date,
 });
@@ -530,7 +537,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       const d = new Date(e.date);
       return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
     });
-    const totalExpensesThisMonth = monthExpenses.reduce((s, e) => s + e.amount, 0);
+    // Bank fees are not categorised expenses, but the money is gone all the same,
+    // so every spending figure below counts them alongside what you bought.
+    const feesThisMonth = moneyMoves
+      .filter(mm => {
+        const d = new Date(mm.date);
+        return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+      })
+      .reduce((s, mm) => s + mm.fee, 0);
+    const totalSpentThisMonth = monthExpenses.reduce((s, e) => s + e.amount, 0) + feesThisMonth;
     // Actual money received this month. Kept separate from settings.monthlyIncome
     // (the planned figure) — no budget formula below reads this.
     const receivedThisMonth = moneyMoves
@@ -581,27 +596,27 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       0, settings.monthlyIncome - totalBills - settings.monthlySavingsTarget,
     ) / daysInMonth;
     const blindSpend = untrackedDays * budgetRate;
-    const observedRate = totalExpensesThisMonth / trackedDays;
+    const observedRate = totalSpentThisMonth / trackedDays;
     const w = Math.min(trackedDays, RATE_RAMP_DAYS) / RATE_RAMP_DAYS;
     const rate = w * observedRate + (1 - w) * budgetRate;
-    const assumedSpending = totalExpensesThisMonth + blindSpend + remainingDays * rate;
+    const assumedSpending = totalSpentThisMonth + blindSpend + remainingDays * rate;
 
     const projectedSavings = projectedIncome - totalBills - assumedSpending;
     // Everything goes right: the due paydays did land, and nothing more is spent.
     const optimisticSavings =
-      (projectedIncome + unconfirmedIncome) - totalBills - (totalExpensesThisMonth + blindSpend);
+      (projectedIncome + unconfirmedIncome) - totalBills - (totalSpentThisMonth + blindSpend);
 
     // Pace counts the blind days too, so this card and the projection tell the
     // same story instead of contradicting each other.
     const discretionary = settings.monthlyIncome - totalBills;
     const expectedSoFar = discretionary * (daysElapsed / daysInMonth);
     const spendingPacePercent = expectedSoFar > 0
-      ? ((totalExpensesThisMonth + blindSpend) / expectedSoFar) * 100
+      ? ((totalSpentThisMonth + blindSpend) / expectedSoFar) * 100
       : 0;
     const nextPaydayDate = computeNextPayday(settings);
     const pending = instalmentSchedule.filter(p => p.status !== 'paid');
     return {
-      totalBalance, totalExpensesThisMonth, receivedThisMonth, projectedSavings, spendingPacePercent,
+      totalBalance, totalSpentThisMonth, receivedThisMonth, projectedSavings, spendingPacePercent,
       optimisticSavings, unconfirmedIncome, pendingPaydays,
       untrackedDays, trackedDays, blindSpend, assumedSpending,
       daysUntilPayday: daysUntil(nextPaydayDate ? new Date(nextPaydayDate) : null),
@@ -787,7 +802,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // Every balance change outside of expenses goes through here so it leaves a
   // record. Balances are applied optimistically, then persisted alongside the row.
   const recordMove = async (
-    move: Omit<MoneyMove, 'id' | 'date'>,
+    // Only withdrawals and transfers can carry a fee; the rest omit it.
+    move: Omit<MoneyMove, 'id' | 'date' | 'fee'> & { fee?: number },
     balanceUpdates: Record<string, number>,
     date?: string,
   ): Promise<string | null> => {
@@ -796,14 +812,14 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const now = date ?? new Date().toISOString();
     const tempId = crypto.randomUUID();
 
-    setMoneyMoves(prev => [{ ...move, id: tempId, date: now }, ...prev]);
+    setMoneyMoves(prev => [{ ...move, fee: move.fee ?? 0, id: tempId, date: now }, ...prev]);
     setWallets(prev => prev.map(w => w.id in balanceUpdates ? { ...w, balance: balanceUpdates[w.id] } : w));
 
     const [moveRes] = await Promise.all([
       supabase.from('money_moves').insert({
         user_id: userId, kind: move.kind, amount: move.amount,
         wallet_id: move.walletId, to_wallet_id: move.toWalletId,
-        source: move.source, note: move.note, date: now,
+        fee: move.fee ?? 0, source: move.source, note: move.note, date: now,
       }).select().single(),
       ...Object.entries(balanceUpdates).map(([id, balance]) =>
         supabase.from('wallets').update({ balance }).eq('id', id)
@@ -843,23 +859,25 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // source, and the total balance does not move. Rows written before this landed
   // carry no destination; they still mean "money left", and every reader below
   // branches on toWalletId rather than on the kind alone.
-  const addWithdrawal = async (m: { walletId: string; amount: number; note: string }) => {
+  const addWithdrawal = async (m: { walletId: string; amount: number; note: string; fee?: number }) => {
     const cashId = settings.cashWalletId;
     if (!cashId || cashId === m.walletId) return;
+    const fee = m.fee ?? 0;
     await recordMove(
-      { kind: 'withdrawn', amount: m.amount, walletId: m.walletId, toWalletId: cashId, source: null, note: m.note },
+      { kind: 'withdrawn', amount: m.amount, walletId: m.walletId, toWalletId: cashId, fee, source: null, note: m.note },
       {
-        [m.walletId]: balanceOf(m.walletId) - m.amount,
+        [m.walletId]: balanceOf(m.walletId) - m.amount - fee,
         [cashId]:     balanceOf(cashId)     + m.amount,
       },
     );
   };
 
-  const addTransfer = async (m: { fromWalletId: string; toWalletId: string; amount: number; note: string }) => {
+  const addTransfer = async (m: { fromWalletId: string; toWalletId: string; amount: number; note: string; fee?: number }) => {
+    const fee = m.fee ?? 0;
     await recordMove(
-      { kind: 'moved', amount: m.amount, walletId: m.fromWalletId, toWalletId: m.toWalletId, source: null, note: m.note },
+      { kind: 'moved', amount: m.amount, walletId: m.fromWalletId, toWalletId: m.toWalletId, fee, source: null, note: m.note },
       {
-        [m.fromWalletId]: balanceOf(m.fromWalletId) - m.amount,
+        [m.fromWalletId]: balanceOf(m.fromWalletId) - m.amount - fee,
         [m.toWalletId]:   balanceOf(m.toWalletId)   + m.amount,
       },
     );
@@ -875,7 +893,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       updates[found.walletId] = balanceOf(found.walletId) - found.amount;
     } else if (found.toWalletId) {
       // Transfers, and withdrawals from the point they started landing in cash.
-      updates[found.walletId]   = balanceOf(found.walletId)   + found.amount;
+      // The source paid the fee on top, so undoing gives that back as well.
+      updates[found.walletId]   = balanceOf(found.walletId)   + found.amount + found.fee;
       updates[found.toWalletId] = balanceOf(found.toWalletId) - found.amount;
     } else if (found.kind === 'withdrawn') {
       // A withdrawal from before cash had a destination: the money just left.
