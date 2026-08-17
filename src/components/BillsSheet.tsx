@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useApp, fmt, Bill, currentYYYYMM } from './AppContext';
 import BottomSheet from './BottomSheet';
+import WalletPicker from './WalletPicker';
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon } from './Icons';
 
 function uid() { return crypto.randomUUID(); }
@@ -15,18 +16,36 @@ interface Props {
 // Full recurring-bills management, lifted out of the Budget page so the page
 // only has to render a tile summarising it.
 export default function BillsSheet({ onClose, onEditBill }: Props) {
-  const { settings, updateSettings, toggleBillPaid } = useApp();
+  const { settings, updateSettings, markBillPaid, unmarkBillPaid, wallets } = useApp();
   const { bills, currency } = settings;
 
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState('');
   const [amt, setAmt] = useState('');
+  // The bill mid-payment, and the wallet it will come out of. Paying is real
+  // spending, so it takes a confirm step rather than happening on the tick.
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [payWalletId, setPayWalletId] = useState('');
+  const [paying, setPaying] = useState(false);
+
+  const startPaying = (billId: string) => {
+    setPayingId(billId);
+    setPayWalletId(settings.cashWalletId ?? '');
+  };
+
+  const confirmPay = async () => {
+    if (!payingId || !payWalletId || paying) return;
+    setPaying(true);
+    await markBillPaid(payingId, payWalletId);
+    setPaying(false);
+    setPayingId(null);
+  };
 
   const total = bills.reduce((s, b) => s + b.amount, 0);
 
   const handleAdd = () => {
     if (!name.trim() || !amt) return;
-    const bill: Bill = { id: uid(), name: name.trim(), amount: parseFloat(amt), paidMonths: [] };
+    const bill: Bill = { id: uid(), name: name.trim(), amount: parseFloat(amt), paidMonths: [], paidExpenseIds: {} };
     updateSettings({ bills: [...bills, bill] });
     setName(''); setAmt(''); setAddOpen(false);
   };
@@ -55,19 +74,23 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
 
         {bills.map(b => {
           const isPaid = b.paidMonths.includes(currentYYYYMM());
+          const isPaying = payingId === b.id;
           return (
             <div
               key={b.id}
-              className={`flex items-center gap-2 rounded-xl border px-4 py-3 transition-colors ${
-                isPaid ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-white/5 border-[#1e2d40]'
+              className={`rounded-xl border px-4 py-3 transition-colors ${
+                isPaid ? 'bg-emerald-500/5 border-emerald-500/20'
+                  : isPaying ? 'bg-white/5 border-blue-500/40'
+                    : 'bg-white/5 border-[#1e2d40]'
               }`}
             >
+            <div className="flex items-center gap-2">
               <p className={`flex-1 text-sm min-w-0 truncate ${isPaid ? 'text-slate-500' : 'text-white'}`}>
                 {b.name}
               </p>
               <p className="text-sm font-medium text-slate-300 shrink-0">{fmt(b.amount, currency)}</p>
               <button
-                onClick={() => toggleBillPaid(b.id)}
+                onClick={() => (isPaid ? unmarkBillPaid(b.id) : isPaying ? setPayingId(null) : startPaying(b.id))}
                 title={isPaid ? 'Mark unpaid' : 'Mark as paid'}
                 className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors shrink-0 ${
                   isPaid
@@ -85,6 +108,27 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
                 className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
                 <TrashIcon className="w-3.5 h-3.5 text-red-400/60 hover:text-red-400" />
               </button>
+            </div>
+
+            {isPaying && (
+              <div className="mt-3 border-t border-[#1e2d40] pt-3">
+                {wallets.length === 0 ? (
+                  <p className="text-xs text-slate-500">No wallets yet — add one before paying a bill.</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-500 mb-2">Paid from</p>
+                    <WalletPicker value={payWalletId} onChange={setPayWalletId} />
+                    <button
+                      onClick={confirmPay}
+                      disabled={!payWalletId || paying}
+                      className="mt-3 w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+                    >
+                      Log {fmt(b.amount, currency)} as paid
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             </div>
           );
         })}

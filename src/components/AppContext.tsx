@@ -89,6 +89,10 @@ export function netOf(entries: DebtEntry[]): number {
 export interface Bill {
   id: string; name: string; amount: number;
   paidMonths: string[]; // 'YYYY-MM' strings — resets each month naturally
+  // Which expense each month's payment created, keyed by the same 'YYYY-MM'.
+  // Unticking a month deletes that expense and refunds the wallet. Months
+  // ticked before payments recorded an expense simply have no entry here.
+  paidExpenseIds: Record<string, string>;
 }
 
 export interface BudgetLine {
@@ -209,7 +213,8 @@ interface AppContextValue extends Computed {
     walletId: string | null;                          // null = a person paid
     paidByPersonId?: string | null;                   // set when walletId is null
     owedToMe?: { personId: string; amount: number }[];// set when a wallet paid
-  }) => Promise<void>;
+    /** The new expense's id, or null when nothing was written. */
+  }) => Promise<string | null>;
   deleteExpense: (id: string) => Promise<boolean>;
   addIncome: (m: { walletId: string; amount: number; source: IncomeSource; note: string }) => Promise<void>;
   /** Record a due payday as received: writes an `earned` move and logs the date. */
@@ -233,7 +238,8 @@ interface AppContextValue extends Computed {
   logApplianceUsage: (id: string, minutes: number) => Promise<void>;
   refundApplianceUsage: (id: string, minutes: number) => Promise<void>;
   setAppliancePinned: (id: string, pinned: boolean) => Promise<void>;
-  toggleBillPaid: (id: string) => Promise<void>;
+  markBillPaid: (id: string, walletId: string) => Promise<void>;
+  unmarkBillPaid: (id: string) => Promise<void>;
   updateBill: (id: string, updates: { name?: string; amount?: number }) => Promise<void>;
   resetBalances: (walletBalances: Record<string, number>) => Promise<void>;
   resetAccount: () => Promise<void>;
@@ -363,6 +369,7 @@ const fromDBWallet     = (r: Row): Wallet     => ({ id: r.id, name: r.name, icon
 const fromDBBill       = (r: Row): Bill       => ({
   id: r.id, name: r.name, amount: Number(r.amount),
   paidMonths: (r.paid_months as string[]) || [],
+  paidExpenseIds: (r.paid_expense_ids as Record<string, string>) || {},
 });
 const fromDBBudgetLine = (r: Row): BudgetLine => ({
   id: r.id, name: r.name, icon: r.icon,
@@ -690,8 +697,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     walletId: string | null;
     paidByPersonId?: string | null;
     owedToMe?: { personId: string; amount: number }[];
-  }) => {
-    if (!userId) return;
+    // Returns the new expense's id so a caller that has to remember the
+    // expense it caused — a bill being ticked paid — can undo it later.
+  }): Promise<string | null> => {
+    if (!userId) return null;
     const owed = e.walletId ? (e.owedToMe ?? []) : [];
     const myShare = round2(e.walletId
       ? e.amount - owed.reduce((s, o) => s + o.amount, 0)
@@ -700,7 +709,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // Over-allocating is incoherent: more is owed back to you than was paid out.
     // The UI blocks it, but this is a money boundary and it defends itself rather
     // than trusting every future caller.
-    if (myShare < 0) return;
+    if (myShare < 0) return null;
 
     const now = new Date().toISOString();
 
@@ -762,6 +771,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
         walletId: null, expenseId,
       });
     }
+
+    return expenseId;
   };
 
   // Returns false when it refuses. The linked rows exist only because of this
@@ -1338,19 +1349,53 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('appliances').update({ pinned_to_home: pinned }).eq('id', id);
   };
 
-  const toggleBillPaid = async (id: string) => {
+  // Paying a bill is spending, so ticking one writes a real expense against the
+  // wallet the money came from rather than only flipping a flag. The tick
+  // follows the expense: if the write fails there is nothing to mark paid with.
+  const markBillPaid = async (id: string, walletId: string) => {
     const month = currentYYYYMM();
     const bill = settings.bills.find(b => b.id === id);
-    if (!bill) return;
-    const isPaid = bill.paidMonths.includes(month);
-    const newPaidMonths = isPaid
-      ? bill.paidMonths.filter(m => m !== month)
-      : [...bill.paidMonths, month];
+    if (!bill || bill.paidMonths.includes(month)) return;
+
+    const expenseId = await addExpense({
+      amount: bill.amount, category: 'bills', note: bill.name, walletId,
+    });
+    if (!expenseId) return;
+
+    const paidMonths = [...bill.paidMonths, month];
+    const paidExpenseIds = { ...bill.paidExpenseIds, [month]: expenseId };
     setSettings(prev => ({
       ...prev,
-      bills: prev.bills.map(b => b.id === id ? { ...b, paidMonths: newPaidMonths } : b),
+      bills: prev.bills.map(b => b.id === id ? { ...b, paidMonths, paidExpenseIds } : b),
     }));
-    await supabase.from('bills').update({ paid_months: newPaidMonths }).eq('id', id);
+    await supabase.from('bills')
+      .update({ paid_months: paidMonths, paid_expense_ids: paidExpenseIds })
+      .eq('id', id);
+  };
+
+  // Unticking undoes the payment. deleteExpense refunds the wallet, so the only
+  // thing tracked here is which expense to take back.
+  const unmarkBillPaid = async (id: string) => {
+    const month = currentYYYYMM();
+    const bill = settings.bills.find(b => b.id === id);
+    if (!bill || !bill.paidMonths.includes(month)) return;
+
+    const expenseId = bill.paidExpenseIds[month];
+    // A refusal means the expense is load-bearing — a debt settled against it —
+    // and unticking would strand that. Leave the bill paid and say nothing
+    // changed rather than half-undoing it.
+    if (expenseId && !(await deleteExpense(expenseId))) return;
+
+    const paidMonths = bill.paidMonths.filter(m => m !== month);
+    const paidExpenseIds = { ...bill.paidExpenseIds };
+    delete paidExpenseIds[month];
+    setSettings(prev => ({
+      ...prev,
+      bills: prev.bills.map(b => b.id === id ? { ...b, paidMonths, paidExpenseIds } : b),
+    }));
+    await supabase.from('bills')
+      .update({ paid_months: paidMonths, paid_expense_ids: paidExpenseIds })
+      .eq('id', id);
   };
 
   const updateBill = async (id: string, updates: { name?: string; amount?: number }) => {
@@ -1500,7 +1545,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       setInstalmentNewPurchaseLock,
       addEmergencyFundEntry,
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
-      toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, toggleBillPaid,
+      toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, markBillPaid, unmarkBillPaid,
       updateBill,
       resetBalances, resetAccount,
       debtPeople, debtEntries,
