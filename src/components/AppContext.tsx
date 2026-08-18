@@ -1357,11 +1357,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       await supabase.from('money_moves').delete().eq('id', existingMoveId);
       moveId = null;
     } else if (existingMoveId && walletId) {
+      // The movement's note is deliberately left alone. It is a label its
+      // creator chose — "Spotted John", "John paid you", "Paid John back" —
+      // not the entry's own note, and overwriting it with the entry's would
+      // leave the feed row describing nothing at all.
       setMoneyMoves(prev => prev.map(m => m.id === existingMoveId ? {
-        ...m, amount: next.amount, walletId, note: next.note, date, updatedAt: editedAt,
+        ...m, amount: next.amount, walletId, date, updatedAt: editedAt,
       } : m));
       await supabase.from('money_moves').update({
-        amount: next.amount, wallet_id: walletId, note: next.note,
+        amount: next.amount, wallet_id: walletId,
         date, updated_at: editedAt,
       }).eq('id', existingMoveId);
     } else if (walletId) {
