@@ -2,14 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useApp, fmt, Category, INCOME_SOURCES } from '@/components/AppContext';
+import { useApp, fmt, INCOME_SOURCES } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
+import ActivityRow, { FeedItem, RowSource } from '@/components/ActivityRow';
+import EditEntrySheet from '@/components/EditEntrySheet';
+import { categoryMeta } from '@/lib/categories';
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, ReceiptIcon } from '@/components/Icons';
-
-const CATEGORY_ICONS: Record<Category, string> = {
-  food: '🍜', transport: '🚗', bills: '💡', shopping: '🛍️', health: '💊', other: '✦',
-};
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -24,29 +23,26 @@ function abbrev(n: number): string {
   return String(Math.round(n));
 }
 
-// One row in the unified activity feed. Expenses and money moves are different
-// tables, so they get normalised into this shape before display.
-//   spent — expenses, and withdrawals from before they landed in cash
-//   earned — wallet top-ups
-//   moved — transfers and withdrawals. Net-zero, so excluded from both totals.
-type Flow = 'spent' | 'earned' | 'moved';
-
-interface FeedItem {
-  id: string; date: string; flow: Flow;
-  icon: string; label: string; sub: string; amount: number;
-  // A bank fee paid on top of `amount`. It counts as spent even when the move
-  // itself is net-zero, which is why the day totals below cannot skip `moved`
-  // rows outright.
-  fee?: number;
-}
+// Expenses and money moves are different tables, so they are normalised into
+// the feed's shape (FeedItem, defined with the row that renders it) before
+// display. Each carries a `source` saying what it really is, so editing and
+// deleting can route back to the right table.
 
 export default function TransactionsPage() {
-  const { expenses, moneyMoves, wallets, settings, debtEntries, debtPeople } = useApp();
+  const {
+    expenses, moneyMoves, wallets, settings, debtEntries, debtPeople,
+    deleteExpense, deleteMoneyMove, deleteDebtEntry, reverseSettleBatch,
+  } = useApp();
   const { currency } = settings;
 
   const today = new Date();
   const [viewMonth, setViewMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // Only one row may have its actions open, so the page owns which — a hook
+  // per row could not enforce that.
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<RowSource | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const y = viewMonth.getFullYear();
   const m = viewMonth.getMonth();
@@ -63,11 +59,15 @@ export default function TransactionsPage() {
     return person ? `paid by ${person.name}` : '';
   };
 
-  // Resolve a category key (built-in or user-defined) to its icon + label.
-  const catMeta = (key: string): { icon: string; label: string } => {
-    const custom = settings.customCategories.find(c => c.key === key);
-    if (custom) return { icon: custom.icon, label: custom.label };
-    return { icon: CATEGORY_ICONS[key] ?? '✦', label: key };
+  const catMeta = (key: string) => categoryMeta(key, settings.customCategories);
+
+  // A debt movement is always owned by a debt entry: either the one that
+  // created it, or every entry in the settle-up batch it closed. Which one
+  // decides whether the row can be edited at all.
+  const debtSource = (moveId: string): RowSource => {
+    const created = debtEntries.find(d => d.moveId === moveId);
+    if (created) return { kind: 'debt', entryId: created.id };
+    return { kind: 'settle', settleMoveId: moveId };
   };
 
   // Join a note and a wallet name into the one-line subtitle, skipping blanks.
@@ -91,6 +91,8 @@ export default function TransactionsPage() {
         label: catMeta(e.category).label,
         sub: subtitle(e.note, fundedBy(e)),
         amount: e.amount,
+        updatedAt: e.updatedAt,
+        source: { kind: 'expense', id: e.id },
       })),
       ...moneyMoves.filter(mm => inMonth(mm.date)).map((mm): FeedItem => {
         if (mm.kind === 'earned') {
@@ -100,6 +102,8 @@ export default function TransactionsPage() {
             icon: src?.icon ?? '✦', label: src?.label ?? 'Income',
             sub: subtitle(mm.note, walletName(mm.walletId)),
             amount: mm.amount,
+            updatedAt: mm.updatedAt,
+            source: { kind: 'move', id: mm.id },
           };
         }
         if (mm.kind === 'withdrawn') {
@@ -112,6 +116,8 @@ export default function TransactionsPage() {
               icon: '🏧', label: 'Withdrawal',
               sub: withFee(subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId)}`), mm.fee),
               amount: mm.amount, fee: mm.fee,
+              updatedAt: mm.updatedAt,
+              source: { kind: 'move', id: mm.id },
             };
           }
           return {
@@ -119,6 +125,8 @@ export default function TransactionsPage() {
             icon: '🏧', label: 'Withdrawal',
             sub: subtitle(mm.note, walletName(mm.walletId)),
             amount: mm.amount,
+            updatedAt: mm.updatedAt,
+            source: { kind: 'move', id: mm.id },
           };
         }
         if (mm.kind === 'debt_out' || mm.kind === 'debt_in') {
@@ -130,6 +138,8 @@ export default function TransactionsPage() {
             icon: '🤝', label: 'Debt',
             sub: subtitle(mm.note, walletName(mm.walletId)),
             amount: mm.amount,
+            updatedAt: mm.updatedAt,
+            source: debtSource(mm.id),
           };
         }
         return {
@@ -137,6 +147,8 @@ export default function TransactionsPage() {
           icon: '🔄', label: 'Transfer',
           sub: withFee(subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId ?? '')}`), mm.fee),
           amount: mm.amount, fee: mm.fee,
+          updatedAt: mm.updatedAt,
+          source: { kind: 'move', id: mm.id },
         };
       }),
     ];
@@ -198,6 +210,22 @@ export default function TransactionsPage() {
   };
 
   const toggleDay = (key: string) => setSelectedKey(prev => (prev === key ? null : key));
+
+  // Each kind of row is deleted through whatever owns it. A settle-up is the
+  // exception: reversing the whole batch is the only coherent thing to do with
+  // a movement that several debt rows share.
+  const remove = async (src: RowSource) => {
+    setNotice(null);
+    if (src.kind === 'expense') {
+      if (!(await deleteExpense(src.id))) {
+        setNotice('That expense has a debt settled against it. Reverse the settle-up on the debt board first.');
+      }
+      return;
+    }
+    if (src.kind === 'move') return deleteMoneyMove(src.id);
+    if (src.kind === 'debt') return deleteDebtEntry(src.entryId);
+    await reverseSettleBatch(src.settleMoveId);
+  };
 
   return (
     <div className="min-h-screen bg-[#0b0f1a]">
@@ -282,6 +310,12 @@ export default function TransactionsPage() {
           </div>
 
           {/* ── Grouped activity list ── */}
+          {notice && (
+            <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+              <p className="text-xs text-amber-300">{notice}</p>
+            </div>
+          )}
+
           {selectedKey && (
             <button onClick={() => setSelectedKey(null)}
               className="mb-3 text-xs text-blue-400 hover:text-blue-300">
@@ -320,21 +354,15 @@ export default function TransactionsPage() {
                     </div>
                     <div className="space-y-2">
                       {g.items.map(it => (
-                        <div key={it.id} className="flex items-center gap-3 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3">
-                          <div className="text-base shrink-0">{it.icon}</div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white capitalize">{it.label}</p>
-                            <p className="text-xs text-slate-500 truncate">{it.sub}</p>
-                          </div>
-                          <p className={`text-sm font-medium shrink-0 ${
-                            it.flow === 'earned' ? 'text-emerald-400'
-                            : it.flow === 'moved' ? 'text-slate-400'
-                            : 'text-red-400'
-                          }`}>
-                            {it.flow === 'earned' ? '+' : it.flow === 'moved' ? '' : '-'}
-                            {fmt(it.amount, currency)}
-                          </p>
-                        </div>
+                        <ActivityRow
+                          key={it.id}
+                          item={it}
+                          currency={currency}
+                          open={openRowId === it.id}
+                          onOpenChange={o => setOpenRowId(o ? it.id : null)}
+                          onEdit={() => setEditing(it.source)}
+                          onDelete={() => remove(it.source)}
+                        />
                       ))}
                     </div>
                   </div>
@@ -345,6 +373,10 @@ export default function TransactionsPage() {
 
         </div>
       </div>
+
+      {editing && (
+        <EditEntrySheet source={editing} onClose={() => setEditing(null)} />
+      )}
     </div>
   );
 }

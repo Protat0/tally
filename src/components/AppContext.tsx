@@ -2,6 +2,12 @@
 
 import { createContext, useContext, useState, useMemo, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { Deltas, mergeDeltas, negate, expenseDeltas, moveDeltas, round2 } from '@/lib/walletDeltas';
+
+// round2 lives with the delta arithmetic it guards, and is re-exported here
+// because SplitPanel, SettleUpSheet and the expense form already import it
+// from this module.
+export { round2 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +29,9 @@ export interface Expense {
   id: string; amount: number; category: Category;
   // null means another person paid for this, so no wallet of yours moved.
   walletId: string | null; note: string; date: string;
+  // When the row was last edited; null means never. Deliberately not defaulted
+  // in the database, so existing rows do not claim to have been edited.
+  updatedAt: string | null;
 }
 
 // Money that moves in or out of a wallet without being a categorised expense.
@@ -56,6 +65,7 @@ export interface MoneyMove {
   // amount itself this money is gone, so it counts as spending. 0 when free.
   fee: number;
   source: IncomeSource | null; note: string; date: string;
+  updatedAt: string | null;
 }
 
 // ── Debt board ──────────────────────────────────────────────────────────────
@@ -75,6 +85,7 @@ export interface DebtEntry {
   moveId: string | null;         // money_moves row created at creation
   settleMoveId: string | null;   // shared by every entry in one settle-up batch
   expenseId: string | null;      // the expense that produced this row; null = standalone debt
+  updatedAt: string | null;      // last edited; null = never
 }
 
 // Positive = they owe you. Caller decides which entries to include; pass only
@@ -216,6 +227,14 @@ interface AppContextValue extends Computed {
     /** The new expense's id, or null when nothing was written. */
   }) => Promise<string | null>;
   deleteExpense: (id: string) => Promise<boolean>;
+  // False means it refused: a debt settled through a wallet is linked to it, or
+  // the new share is not a positive amount.
+  updateExpense: (id: string, next: {
+    amount: number; category: Category; note: string;
+    walletId: string | null; date?: string;
+    paidByPersonId?: string | null;
+    owedToMe?: { personId: string; amount: number }[];
+  }) => Promise<boolean>;
   addIncome: (m: { walletId: string; amount: number; source: IncomeSource; note: string }) => Promise<void>;
   /** Record a due payday as received: writes an `earned` move and logs the date. */
   confirmPayday: (date: string, amount: number, walletId: string) => Promise<void>;
@@ -225,6 +244,11 @@ interface AppContextValue extends Computed {
   addWithdrawal: (m: { walletId: string; amount: number; note: string; fee?: number }) => Promise<void>;
   addTransfer: (m: { fromWalletId: string; toWalletId: string; amount: number; note: string; fee?: number }) => Promise<void>;
   deleteMoneyMove: (id: string) => Promise<void>;
+  // Refuses debt movements: those are edited through updateDebtEntry.
+  updateMoneyMove: (id: string, next: {
+    amount: number; walletId: string; toWalletId?: string | null;
+    fee?: number; source?: IncomeSource | null; note: string; date?: string;
+  }) => Promise<boolean>;
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
   addInstalmentPayment: (p: Omit<InstalmentPayment, 'id'>) => Promise<void>;
   updateInstalmentPayment: (id: string, updates: Partial<InstalmentPayment>) => Promise<void>;
@@ -257,9 +281,13 @@ interface AppContextValue extends Computed {
      *  should not read like one in the transactions feed. */
     moveNote?: string;
     expenseId?: string | null;
-    walletBalanceAfter?: number;
+    deferBalance?: boolean;
   }) => Promise<void>;
   deleteDebtEntry: (id: string) => Promise<void>;
+  // Refuses a settled row — reverse its settle-up batch first.
+  updateDebtEntry: (id: string, next: {
+    amount: number; note: string; date?: string; walletId?: string | null;
+  }) => Promise<boolean>;
   setDebtEntrySettled: (id: string, settled: boolean, walletId?: string | null) => Promise<void>;
   settleUpPerson: (personId: string, walletId?: string | null) => Promise<void>;
   reverseSettleBatch: (settleMoveId: string) => Promise<void>;
@@ -270,6 +298,12 @@ interface AppContextValue extends Computed {
 
 export function currentYYYYMM(): string {
   return new Date().toISOString().slice(0, 7);
+}
+
+// The month key an arbitrary date falls in. Same UTC basis as currentYYYYMM,
+// so a bill's tick and the month it is compared against never disagree.
+export function yyyymmOf(date: string): string {
+  return new Date(date).toISOString().slice(0, 7);
 }
 
 export function getApplianceMinutes(a: Appliance): number {
@@ -386,6 +420,7 @@ const fromDBAppliance  = (r: Row): Appliance  => ({
 const fromDBExpense    = (r: Row): Expense    => ({
   id: r.id, amount: Number(r.amount), category: r.category as Category,
   walletId: r.wallet_id ?? null, note: r.note || '', date: r.date,
+  updatedAt: r.updated_at ?? null,
 });
 const fromDBMoneyMove  = (r: Row): MoneyMove  => ({
   id: r.id, kind: r.kind as MoneyMoveKind, amount: Number(r.amount),
@@ -393,6 +428,7 @@ const fromDBMoneyMove  = (r: Row): MoneyMove  => ({
   fee: Number(r.fee) || 0,
   source: (r.source ?? null) as IncomeSource | null,
   note: r.note || '', date: r.date,
+  updatedAt: r.updated_at ?? null,
 });
 const fromDBInstalment = (r: Row): InstalmentPayment => ({
   id: r.id, month: String(r.month || '').slice(0, 7),
@@ -413,6 +449,7 @@ const fromDBDebtEntry  = (r: Row): DebtEntry => ({
   moveId: r.move_id ?? null,
   settleMoveId: r.settle_move_id ?? null,
   expenseId: r.expense_id ?? null,
+  updatedAt: r.updated_at ?? null,
 });
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
@@ -717,54 +754,40 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // expense id as a foreign key. A share of zero (you spotted someone the
     // whole thing) writes no expense at all rather than a ₱0 row that would
     // clutter the feed and the category totals.
-    // ONE running balance owns every deduction below. `balanceOf` and the
-    // `wallets` state both read the value captured in this render and do NOT
-    // update across awaits, so reading either one again after the first write
-    // would compute from a stale figure and the last write would win —
-    // silently losing the difference. Read the wallet exactly once, here.
-    let running = e.walletId
-      ? (wallets.find(w => w.id === e.walletId)?.balance ?? 0)
-      : 0;
+    // The whole footprint — this expense and every debt movement it spawns —
+    // is described up front and committed once at the end. Nothing below reads
+    // a balance, so nothing below can read a stale one.
+    const footprint = expenseDeltas({ walletId: e.walletId, myShare, owedToMe: owed });
 
     let expenseId: string | null = null;
     if (myShare > 0) {
-      const newBalance = e.walletId ? round2(running - myShare) : null;
-      if (newBalance !== null) running = newBalance;
+      const { data } = await supabase.from('expenses').insert({
+        user_id: userId, wallet_id: e.walletId, amount: myShare,
+        category: e.category, note: e.note, date: now,
+      }).select().single();
 
-      const [expRes] = await Promise.all([
-        supabase.from('expenses').insert({
-          user_id: userId, wallet_id: e.walletId, amount: myShare,
-          category: e.category, note: e.note, date: now,
-        }).select().single(),
-        ...(newBalance !== null && e.walletId
-          ? [supabase.from('wallets').update({ balance: newBalance }).eq('id', e.walletId)]
-          : []),
-      ]);
+      // Bail before anything moves. The wallet is debited at the end of this
+      // function, so carrying on past a failed insert would take the money and
+      // leave no record of where it went — the balance would just be wrong.
+      // Nothing has been written yet, so returning here changes nothing.
+      if (!data) return null;
 
-      if (expRes.data) {
-        expenseId = expRes.data.id as string;
-        setExpenses(prev => [fromDBExpense(expRes.data), ...prev]);
-      }
-      if (newBalance !== null) {
-        setWallets(prev => prev.map(w => w.id === e.walletId ? { ...w, balance: newBalance } : w));
-      }
+      expenseId = data.id as string;
+      setExpenses(prev => [fromDBExpense(data), ...prev]);
     }
 
-    // Sequential, and each call is handed the balance it must leave behind.
-    // Letting addDebtEntry compute its own would reintroduce the stale read
-    // described above the moment two people share a wallet.
+    // deferBalance: each of these writes its own money_move but leaves the
+    // balance to the single commit below.
     if (e.walletId) {
       for (const o of owed) {
-        running = round2(running - o.amount);
         await addDebtEntry({
           personId: o.personId, direction: 'owed_to_me',
           amount: o.amount, note: e.note, date: now,
-          walletId: e.walletId, expenseId,
-          walletBalanceAfter: running,
+          walletId: e.walletId, expenseId, deferBalance: true,
         });
       }
     } else if (e.paidByPersonId) {
-      // No wallet, so no movement and no balance to hand over.
+      // No wallet, so no movement and no balance to defer.
       await addDebtEntry({
         personId: e.paidByPersonId, direction: 'i_owe',
         amount: myShare, note: e.note, date: now,
@@ -772,7 +795,59 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       });
     }
 
+    await commitDeltas(footprint);
     return expenseId;
+  };
+
+  // ── Bill ticks ────────────────────────────────────────────────────────────
+  // Ticking a bill paid records an expense and remembers its id. That pointer
+  // has to be maintained by anything that moves or removes the expense, or the
+  // bill is stranded: a later untick looks for an expense that no longer
+  // exists, deleteExpense returns false, and the month can never be paid again.
+
+  // Which bill month, if any, this expense is the payment for.
+  const billTickFor = (expenseId: string): { bill: Bill; month: string } | null => {
+    for (const bill of settings.bills) {
+      const month = Object.keys(bill.paidExpenseIds).find(m => bill.paidExpenseIds[m] === expenseId);
+      if (month) return { bill, month };
+    }
+    return null;
+  };
+
+  const writeBillTicks = async (bill: Bill, paidMonths: string[], paidExpenseIds: Record<string, string>) => {
+    setSettings(prev => ({
+      ...prev,
+      bills: prev.bills.map(b => b.id === bill.id ? { ...b, paidMonths, paidExpenseIds } : b),
+    }));
+    await supabase.from('bills')
+      .update({ paid_months: paidMonths, paid_expense_ids: paidExpenseIds })
+      .eq('id', bill.id);
+  };
+
+  const clearBillMonth = async (bill: Bill, month: string) => {
+    const paidExpenseIds = { ...bill.paidExpenseIds };
+    delete paidExpenseIds[month];
+    await writeBillTicks(bill, bill.paidMonths.filter(m => m !== month), paidExpenseIds);
+  };
+
+  // An expense edited across a month boundary takes its bill's tick with it.
+  // Left behind, the bill claims one month while its expense sits in another,
+  // and unmarkBillPaid — which always works on the current month — would take
+  // back the wrong row.
+  const moveBillTick = async (expenseId: string, newDate: string) => {
+    const tick = billTickFor(expenseId);
+    if (!tick) return;
+    const newMonth = yyyymmOf(newDate);
+    if (tick.month === newMonth) return;
+
+    const paidExpenseIds = { ...tick.bill.paidExpenseIds };
+    delete paidExpenseIds[tick.month];
+    paidExpenseIds[newMonth] = expenseId;
+    await writeBillTicks(
+      tick.bill,
+      [...tick.bill.paidMonths.filter(m => m !== tick.month), newMonth],
+      paidExpenseIds,
+    );
   };
 
   // Returns false when it refuses. The linked rows exist only because of this
@@ -803,19 +878,165 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
         : []),
     ]);
 
+    // A bill's payment going away has to untick the bill as well.
+    const tick = billTickFor(id);
+    if (tick) await clearBillMonth(tick.bill, tick.month);
+
     // One call, one balance computation per wallet — the refund and every
     // linked movement together.
     await reverseMoves(moveIds, seed);
     return true;
   };
 
+  // Re-record an expense over the top of itself. Returns false when it refuses.
+  //
+  // The row keeps its id — bills.paidExpenseIds points at it, and a delete-and-
+  // recreate would strand the bill. Its debt rows do not: a split is rewritten
+  // wholesale rather than diffed, because working out which of three people's
+  // shares moved is more error-prone than describing the end state.
+  const updateExpense = async (
+    id: string,
+    next: {
+      amount: number; category: Category; note: string;
+      walletId: string | null;
+      date?: string;
+      paidByPersonId?: string | null;
+      owedToMe?: { personId: string; amount: number }[];
+    },
+  ): Promise<boolean> => {
+    if (!userId) return false;
+    const found = expenses.find(e => e.id === id);
+    if (!found) return false;
+
+    const linked = debtEntries.filter(d => d.expenseId === id);
+    // A row settled through a wallet owns no share of its batch's netted
+    // movement, so it cannot be handed back — the same refusal deleteExpense
+    // makes. The caller reverses the settle-up first.
+    if (linked.some(d => d.settleMoveId)) return false;
+
+    const owed = next.walletId ? (next.owedToMe ?? []) : [];
+    const myShare = round2(next.walletId
+      ? next.amount - owed.reduce((sum, o) => sum + o.amount, 0)
+      : next.amount);
+
+    // Negative is over-allocated: more owed back than was paid out. Zero would
+    // mean the expense should not exist at all — legitimate under the splits
+    // model, but dissolving the row the user is editing while invisible debt
+    // rows survive is worse than refusing, so the caller deletes instead.
+    if (myShare <= 0) return false;
+
+    const date = next.date ?? found.date;
+    const editedAt = new Date().toISOString();
+
+    // What the row does to wallets today, and what it will do once saved. Only
+    // owed_to_me rows carrying a wallet ever moved money; an i_owe row from
+    // "someone else paid" moved nothing and contributes nothing to reverse.
+    const before = expenseDeltas({
+      walletId: found.walletId,
+      myShare: found.amount,
+      owedToMe: linked
+        .filter(d => d.direction === 'owed_to_me' && d.walletId)
+        .map(d => ({ amount: d.amount })),
+    });
+    const after = expenseDeltas({ walletId: next.walletId, myShare, owedToMe: owed });
+
+    // The expense row goes FIRST, and a failure here abandons the whole edit.
+    // Everything below tears down the split, rebuilds it, and then moves money.
+    // If the row itself cannot be written — a category the database rejects,
+    // say — none of that may happen: it would destroy the debt rows and debit
+    // the wallet for an edit that never landed. Nothing has changed yet here,
+    // so returning leaves the expense exactly as it was.
+    const { error: writeFailed } = await supabase.from('expenses').update({
+      amount: myShare, category: next.category, note: next.note,
+      wallet_id: next.walletId, date, updated_at: editedAt,
+    }).eq('id', id);
+    if (writeFailed) return false;
+
+    setExpenses(prev => prev.map(e => e.id === id ? {
+      ...e, amount: myShare, category: next.category, note: next.note,
+      walletId: next.walletId, date, updatedAt: editedAt,
+    } : e));
+
+    // Now the split is rebuilt wholesale. Deleting before inserting leaves it
+    // briefly missing rather than briefly doubled — the feed shows the first
+    // and hides the second, so a failure here is visible.
+    const linkedIds = linked.map(d => d.id);
+    const moveIds = linked.map(d => d.moveId).filter((m): m is string => Boolean(m));
+    setDebtEntries(prev => prev.filter(d => !linkedIds.includes(d.id)));
+    setMoneyMoves(prev => prev.filter(m => !moveIds.includes(m.id)));
+    await Promise.all([
+      ...(linkedIds.length > 0 ? [supabase.from('debt_entries').delete().in('id', linkedIds)] : []),
+      ...(moveIds.length   > 0 ? [supabase.from('money_moves').delete().in('id', moveIds)]   : []),
+    ]);
+
+    // Then the replacements, dated to the new date so a split never drifts
+    // away from its parent.
+    if (next.walletId) {
+      for (const o of owed) {
+        await addDebtEntry({
+          personId: o.personId, direction: 'owed_to_me',
+          amount: o.amount, note: next.note, date,
+          walletId: next.walletId, expenseId: id, deferBalance: true,
+        });
+      }
+    } else if (next.paidByPersonId) {
+      await addDebtEntry({
+        personId: next.paidByPersonId, direction: 'i_owe',
+        amount: myShare, note: next.note, date,
+        walletId: null, expenseId: id,
+      });
+    }
+
+    await moveBillTick(id, date);
+
+    // One commit for the whole edit. Editing an amount on the same wallet nets
+    // to the difference here; two separate commits would each recompute from
+    // the same pre-await balance and the second would overwrite the first.
+    await commitDeltas(mergeDeltas(negate(before), after));
+    return true;
+  };
+
   // ── Money moves (top-ups, withdrawals, transfers) ─────────────────────────
   // Every balance change outside of expenses goes through here so it leaves a
   // record. Balances are applied optimistically, then persisted alongside the row.
-  const recordMove = async (
+
+  const balanceOf = (id: string) => wallets.find(w => w.id === id)?.balance ?? 0;
+
+  // Apply a delta map to wallets: ONE computation and ONE write per wallet.
+  //
+  // Callers say how much each balance should MOVE, never what it should become.
+  // balanceOf reads React state, which does not update across an await, so two
+  // absolute balances computed either side of one would both derive from the
+  // same pre-await figure and the second write would silently overwrite the
+  // first — losing the difference from a real wallet. Deltas from independent
+  // sources can be summed, so an operation touching several rows merges its
+  // whole footprint and calls this EXACTLY ONCE.
+  const commitDeltas = async (deltas: Deltas) => {
+    // A zero delta is a write that changes nothing; skipping it also means an
+    // edit that changed no amount touches no wallet row at all.
+    const moving = Object.entries(deltas).filter(([, d]) => d !== 0);
+    if (moving.length === 0) return;
+
+    const newBalances: Record<string, number> = {};
+    // round2, because this sums several raw floats: 0.01 + 0.05 is
+    // 0.060000000000000005, and sub-centavo dust in a stored balance causes real
+    // misbehaviour later (a balance that should be zero never compares equal to it).
+    for (const [wid, d] of moving) newBalances[wid] = round2(balanceOf(wid) + d);
+
+    setWallets(prev => prev.map(w => w.id in newBalances ? { ...w, balance: newBalances[w.id] } : w));
+    await Promise.all(
+      Object.entries(newBalances).map(([wid, balance]) =>
+        supabase.from('wallets').update({ balance }).eq('id', wid)
+      ),
+    );
+  };
+
+  // Writes the row and nothing else. Callers recording several movements use
+  // this and commit one merged delta map at the end; single-movement callers
+  // use recordMove below, which does both.
+  const insertMove = async (
     // Only withdrawals and transfers can carry a fee; the rest omit it.
-    move: Omit<MoneyMove, 'id' | 'date' | 'fee'> & { fee?: number },
-    balanceUpdates: Record<string, number>,
+    move: Omit<MoneyMove, 'id' | 'date' | 'fee' | 'updatedAt'> & { fee?: number },
     date?: string,
   ): Promise<string | null> => {
     if (!userId) return null;
@@ -823,33 +1044,40 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const now = date ?? new Date().toISOString();
     const tempId = crypto.randomUUID();
 
-    setMoneyMoves(prev => [{ ...move, fee: move.fee ?? 0, id: tempId, date: now }, ...prev]);
-    setWallets(prev => prev.map(w => w.id in balanceUpdates ? { ...w, balance: balanceUpdates[w.id] } : w));
-
-    const [moveRes] = await Promise.all([
-      supabase.from('money_moves').insert({
-        user_id: userId, kind: move.kind, amount: move.amount,
-        wallet_id: move.walletId, to_wallet_id: move.toWalletId,
-        fee: move.fee ?? 0, source: move.source, note: move.note, date: now,
-      }).select().single(),
-      ...Object.entries(balanceUpdates).map(([id, balance]) =>
-        supabase.from('wallets').update({ balance }).eq('id', id)
-      ),
+    setMoneyMoves(prev => [
+      { ...move, fee: move.fee ?? 0, id: tempId, date: now, updatedAt: null },
+      ...prev,
     ]);
-    if (moveRes.data) {
-      setMoneyMoves(prev => prev.map(m => m.id === tempId ? fromDBMoneyMove(moveRes.data) : m));
-      return moveRes.data.id as string;
-    }
-    return null;
+
+    const { data } = await supabase.from('money_moves').insert({
+      user_id: userId, kind: move.kind, amount: move.amount,
+      wallet_id: move.walletId, to_wallet_id: move.toWalletId,
+      fee: move.fee ?? 0, source: move.source, note: move.note, date: now,
+    }).select().single();
+
+    if (!data) return null;
+    setMoneyMoves(prev => prev.map(m => m.id === tempId ? fromDBMoneyMove(data) : m));
+    return data.id as string;
   };
 
-  const balanceOf = (id: string) => wallets.find(w => w.id === id)?.balance ?? 0;
+  // One movement and the balances it moves. Safe to call once per operation;
+  // a caller needing two movements must use insertMove and commit the merged
+  // deltas itself, or the second call recomputes from the first's stale state.
+  const recordMove = async (
+    move: Omit<MoneyMove, 'id' | 'date' | 'fee' | 'updatedAt'> & { fee?: number },
+    deltas: Deltas,
+    date?: string,
+  ): Promise<string | null> => {
+    const id = await insertMove(move, date);
+    await commitDeltas(deltas);
+    return id;
+  };
 
   // These three discard recordMove's id — only the debt board needs it.
   const addIncome = async (m: { walletId: string; amount: number; source: IncomeSource; note: string }) => {
     await recordMove(
       { kind: 'earned', amount: m.amount, walletId: m.walletId, toWalletId: null, source: m.source, note: m.note },
-      { [m.walletId]: balanceOf(m.walletId) + m.amount },
+      { [m.walletId]: m.amount },
     );
   };
 
@@ -877,8 +1105,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await recordMove(
       { kind: 'withdrawn', amount: m.amount, walletId: m.walletId, toWalletId: cashId, fee, source: null, note: m.note },
       {
-        [m.walletId]: balanceOf(m.walletId) - m.amount - fee,
-        [cashId]:     balanceOf(cashId)     + m.amount,
+        [m.walletId]: -m.amount - fee,
+        [cashId]:      m.amount,
       },
     );
   };
@@ -888,8 +1116,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await recordMove(
       { kind: 'moved', amount: m.amount, walletId: m.fromWalletId, toWalletId: m.toWalletId, fee, source: null, note: m.note },
       {
-        [m.fromWalletId]: balanceOf(m.fromWalletId) - m.amount - fee,
-        [m.toWalletId]:   balanceOf(m.toWalletId)   + m.amount,
+        [m.fromWalletId]: -m.amount - fee,
+        [m.toWalletId]:    m.amount,
       },
     );
   };
@@ -898,29 +1126,55 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const found = moneyMoves.find(m => m.id === id);
     if (!found) return;
 
-    // Undo whatever the move did to the wallets it touched.
-    const updates: Record<string, number> = {};
-    if (found.kind === 'earned') {
-      updates[found.walletId] = balanceOf(found.walletId) - found.amount;
-    } else if (found.toWalletId) {
-      // Transfers, and withdrawals from the point they started landing in cash.
-      // The source paid the fee on top, so undoing gives that back as well.
-      updates[found.walletId]   = balanceOf(found.walletId)   + found.amount + found.fee;
-      updates[found.toWalletId] = balanceOf(found.toWalletId) - found.amount;
-    } else if (found.kind === 'withdrawn') {
-      // A withdrawal from before cash had a destination: the money just left.
-      updates[found.walletId] = balanceOf(found.walletId) + found.amount;
-    }
-
     setMoneyMoves(prev => prev.filter(m => m.id !== id));
-    setWallets(prev => prev.map(w => w.id in updates ? { ...w, balance: updates[w.id] } : w));
+    await supabase.from('money_moves').delete().eq('id', id);
+    // Undo whatever the move did to the wallets it touched.
+    await commitDeltas(negate(moveDeltas(found)));
+  };
 
-    await Promise.all([
-      supabase.from('money_moves').delete().eq('id', id),
-      ...Object.entries(updates).map(([wid, balance]) =>
-        supabase.from('wallets').update({ balance }).eq('id', wid)
-      ),
-    ]);
+  // Re-record a money move over the top of itself. Income, transfers and
+  // withdrawals only: a debt movement belongs to the entry that created it and
+  // is edited through updateDebtEntry, so the two never drift apart.
+  const updateMoneyMove = async (
+    id: string,
+    next: {
+      amount: number; walletId: string; toWalletId?: string | null;
+      fee?: number; source?: IncomeSource | null; note: string; date?: string;
+    },
+  ): Promise<boolean> => {
+    const found = moneyMoves.find(m => m.id === id);
+    if (!found) return false;
+    if (found.kind === 'debt_in' || found.kind === 'debt_out') return false;
+    if (next.amount <= 0) return false;
+
+    const date = next.date ?? found.date;
+    const editedAt = new Date().toISOString();
+    const fee = next.fee ?? 0;
+    // A withdrawal keeps whichever shape it already has. Giving a legacy row a
+    // destination would turn money that really left into a net-zero move and
+    // silently lower a past month's spending.
+    const toWalletId = found.kind === 'withdrawn' && !found.toWalletId
+      ? null
+      : (next.toWalletId ?? found.toWalletId);
+    const source = next.source ?? found.source;
+
+    const before = moveDeltas(found);
+    const after  = moveDeltas({
+      kind: found.kind, amount: next.amount, fee,
+      walletId: next.walletId, toWalletId,
+    });
+
+    setMoneyMoves(prev => prev.map(m => m.id === id ? {
+      ...m, amount: next.amount, walletId: next.walletId, toWalletId,
+      fee, source, note: next.note, date, updatedAt: editedAt,
+    } : m));
+    await supabase.from('money_moves').update({
+      amount: next.amount, wallet_id: next.walletId, to_wallet_id: toWalletId,
+      fee, source, note: next.note, date, updated_at: editedAt,
+    }).eq('id', id);
+
+    await commitDeltas(mergeDeltas(negate(before), after));
+    return true;
   };
 
   // ── Debt board ────────────────────────────────────────────────────────────
@@ -946,21 +1200,9 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
         + (mv.kind === 'debt_in' ? -mv.amount : mv.amount);
     }
 
-    const newBalances: Record<string, number> = {};
-    // round2, because this sums several raw floats: 0.01 + 0.05 is
-    // 0.060000000000000005, and sub-centavo dust in a stored balance causes real
-    // misbehaviour later (a balance that should be zero never compares equal to it).
-    for (const [wid, d] of Object.entries(deltas)) newBalances[wid] = round2(balanceOf(wid) + d);
-
     setMoneyMoves(prev => prev.filter(m => !ids.includes(m.id)));
-    setWallets(prev => prev.map(w => w.id in newBalances ? { ...w, balance: newBalances[w.id] } : w));
-
-    await Promise.all([
-      ...(ids.length > 0 ? [supabase.from('money_moves').delete().in('id', ids)] : []),
-      ...Object.entries(newBalances).map(([wid, balance]) =>
-        supabase.from('wallets').update({ balance }).eq('id', wid)
-      ),
-    ]);
+    if (ids.length > 0) await supabase.from('money_moves').delete().in('id', ids);
+    await commitDeltas(deltas);
   };
 
   // Not optimistic: the caller needs the real row id to reference as a foreign
@@ -1000,7 +1242,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     walletId?: string | null;
     moveNote?: string;
     expenseId?: string | null;
-    walletBalanceAfter?: number;
+    // Set when the caller is committing the wallet movement itself as part of a
+    // larger merged footprint — an expense and its several debt rows. The entry
+    // and its money_move are still written; only the balance is left alone.
+    deferBalance?: boolean;
   }) => {
     if (!userId) return;
     const walletId = e.walletId || null;
@@ -1012,20 +1257,18 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     let moveId: string | null = null;
     if (walletId) {
       const out = e.direction === 'owed_to_me';
-      // A caller making several calls against one wallet must pass the balance
-      // itself: balanceOf reads React state, which does not update across
-      // awaits, so a second call would compute from the same stale figure and
-      // the last write would win. Single-call callers omit it.
-      const after = e.walletBalanceAfter ?? (balanceOf(walletId) + (out ? -e.amount : e.amount));
-      moveId = await recordMove(
-        {
-          kind: out ? 'debt_out' : 'debt_in',
-          amount: e.amount, walletId, toWalletId: null, source: null,
-          note: e.moveNote ?? (out ? `Spotted ${name}` : `Borrowed from ${name}`),
-        },
-        { [walletId]: after },
-        e.date,
-      );
+      const move = {
+        kind: (out ? 'debt_out' : 'debt_in') as MoneyMoveKind,
+        amount: e.amount, walletId, toWalletId: null, source: null,
+        note: e.moveNote ?? (out ? `Spotted ${name}` : `Borrowed from ${name}`),
+      };
+      // A caller making several calls against one wallet commits the balances
+      // itself, as one merged map. Letting each call commit its own would have
+      // every one of them recompute from the same pre-await React state, and
+      // the last write would win — silently losing the rest.
+      moveId = e.deferBalance
+        ? await insertMove(move, e.date)
+        : await recordMove(move, { [walletId]: out ? -e.amount : e.amount }, e.date);
     }
 
     const { data } = await supabase.from('debt_entries').insert({
@@ -1083,6 +1326,65 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     if (entry?.moveId) await reverseMoves([entry.moveId]);
   };
 
+  // Edit a debt row together with the movement it made, so the two never
+  // disagree. Refuses a settled row: its share of the batch's netted movement
+  // is not its own to change — reverse the settle-up first.
+  const updateDebtEntry = async (
+    id: string,
+    next: { amount: number; note: string; date?: string; walletId?: string | null },
+  ): Promise<boolean> => {
+    const entry = debtEntries.find(e => e.id === id);
+    if (!entry) return false;
+    if (entry.settleMoveId) return false;
+    if (next.amount <= 0) return false;
+
+    const date = next.date ?? entry.date;
+    const editedAt = new Date().toISOString();
+    const walletId = next.walletId === undefined ? entry.walletId : next.walletId;
+    const out = entry.direction === 'owed_to_me';
+    const existingMoveId = entry.moveId;
+
+    const before: Deltas = entry.walletId
+      ? { [entry.walletId]: out ? -entry.amount : entry.amount } : {};
+    const after: Deltas = walletId
+      ? { [walletId]: out ? -next.amount : next.amount } : {};
+
+    // The movement follows the entry. Clearing the wallet removes it entirely;
+    // setting one on a row that never had a wallet creates it.
+    let moveId: string | null = existingMoveId;
+    if (existingMoveId && !walletId) {
+      setMoneyMoves(prev => prev.filter(m => m.id !== existingMoveId));
+      await supabase.from('money_moves').delete().eq('id', existingMoveId);
+      moveId = null;
+    } else if (existingMoveId && walletId) {
+      setMoneyMoves(prev => prev.map(m => m.id === existingMoveId ? {
+        ...m, amount: next.amount, walletId, note: next.note, date, updatedAt: editedAt,
+      } : m));
+      await supabase.from('money_moves').update({
+        amount: next.amount, wallet_id: walletId, note: next.note,
+        date, updated_at: editedAt,
+      }).eq('id', existingMoveId);
+    } else if (walletId) {
+      const name = debtPeople.find(p => p.id === entry.personId)?.name ?? 'someone';
+      moveId = await insertMove({
+        kind: (out ? 'debt_out' : 'debt_in') as MoneyMoveKind,
+        amount: next.amount, walletId, toWalletId: null, source: null,
+        note: out ? `Spotted ${name}` : `Borrowed from ${name}`,
+      }, date);
+    }
+
+    setDebtEntries(prev => prev.map(e => e.id === id ? {
+      ...e, amount: next.amount, note: next.note, date, walletId, moveId, updatedAt: editedAt,
+    } : e));
+    await supabase.from('debt_entries').update({
+      amount: next.amount, note: next.note, date,
+      wallet_id: walletId, move_id: moveId, updated_at: editedAt,
+    }).eq('id', id);
+
+    await commitDeltas(mergeDeltas(negate(before), after));
+    return true;
+  };
+
   // Un-settle a whole settle-up batch. Reversing one row's share of a netted
   // movement has no coherent meaning — ₱250 owed and ₱180 owing became a single
   // ₱70 movement that no individual row owns — so the batch is the unit.
@@ -1126,7 +1428,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
           amount: entry.amount, walletId, toWalletId: null, source: null,
           note: incoming ? `${name} paid you back` : `Paid ${name} back`,
         },
-        { [walletId]: balanceOf(walletId) + (incoming ? entry.amount : -entry.amount) },
+        { [walletId]: incoming ? entry.amount : -entry.amount },
       );
     }
 
@@ -1162,7 +1464,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
           amount, walletId, toWalletId: null, source: null,
           note: incoming ? `${name} settled up` : `Settled up with ${name}`,
         },
-        { [walletId]: balanceOf(walletId) + (incoming ? amount : -amount) },
+        { [walletId]: incoming ? amount : -amount },
       );
     }
 
@@ -1381,21 +1683,17 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     if (!bill || !bill.paidMonths.includes(month)) return;
 
     const expenseId = bill.paidExpenseIds[month];
-    // A refusal means the expense is load-bearing — a debt settled against it —
-    // and unticking would strand that. Leave the bill paid and say nothing
-    // changed rather than half-undoing it.
-    if (expenseId && !(await deleteExpense(expenseId))) return;
+    if (expenseId) {
+      // deleteExpense clears the tick itself on success. On refusal — the
+      // expense is load-bearing, a debt settled against it — it changes
+      // nothing, and the bill correctly stays paid rather than half-undone.
+      await deleteExpense(expenseId);
+      return;
+    }
 
-    const paidMonths = bill.paidMonths.filter(m => m !== month);
-    const paidExpenseIds = { ...bill.paidExpenseIds };
-    delete paidExpenseIds[month];
-    setSettings(prev => ({
-      ...prev,
-      bills: prev.bills.map(b => b.id === id ? { ...b, paidMonths, paidExpenseIds } : b),
-    }));
-    await supabase.from('bills')
-      .update({ paid_months: paidMonths, paid_expense_ids: paidExpenseIds })
-      .eq('id', id);
+    // Months ticked before payments recorded an expense have nothing to take
+    // back, so the tick is released on its own.
+    await clearBillMonth(bill, month);
   };
 
   const updateBill = async (id: string, updates: { name?: string; amount?: number }) => {
@@ -1537,8 +1835,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       emergencyFund, dataLoading,
       ...computed,
       addWallet, updateWallet, deleteWallet,
-      addExpense, deleteExpense,
-      addIncome, addWithdrawal, addTransfer, deleteMoneyMove,
+      addExpense, deleteExpense, updateExpense,
+      addIncome, addWithdrawal, addTransfer, deleteMoneyMove, updateMoneyMove,
       confirmPayday, dismissPayday,
       updateSettings,
       addInstalmentPayment, updateInstalmentPayment, deleteInstalmentPayment,
@@ -1551,7 +1849,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       debtPeople, debtEntries,
       ...debtTotals,
       addDebtPerson, deleteDebtPerson,
-      addDebtEntry, deleteDebtEntry, setDebtEntrySettled, settleUpPerson,
+      addDebtEntry, deleteDebtEntry, updateDebtEntry, setDebtEntrySettled, settleUpPerson,
       reverseSettleBatch, recordDebtPayment,
     }}>
       {children}
@@ -1575,4 +1873,3 @@ export function fmt(amount: number, currency = '₱'): string {
 // "is this the full amount" decision. A raw float comparison would send a
 // ₱333.33 payment against a ₱333.33 balance down the partial path and leave a
 // phantom ₱0.00 entry open forever.
-export const round2 = (n: number) => Math.round(n * 100) / 100;
