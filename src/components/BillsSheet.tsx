@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useApp, fmt, Bill } from './AppContext';
+import { useApp, fmt, Bill, Category } from './AppContext';
 import BottomSheet from './BottomSheet';
 import WalletPicker from './WalletPicker';
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon } from './Icons';
+import { visibleCategories } from '@/lib/categories';
 
 function uid() { return crypto.randomUUID(); }
 
@@ -22,6 +23,8 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState('');
   const [amt, setAmt] = useState('');
+  const [dueDay, setDueDay] = useState('');
+  const [category, setCategory] = useState<Category>('bills');
   // The bill mid-payment, and the wallet it will come out of. Paying is real
   // spending, so it takes a confirm step rather than happening on the tick.
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -45,9 +48,14 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
 
   const handleAdd = () => {
     if (!name.trim() || !amt) return;
-    const bill: Bill = { id: uid(), name: name.trim(), amount: parseFloat(amt), paidMonths: [], paidExpenseIds: {} };
+    const bill: Bill = {
+      id: uid(), name: name.trim(), amount: parseFloat(amt),
+      dueDay: dueDay ? Math.min(Math.max(parseInt(dueDay), 1), 31) : null,
+      category,
+      paidMonths: [], paidExpenseIds: {},
+    };
     updateSettings({ bills: [...bills, bill] });
-    setName(''); setAmt(''); setAddOpen(false);
+    setName(''); setAmt(''); setDueDay(''); setCategory('bills'); setAddOpen(false);
   };
 
   const remove = (id: string) =>
@@ -148,11 +156,28 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
               />
             </div>
             <div className="flex gap-2">
+              <input
+                type="number" inputMode="numeric" value={dueDay}
+                onChange={e => setDueDay(e.target.value)}
+                placeholder="Due day (e.g. 15)" min="1" max="31"
+                className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
+              />
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value as Category)}
+                className="w-32 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50"
+              >
+                {visibleCategories(settings.customCategories, settings.hiddenCategories).map(c => (
+                  <option key={c.key} value={c.key} className="bg-[#111827]">{c.icon} {c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
               <button onClick={handleAdd} disabled={!name.trim() || !amt}
                 className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white disabled:opacity-40">
                 Save
               </button>
-              <button onClick={() => { setAddOpen(false); setName(''); setAmt(''); }}
+              <button onClick={() => { setAddOpen(false); setName(''); setAmt(''); setDueDay(''); setCategory('bills'); }}
                 className="flex-1 rounded-lg bg-white/5 py-2 text-sm text-slate-400">
                 Cancel
               </button>

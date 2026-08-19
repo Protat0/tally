@@ -103,6 +103,12 @@ export function netOf(entries: DebtEntry[]): number {
 
 export interface Bill {
   id: string; name: string; amount: number;
+  // Day of the month the bill is due, clamped to the month's length. null when
+  // the user has not said. Resolved to a date inside the cycle by dueDateInCycle.
+  dueDay: number | null;
+  // Which category the payment is logged under. Defaults to 'bills'; setting it
+  // to 'electric' is what makes the Electric card show the real bill.
+  category: Category;
   paidMonths: string[]; // 'YYYY-MM' strings — resets each month naturally
   // Which expense each month's payment created, keyed by the same 'YYYY-MM'.
   // Unticking a month deletes that expense and refunds the wallet. Months
@@ -275,7 +281,7 @@ interface AppContextValue extends Computed {
   setAppliancePinned: (id: string, pinned: boolean) => Promise<void>;
   markBillPaid: (id: string, walletId: string) => Promise<void>;
   unmarkBillPaid: (id: string) => Promise<void>;
-  updateBill: (id: string, updates: { name?: string; amount?: number }) => Promise<void>;
+  updateBill: (id: string, updates: { name?: string; amount?: number; dueDay?: number | null; category?: Category }) => Promise<void>;
   resetBalances: (walletBalances: Record<string, number>) => Promise<void>;
   resetAccount: () => Promise<void>;
   debtPeople: DebtPerson[];
@@ -409,6 +415,8 @@ function toDBSettings(s: Partial<Settings>): Row {
 const fromDBWallet     = (r: Row): Wallet     => ({ id: r.id, name: r.name, icon: r.icon, balance: Number(r.balance) });
 const fromDBBill       = (r: Row): Bill       => ({
   id: r.id, name: r.name, amount: Number(r.amount),
+  dueDay: r.due_day ?? null,
+  category: (r.category || 'bills') as Category,
   paidMonths: (r.paid_months as string[]) || [],
   paidExpenseIds: (r.paid_expense_ids as Record<string, string>) || {},
 });
@@ -1515,7 +1523,11 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       if (bills.length > current.length) {
         const added = bills.filter(b => !current.some(c => c.id === b.id));
         for (const b of added) {
-          await supabase.from('bills').insert({ id: b.id, user_id: userId, name: b.name, amount: b.amount, paid_months: b.paidMonths ?? [] });
+          await supabase.from('bills').insert({
+            id: b.id, user_id: userId, name: b.name, amount: b.amount,
+            due_day: b.dueDay, category: b.category,
+            paid_months: b.paidMonths ?? [],
+          });
         }
       } else {
         const removed = current.filter(c => !bills.some(b => b.id === c.id));
@@ -1707,14 +1719,19 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await clearBillMonth(bill, month);
   };
 
-  const updateBill = async (id: string, updates: { name?: string; amount?: number }) => {
+  const updateBill = async (
+    id: string,
+    updates: { name?: string; amount?: number; dueDay?: number | null; category?: Category },
+  ) => {
     setSettings(prev => ({
       ...prev,
       bills: prev.bills.map(b => b.id === id ? { ...b, ...updates } : b),
     }));
     const db: Row = {};
-    if ('name'   in updates) db.name   = updates.name;
-    if ('amount' in updates) db.amount = updates.amount;
+    if ('name'     in updates) db.name     = updates.name;
+    if ('amount'   in updates) db.amount   = updates.amount;
+    if ('dueDay'   in updates) db.due_day  = updates.dueDay;
+    if ('category' in updates) db.category = updates.category;
     await supabase.from('bills').update(db).eq('id', id);
   };
 

@@ -17,6 +17,7 @@ import CategoryDetailSheet from '@/components/CategoryDetailSheet';
 import ElectricSheet from '@/components/ElectricSheet';
 import SavingsSheet from '@/components/SavingsSheet';
 import { PlusIcon, CogIcon } from '@/components/Icons';
+import { visibleCategories } from '@/lib/categories';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -216,17 +217,26 @@ export default function BudgetPage() {
   const [editBill,     setEditBill]     = useState<Bill | null>(null);
   const [editBillName, setEditBillName] = useState('');
   const [editBillAmt,  setEditBillAmt]  = useState('');
+  const [editBillDue,  setEditBillDue]  = useState('');
+  const [editBillCat,  setEditBillCat]  = useState<Category>('bills');
 
   // ── handlers ──
   const openBillEdit = (bill: Bill) => {
     setEditBill(bill);
     setEditBillName(bill.name);
     setEditBillAmt(String(bill.amount));
+    setEditBillDue(bill.dueDay ? String(bill.dueDay) : '');
+    setEditBillCat(bill.category);
   };
 
   const saveBillEdit = () => {
     if (!editBill || !editBillName.trim() || !editBillAmt) return;
-    updateBill(editBill.id, { name: editBillName.trim(), amount: parseFloat(editBillAmt) || 0 });
+    updateBill(editBill.id, {
+      name: editBillName.trim(),
+      amount: parseFloat(editBillAmt) || 0,
+      dueDay: editBillDue ? Math.min(Math.max(parseInt(editBillDue), 1), 31) : null,
+      category: editBillCat,
+    });
     setEditBill(null);
   };
 
@@ -421,6 +431,24 @@ export default function BudgetPage() {
             className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
           />
           <InlineAmountInput label="Amount" value={editBillAmt} onChange={setEditBillAmt} />
+          <div className="mt-4">
+            <InlineAmountInput
+              label="Due day of month" value={editBillDue} onChange={setEditBillDue}
+              placeholder="e.g. 15"
+            />
+          </div>
+          <div className="mt-4">
+            <p className="text-xs text-slate-500 mb-1">Category</p>
+            <select
+              value={editBillCat}
+              onChange={e => setEditBillCat(e.target.value as Category)}
+              className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+            >
+              {visibleCategories(settings.customCategories, settings.hiddenCategories).map(c => (
+                <option key={c.key} value={c.key} className="bg-[#111827]">{c.icon} {c.label}</option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={saveBillEdit}
             disabled={!editBillName.trim() || !editBillAmt}
