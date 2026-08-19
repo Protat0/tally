@@ -185,7 +185,7 @@ function ResetModal({ onClose }: { onClose: () => void }) {
         <div className="px-5 pb-4">
           <p className="text-xs text-slate-400 leading-relaxed">
             Enter each wallet&apos;s current real balance. This will also{' '}
-            <span className="text-red-300">delete this month&apos;s expenses</span> and{' '}
+            <span className="text-red-300">delete this cycle&apos;s expenses</span> and{' '}
             <span className="text-red-300">reset electric usage</span> to zero. This can&apos;t be undone.
           </p>
         </div>

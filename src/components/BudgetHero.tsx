@@ -106,7 +106,7 @@ export default function BudgetHero({
           <div className="rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3">
             <div className="flex items-baseline justify-between gap-3">
               <div>
-                <p className="text-xs text-slate-500">Received this month</p>
+                <p className="text-xs text-slate-500">Received this cycle</p>
                 <p className="text-[11px] text-slate-600 mt-0.5">Actual top-ups logged to your wallets</p>
               </div>
               <p className="text-right shrink-0">
