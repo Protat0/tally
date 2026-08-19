@@ -30,19 +30,25 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
   // spending, so it takes a confirm step rather than happening on the tick.
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payWalletId, setPayWalletId] = useState('');
+  const [payAmt, setPayAmt] = useState('');
   const [paying, setPaying] = useState(false);
 
   const startPaying = (billId: string) => {
+    const bill = bills.find(b => b.id === billId);
     setPayingId(billId);
     setPayWalletId(settings.cashWalletId ?? '');
+    // Pre-filled with the estimate, because most bills are what you expected.
+    setPayAmt(bill ? String(bill.amount) : '');
   };
 
   const confirmPay = async () => {
-    if (!payingId || !payWalletId || paying) return;
+    const amount = parseFloat(payAmt);
+    if (!payingId || !payWalletId || paying || !(amount > 0)) return;
     setPaying(true);
-    await markBillPaid(payingId, payWalletId);
+    await markBillPaid(payingId, payWalletId, amount);
     setPaying(false);
     setPayingId(null);
+    setPayAmt('');
   };
 
   const total = bills.reduce((s, b) => s + b.amount, 0);
@@ -132,7 +138,11 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
               </div>
               <p className="text-sm font-medium text-slate-300 shrink-0">{fmt(b.amount, currency)}</p>
               <button
-                onClick={() => (isPaid ? unmarkBillPaid(b.id) : isPaying ? setPayingId(null) : startPaying(b.id))}
+                onClick={() => {
+                  if (isPaid) unmarkBillPaid(b.id);
+                  else if (isPaying) { setPayingId(null); setPayAmt(''); }
+                  else startPaying(b.id);
+                }}
                 title={isPaid ? 'Mark unpaid' : 'Mark as paid'}
                 className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors shrink-0 ${
                   isPaid
@@ -158,14 +168,24 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
                   <p className="text-xs text-slate-500">No wallets yet — add one before paying a bill.</p>
                 ) : (
                   <>
+                    <p className="text-xs text-slate-500 mb-2">Amount paid</p>
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <span className="text-sm text-slate-500">{currency}</span>
+                      <input
+                        type="number" inputMode="decimal" value={payAmt}
+                        onChange={e => setPayAmt(e.target.value)}
+                        step="0.01" min="0" autoFocus
+                        className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50"
+                      />
+                    </div>
                     <p className="text-xs text-slate-500 mb-2">Paid from</p>
                     <WalletPicker value={payWalletId} onChange={setPayWalletId} />
                     <button
                       onClick={confirmPay}
-                      disabled={!payWalletId || paying}
+                      disabled={!payWalletId || paying || !(parseFloat(payAmt) > 0)}
                       className="mt-3 w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white disabled:opacity-40"
                     >
-                      Log {fmt(b.amount, currency)} as paid
+                      Log {fmt(parseFloat(payAmt) || 0, currency)} as paid
                     </button>
                   </>
                 )}

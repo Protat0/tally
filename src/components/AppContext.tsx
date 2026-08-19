@@ -279,7 +279,7 @@ interface AppContextValue extends Computed {
   logApplianceUsage: (id: string, minutes: number) => Promise<void>;
   refundApplianceUsage: (id: string, minutes: number) => Promise<void>;
   setAppliancePinned: (id: string, pinned: boolean) => Promise<void>;
-  markBillPaid: (id: string, walletId: string) => Promise<void>;
+  markBillPaid: (id: string, walletId: string, amount: number) => Promise<void>;
   unmarkBillPaid: (id: string) => Promise<void>;
   updateBill: (id: string, updates: { name?: string; amount?: number; dueDay?: number | null; category?: Category }) => Promise<void>;
   resetBalances: (walletBalances: Record<string, number>) => Promise<void>;
@@ -1675,15 +1675,16 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   };
 
   // Paying a bill is spending, so ticking one writes a real expense against the
-  // wallet the money came from rather than only flipping a flag. The tick
-  // follows the expense: if the write fails there is nothing to mark paid with.
-  const markBillPaid = async (id: string, walletId: string) => {
+  // wallet the money came from rather than only flipping a flag. The amount is
+  // what was actually paid, which for a variable bill is not what was budgeted —
+  // the bill's own amount stays the estimate and is edited deliberately.
+  const markBillPaid = async (id: string, walletId: string, amount: number) => {
     const month = currentCycleKey(settings.cycleStartDay);
     const bill = settings.bills.find(b => b.id === id);
-    if (!bill || bill.paidMonths.includes(month)) return;
+    if (!bill || bill.paidMonths.includes(month) || !(amount > 0)) return;
 
     const expenseId = await addExpense({
-      amount: bill.amount, category: 'bills', note: bill.name, walletId,
+      amount, category: bill.category, note: bill.name, walletId,
     });
     if (!expenseId) return;
 
