@@ -182,3 +182,35 @@ test('fields other than the ticks survive re-keying', () => {
   assert.equal(out[0].name, 'Electric');
   assert.equal(out[0].amount, 2500);
 });
+
+// Loop 2 repairs orphaned entries — entries in paidExpenseIds but missing from
+// paidMonths. When an orphan re-keys to a cycle not occupied by a real tick, it
+// must be carried through and appear in the output, else the orphan repair is
+// pointless and the expense stays stranded.
+test('an orphan entry re-keyed to an unoccupied cycle appears in paidMonths', () => {
+  const out = rekeyBillTicks(
+    [{ id: 'b1', paidMonths: ['2026-08'], paidExpenseIds: { '2026-08': 'e1', '2026-09': 'e2' } }],
+    { e1: new Date(2026, 8, 20).toISOString(), e2: new Date(2026, 6, 10).toISOString() },
+    15,
+  );
+
+  assert.ok(out[0].paidMonths.includes('2026-06'));
+  assert.equal((out[0].paidExpenseIds as Record<string, string>)['2026-06'], 'e2');
+});
+
+// When a real tick (from paidMonths) and an orphan repair (from paidExpenseIds)
+// both re-key to the same cycle, the real tick must win. Loop 2 is a repair for
+// orphaned data only; it must never overwrite a legitimate tick's linkage.
+// Allowing it would lose the real expense id and strand a transaction.
+test('a real tick wins over an orphan entry when both re-key to the same cycle', () => {
+  const out = rekeyBillTicks(
+    [{ id: 'b1', paidMonths: ['2026-07'], paidExpenseIds: { '2026-07': 'e1', '2026-09': 'e2' } }],
+    { e1: new Date(2026, 7, 20).toISOString(), e2: new Date(2026, 7, 25).toISOString() },
+    15,
+  );
+
+  // Both e1 (Aug 20) and e2 (Aug 25) re-key to '2026-08' with startDay=15.
+  // But e1 comes from paidMonths (real tick), so it must survive.
+  assert.equal((out[0].paidExpenseIds as Record<string, string>)['2026-08'], 'e1');
+  assert.deepEqual(out[0].paidMonths, ['2026-08']);
+});

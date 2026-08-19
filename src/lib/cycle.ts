@@ -129,9 +129,12 @@ export interface TickedBill {
 // The payment's own date is the only reliable evidence of which cycle it
 // belongs to, so each tick is re-keyed from the expense it created.
 //
-// Ticks with no usable expense date keep their original key. Two ticks landing
-// on the same new key is possible in principle; the later month wins, which is
-// deterministic and matches "the most recent payment for this period".
+// Ticks with no usable expense date keep their original key. Two entries from
+// the same loop landing on the same new key is possible in principle; the later
+// month wins, which is deterministic and matches "the most recent payment for
+// this period". But when a real tick (from paidMonths) and an orphan repair
+// (from paidExpenseIds) collide, the real tick wins — orphan repairs fill gaps
+// only, never replace legitimate data.
 export function rekeyBillTicks<T extends TickedBill>(
   bills: T[],
   expenseDates: Record<string, string>,
@@ -157,7 +160,7 @@ export function rekeyBillTicks<T extends TickedBill>(
       const iso = expenseDates[expenseId];
       const key = iso ? cycleKeyOf(new Date(iso), newStartDay) : month;
       keys.add(key);
-      paidExpenseIds[key] = expenseId;
+      if (!paidExpenseIds[key]) paidExpenseIds[key] = expenseId;
     }
 
     return { ...bill, paidMonths: [...keys].sort(), paidExpenseIds };
