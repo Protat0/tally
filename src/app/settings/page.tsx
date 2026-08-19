@@ -8,7 +8,9 @@ import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import NumberField from '@/components/NumberField';
 import WalletPicker from '@/components/WalletPicker';
+import BottomSheet from '@/components/BottomSheet';
 import { ScrollLock } from '@/components/ModalLock';
+import { cycleLabel, currentCycleKey } from '@/lib/cycle';
 import { PlusIcon, LogOutIcon, BoltIcon, ChevronLeftIcon, ChevronRightIcon, AlertIcon, XIcon } from '@/components/Icons';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -282,12 +284,13 @@ function ResetModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function SettingsPage() {
-  const { settings, updateSettings, totalBalance, wallets } = useApp();
+  const { settings, updateSettings, setCycleStartDay, totalBalance, wallets } = useApp();
   const { signOut, user } = useAuth();
 
   const [customPayday, setCustomPayday] = useState('');
   const [resetOpen, setResetOpen] = useState(false);
   const [resetAccountOpen, setResetAccountOpen] = useState(false);
+  const [pendingCycleDay, setPendingCycleDay] = useState<number | null>(null);
 
   const addCustomPayday = () => {
     const d = parseInt(customPayday);
@@ -384,6 +387,22 @@ export default function SettingsPage() {
             </div>
           </Section>
 
+          {/* Budget cycle */}
+          <Section title="Budget Cycle">
+            <SettingRow
+              label="Cycle starts on day"
+              sub={cycleLabel(currentCycleKey(settings.cycleStartDay), settings.cycleStartDay)}
+            >
+              <NumInput
+                value={pendingCycleDay ?? settings.cycleStartDay}
+                onChange={v => setPendingCycleDay(Math.min(Math.max(Math.round(v), 1), 31))}
+              />
+            </SettingRow>
+            <p className="mt-2 px-1 text-xs text-slate-500">
+              Set this to the day your bills land. Day 1 is the plain calendar month.
+            </p>
+          </Section>
+
           {/* Emergency fund */}
           <Section title="Emergency Fund">
             <SettingRow label="Target amount" sub="Your total savings goal">
@@ -467,6 +486,37 @@ export default function SettingsPage() {
 
       {resetOpen && <ResetModal onClose={() => setResetOpen(false)} />}
       {resetAccountOpen && <ResetAccountModal onClose={() => setResetAccountOpen(false)} />}
+
+      {pendingCycleDay !== null && pendingCycleDay !== settings.cycleStartDay && (
+        <BottomSheet onClose={() => setPendingCycleDay(null)}>
+          <p className="font-semibold text-white mb-2">Change your budget cycle?</p>
+          <p className="text-sm text-slate-400 mb-3">
+            Your current period becomes{' '}
+            <span className="text-white">
+              {cycleLabel(currentCycleKey(pendingCycleDay), pendingCycleDay)}
+            </span>.
+          </p>
+          <p className="text-sm text-slate-400 mb-5">
+            Nothing is deleted, but spending and income already logged move into whichever
+            period now contains them — so this month&apos;s totals will change. Bills you have
+            ticked paid follow the date you actually paid them.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={async () => { await setCycleStartDay(pendingCycleDay); setPendingCycleDay(null); }}
+              className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white"
+            >
+              Change cycle
+            </button>
+            <button
+              onClick={() => setPendingCycleDay(null)}
+              className="flex-1 rounded-lg bg-white/5 py-2.5 text-sm text-slate-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </BottomSheet>
+      )}
     </div>
   );
 }

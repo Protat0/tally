@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Deltas, mergeDeltas, negate, expenseDeltas, moveDeltas, round2 } from '@/lib/walletDeltas';
 import {
   CycleKey, cycleKeyOf, currentCycleKey, cycleRange,
-  datesInCycle, daysInCycle, daysElapsedInCycle,
+  datesInCycle, daysInCycle, daysElapsedInCycle, rekeyBillTicks,
 } from '@/lib/cycle';
 
 // round2 lives with the delta arithmetic it guards, and is re-exported here
@@ -259,6 +259,8 @@ interface AppContextValue extends Computed {
     fee?: number; source?: IncomeSource | null; note: string; date?: string;
   }) => Promise<boolean>;
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
+  /** Changes the budget cycle and re-keys every bill tick onto the new periods. */
+  setCycleStartDay: (day: number) => Promise<void>;
   addInstalmentPayment: (p: Omit<InstalmentPayment, 'id'>) => Promise<void>;
   updateInstalmentPayment: (id: string, updates: Partial<InstalmentPayment>) => Promise<void>;
   deleteInstalmentPayment: (id: string) => Promise<void>;
@@ -1716,6 +1718,36 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('bills').update(db).eq('id', id);
   };
 
+  // Changing the cycle reinterprets every stored 'YYYY-MM' tick, so the ticks
+  // are rewritten from the dates their payments actually landed on. Appliance
+  // counters have no per-minute history to re-bucket and the meter is only a
+  // forecast, so they simply start the new cycle at zero.
+  const setCycleStartDay = async (day: number) => {
+    if (!userId) return;
+    const expenseDates = Object.fromEntries(expenses.map(e => [e.id, e.date]));
+    const bills = rekeyBillTicks(settings.bills, expenseDates, day);
+    const month = currentCycleKey(day);
+    const appliances = settings.appliances.map(a => ({
+      ...a, totalMinutesThisMonth: 0, lastResetMonth: month,
+      enabled: false, startedAt: null,
+    }));
+
+    setSettings(prev => ({ ...prev, cycleStartDay: day, bills, appliances }));
+
+    await supabase.from('settings').update({ cycle_start_day: day }).eq('user_id', userId);
+    for (const b of bills) {
+      await supabase.from('bills')
+        .update({ paid_months: b.paidMonths, paid_expense_ids: b.paidExpenseIds })
+        .eq('id', b.id);
+    }
+    for (const a of appliances) {
+      await supabase.from('appliances').update({
+        total_minutes_this_month: 0, last_reset_month: month,
+        enabled: false, started_at: null,
+      }).eq('id', a.id);
+    }
+  };
+
   const logApplianceUsage = async (id: string, minutes: number) => {
     const month = currentCycleKey(settings.cycleStartDay);
     const appl = settings.appliances.find(a => a.id === id);
@@ -1846,7 +1878,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       addExpense, deleteExpense, updateExpense,
       addIncome, addWithdrawal, addTransfer, deleteMoneyMove, updateMoneyMove,
       confirmPayday, dismissPayday,
-      updateSettings,
+      updateSettings, setCycleStartDay,
       addInstalmentPayment, updateInstalmentPayment, deleteInstalmentPayment,
       setInstalmentNewPurchaseLock,
       addEmergencyFundEntry,
