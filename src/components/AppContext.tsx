@@ -312,8 +312,11 @@ export function currentYYYYMM(): string {
   return currentCycleKey(1);
 }
 
-// The month key an arbitrary date falls in. Same UTC basis as currentYYYYMM,
-// so a bill's tick and the month it is compared against never disagree.
+// A UTC-basis leftover: currentYYYYMM moved to a local basis (currentCycleKey)
+// and this did not follow, so it is now the only UTC month-key function left
+// in the codebase. It has no callers — cycleKeyOf(new Date(d), startDay) is
+// the correct, local-basis replacement, matching what every reader and
+// writer of a stored month/cycle key now uses. Delete once confirmed unused.
 export function yyyymmOf(date: string): string {
   return new Date(date).toISOString().slice(0, 7);
 }
@@ -348,6 +351,7 @@ export function isoDay(d: Date): string {
 
 // Every payday falling in a given month, ascending. A payday set to the 31st
 // still has to land in a 30-day month, so days are clamped to the month's end.
+// Superseded by paydaysInCycle; has no callers left — delete once confirmed unused.
 export function paydaysInMonth(settings: Settings, year: number, month: number): Date[] {
   const lastDay = new Date(year, month + 1, 0).getDate();
   const days =
@@ -361,6 +365,11 @@ export function paydaysInMonth(settings: Settings, year: number, month: number):
 // Every payday falling inside a cycle. This is why paydays moved off calendar
 // months: with a 1st-and-15th schedule and a cycle starting on the 15th, one
 // cycle contains BOTH paydays, so income and spending finally share a window.
+// `key` and `settings.cycleStartDay` must describe the same cycle — nothing
+// enforces that here, so a caller passing a key computed under a different
+// start day than `settings` currently holds will get paydays for the wrong
+// window. True by construction at the one call site today (both come from
+// the same `settings` in the same render).
 export function paydaysInCycle(settings: Settings, key: CycleKey): Date[] {
   const days =
     settings.paydayCycle === '1st-15th' ? [1, 15]
@@ -603,7 +612,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const computed = useMemo<Computed>(() => {
     const today = new Date();
     const startDay = settings.cycleStartDay;
-    const currentCycle = currentCycleKey(startDay);
+    // Derived from `today`, not a second `new Date()` — everything below reads
+    // off the same instant, so evaluation straddling local midnight on the 1st
+    // cannot leave `currentCycle` naming a different period than `today` is in.
+    const currentCycle = cycleKeyOf(today, startDay);
     const inCycle = (iso: string) => cycleKeyOf(new Date(iso), startDay) === currentCycle;
 
     const totalBalance = wallets.reduce((s, w) => s + w.balance, 0);

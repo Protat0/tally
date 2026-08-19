@@ -115,7 +115,7 @@ export function daysInCycle(key: CycleKey, startDay: number): number {
 export function daysElapsedInCycle(key: CycleKey, startDay: number, now: Date = new Date()): number {
   const { start } = cycleRange(key, startDay);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.floor((today.getTime() - start.getTime()) / DAY_MS) + 1;
+  return Math.round((today.getTime() - start.getTime()) / DAY_MS) + 1;
 }
 
 export interface TickedBill {
