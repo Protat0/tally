@@ -1750,19 +1750,39 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       enabled: false, startedAt: null,
     }));
 
+    const previous = settings;
     setSettings(prev => ({ ...prev, cycleStartDay: day, bills, appliances }));
 
-    await supabase.from('settings').update({ cycle_start_day: day }).eq('user_id', userId);
-    for (const b of bills) {
-      await supabase.from('bills')
+    // The ticks are the data; cycle_start_day is the key that says how to read
+    // them. Write the data first and the key last, so a run that dies half way
+    // leaves ticks reading UNPAID rather than PAID. Unpaid costs the user a
+    // re-tick; paid invites them to untick, and unmarkBillPaid deletes the
+    // expense and refunds a wallet that was legitimately debited.
+    const writes = await Promise.all([
+      ...bills.map(b => supabase.from('bills')
         .update({ paid_months: b.paidMonths, paid_expense_ids: b.paidExpenseIds })
-        .eq('id', b.id);
-    }
-    for (const a of appliances) {
-      await supabase.from('appliances').update({
+        .eq('id', b.id)),
+      ...appliances.map(a => supabase.from('appliances').update({
         total_minutes_this_month: 0, last_reset_month: month,
         enabled: false, started_at: null,
-      }).eq('id', a.id);
+      }).eq('id', a.id)),
+    ]);
+
+    // Local state was set optimistically. Leaving it applied over a failed write
+    // would show a cycle the stored records were never migrated onto.
+    // rekeyBillTicks is a pure function of stored data, so a retry is safe.
+    const failed = writes.find(w => w.error);
+    if (failed?.error) {
+      console.error('cycle change failed, start day unchanged:', failed.error.message);
+      setSettings(previous);
+      return;
+    }
+
+    const { error } = await supabase.from('settings')
+      .update({ cycle_start_day: day }).eq('user_id', userId);
+    if (error) {
+      console.error('cycle start day write failed:', error.message);
+      setSettings(previous);
     }
   };
 
