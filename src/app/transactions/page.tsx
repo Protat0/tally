@@ -47,11 +47,6 @@ export default function TransactionsPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const monthLabel = cycleLabel(viewCycle, cycleStartDay);
-  // The calendar grid below still renders a whole calendar month, so it
-  // anchors on the month the viewed cycle starts in.
-  const { start: cycleStart } = cycleRange(viewCycle, cycleStartDay);
-  const y = cycleStart.getFullYear();
-  const m = cycleStart.getMonth();
 
   const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
 
@@ -176,14 +171,16 @@ export default function TransactionsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, viewCycle, cycleStartDay]);
 
-  // Calendar cells for the viewed cycle's anchor month: leading blanks then each day.
+  // Calendar cells for the viewed CYCLE, not its anchor month: leading blanks
+  // then every day from the cycle's start up to the day before it ends. A cycle
+  // that crosses a month boundary still runs contiguously, so padding by the
+  // start date's weekday keeps every date under the right column heading.
   const cells = useMemo(() => {
-    const firstWeekday = new Date(y, m, 1).getDay();
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const arr: (number | null)[] = Array(firstWeekday).fill(null);
-    for (let d = 1; d <= daysInMonth; d++) arr.push(d);
+    const { start, end } = cycleRange(viewCycle, cycleStartDay);
+    const arr: (Date | null)[] = Array(start.getDay()).fill(null);
+    for (const d = new Date(start); d < end; d.setDate(d.getDate() + 1)) arr.push(new Date(d));
     return arr;
-  }, [y, m]);
+  }, [viewCycle, cycleStartDay]);
 
   // Grouped by day (newest first), filtered to the selected date if any.
   const groups = useMemo(() => {
@@ -275,7 +272,7 @@ export default function TransactionsPage() {
             <div className="grid grid-cols-7 gap-1">
               {cells.map((d, i) => {
                 if (d === null) return <div key={`b${i}`} />;
-                const key = dayKey(new Date(y, m, d));
+                const key = dayKey(d);
                 const t = totals[key];
                 const active = Boolean(t && (t.spent > 0 || t.earned > 0));
                 const isToday = key === todayKey;
@@ -293,7 +290,7 @@ export default function TransactionsPage() {
                     <span className={`text-xs leading-none ${
                       isToday ? 'font-bold text-blue-400' : active ? 'text-white' : 'text-slate-600'
                     }`}>
-                      {d}
+                      {d.getDate()}
                     </span>
                     {t && t.earned > 0 ? (
                       <span className="mt-1 text-[9px] font-medium leading-none text-emerald-400">
