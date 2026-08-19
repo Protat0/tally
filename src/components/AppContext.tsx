@@ -16,7 +16,7 @@ export { round2 };
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 // Built-in keys keep autocomplete; `(string & {})` also allows user-defined custom category keys.
-export type Category = 'food' | 'transport' | 'bills' | 'shopping' | 'health' | 'other' | (string & {});
+export type Category = 'food' | 'transport' | 'bills' | 'electric' | 'shopping' | 'health' | 'other' | (string & {});
 
 export interface CustomCategory {
   key: string; label: string; icon: string;
@@ -527,6 +527,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const [sRes, wRes, eRes, mmRes, bRes, blRes, aRes, ipRes, efRes, dpRes, deRes] = await Promise.all([
       supabase.from('settings').select('*').eq('user_id', uid).single(),
       supabase.from('wallets').select('*').eq('user_id', uid).order('created_at'),
+      // No limit, so PostgREST's default 1000-row cap applies. setCycleStartDay
+      // builds its expenseDates lookup from this: if the cap ever bites, the
+      // oldest ticks find no date and keep their existing key, which is the
+      // safe direction to fail — nothing is moved on a guess.
       supabase.from('expenses').select('*').eq('user_id', uid).order('date', { ascending: false }),
       supabase.from('money_moves').select('*').eq('user_id', uid).order('date', { ascending: false }),
       supabase.from('bills').select('*').eq('user_id', uid),

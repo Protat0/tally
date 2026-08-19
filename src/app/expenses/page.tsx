@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   useApp, fmt, Category, Bill, calcElectric,
 } from '@/components/AppContext';
-import { currentCycleKey, cycleKeyOf, cycleLabel, dueDateInCycle } from '@/lib/cycle';
+import { cycleKeyOf, cycleLabel, dueDateInCycle } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
 import { ScrollLock } from '@/components/ModalLock';
@@ -59,7 +59,7 @@ export default function BudgetPage() {
     instalmentSchedule, instalmentRemainingBalance, instalmentDebtFreeDate,
     emergencyFund,
     updateBill,
-    receivedThisMonth,
+    receivedThisMonth, currentCycle,
   } = useApp();
 
   const {
@@ -152,7 +152,10 @@ export default function BudgetPage() {
   }, []);
   const liveElectric = calcElectric(settings);
   const { cycleStartDay } = settings;
-  const currentCycle = currentCycleKey(cycleStartDay);
+  // Taken from the context, not recomputed here: this page re-renders every 10s
+  // and a second derivation would step over the rollover before the memoised one
+  // did, leaving the Bills tile and the sheet it opens disagreeing about which
+  // cycle a bill was ticked for.
   const monthLabel = cycleLabel(currentCycle, cycleStartDay);
 
   // ── this-cycle spend per expense category ──
