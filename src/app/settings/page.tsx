@@ -10,7 +10,7 @@ import NumberField from '@/components/NumberField';
 import WalletPicker from '@/components/WalletPicker';
 import BottomSheet from '@/components/BottomSheet';
 import { ScrollLock } from '@/components/ModalLock';
-import { cycleLabel, currentCycleKey } from '@/lib/cycle';
+import { cycleRange, currentCycleKey } from '@/lib/cycle';
 import { PlusIcon, LogOutIcon, BoltIcon, ChevronLeftIcon, ChevronRightIcon, AlertIcon, XIcon } from '@/components/Icons';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -45,6 +45,17 @@ function NumInput({ value, onChange, step = 1, placeholder = '0' }: { value: num
       inputClassName="w-24 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-1.5 text-right text-sm text-white outline-none focus:border-blue-500/50"
     />
   );
+}
+
+// The span the current period would have at a given start day. cycleLabel
+// prints a bare month name at day 1, which reads as a date rather than as the
+// period a day-of-month setting produces, so this always spells the span out.
+function periodSpan(startDay: number): string {
+  const { start, end } = cycleRange(currentCycleKey(startDay), startDay);
+  // Half-open, so the last day the user lives through is the day before it ends.
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1);
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  return `${start.toLocaleDateString('en-PH', opts)} – ${last.toLocaleDateString('en-PH', opts)}`;
 }
 
 // Deletes everything. Gated behind typing the word rather than a second tap —
@@ -290,7 +301,15 @@ export default function SettingsPage() {
   const [customPayday, setCustomPayday] = useState('');
   const [resetOpen, setResetOpen] = useState(false);
   const [resetAccountOpen, setResetAccountOpen] = useState(false);
+  // What the field currently shows. Editing it changes nothing on its own: the
+  // sheet is modal, so opening it per keystroke made every value whose first
+  // digit was not already the answer unreachable, and offered "Change cycle" on
+  // an intermediate number the user never meant. Applying is a separate tap.
   const [pendingCycleDay, setPendingCycleDay] = useState<number | null>(null);
+  const [confirmCycleDay, setConfirmCycleDay] = useState<number | null>(null);
+  const [cycleBusy, setCycleBusy] = useState(false);
+  const cycleDayShown = pendingCycleDay ?? settings.cycleStartDay;
+  const cycleDayChanged = cycleDayShown !== settings.cycleStartDay;
 
   const addCustomPayday = () => {
     const d = parseInt(customPayday);
@@ -391,13 +410,26 @@ export default function SettingsPage() {
           <Section title="Budget Cycle">
             <SettingRow
               label="Cycle starts on day"
-              sub={cycleLabel(currentCycleKey(settings.cycleStartDay), settings.cycleStartDay)}
+              sub={`This period: ${periodSpan(settings.cycleStartDay)}`}
             >
               <NumInput
-                value={pendingCycleDay ?? settings.cycleStartDay}
+                value={cycleDayShown}
                 onChange={v => setPendingCycleDay(Math.min(Math.max(Math.round(v), 1), 31))}
               />
             </SettingRow>
+            {cycleDayChanged && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3">
+                <p className="min-w-0 flex-1 text-xs text-blue-200">
+                  Day {cycleDayShown} would make this period {periodSpan(cycleDayShown)}.
+                </p>
+                <button
+                  onClick={() => setConfirmCycleDay(cycleDayShown)}
+                  className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white active:bg-blue-700 transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+            )}
             <p className="mt-2 px-1 text-xs text-slate-500">
               Set this to the day your bills land. Day 1 is the plain calendar month.
             </p>
@@ -487,13 +519,13 @@ export default function SettingsPage() {
       {resetOpen && <ResetModal onClose={() => setResetOpen(false)} />}
       {resetAccountOpen && <ResetAccountModal onClose={() => setResetAccountOpen(false)} />}
 
-      {pendingCycleDay !== null && pendingCycleDay !== settings.cycleStartDay && (
-        <BottomSheet onClose={() => setPendingCycleDay(null)}>
+      {confirmCycleDay !== null && (
+        <BottomSheet onClose={() => { if (!cycleBusy) setConfirmCycleDay(null); }}>
           <p className="font-semibold text-white mb-2">Change your budget cycle?</p>
           <p className="text-sm text-slate-400 mb-3">
             Your current period becomes{' '}
             <span className="text-white">
-              {cycleLabel(currentCycleKey(pendingCycleDay), pendingCycleDay)}
+              {periodSpan(confirmCycleDay)}
             </span>.
           </p>
           <p className="text-sm text-slate-400 mb-5">
@@ -502,15 +534,25 @@ export default function SettingsPage() {
             ticked paid follow the date you actually paid them.
           </p>
           <div className="flex gap-2">
+            {/* The migration rewrites every bill's ticks, so it takes a moment.
+                Left enabled, a second tap would start a second re-key mid-flight. */}
             <button
-              onClick={async () => { await setCycleStartDay(pendingCycleDay); setPendingCycleDay(null); }}
-              className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white"
+              onClick={async () => {
+                setCycleBusy(true);
+                await setCycleStartDay(confirmCycleDay);
+                setCycleBusy(false);
+                setConfirmCycleDay(null);
+                setPendingCycleDay(null);
+              }}
+              disabled={cycleBusy}
+              className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white disabled:opacity-50"
             >
-              Change cycle
+              {cycleBusy ? 'Changing…' : 'Change cycle'}
             </button>
             <button
-              onClick={() => setPendingCycleDay(null)}
-              className="flex-1 rounded-lg bg-white/5 py-2.5 text-sm text-slate-400"
+              onClick={() => setConfirmCycleDay(null)}
+              disabled={cycleBusy}
+              className="flex-1 rounded-lg bg-white/5 py-2.5 text-sm text-slate-400 disabled:opacity-50"
             >
               Cancel
             </button>
