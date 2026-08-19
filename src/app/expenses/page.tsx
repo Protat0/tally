@@ -291,7 +291,7 @@ export default function BudgetPage() {
 
               <BudgetTile
                 icon="⚡"
-                label="Electric"
+                label="Electric Usage"
                 value={`Est. ${fmt(liveElectric, currency)}`}
                 status={
                   electricBill
