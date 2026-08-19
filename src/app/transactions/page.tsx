@@ -318,14 +318,14 @@ export default function TransactionsPage() {
           {selectedKey && (
             <button onClick={() => setSelectedKey(null)}
               className="mb-3 text-xs text-blue-400 hover:text-blue-300">
-              ← Showing one day · view whole month
+              ← Showing one day · view whole cycle
             </button>
           )}
 
           {groups.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-10 text-center">
               <ReceiptIcon className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-              <p className="text-sm text-slate-500 mb-1">No activity this month.</p>
+              <p className="text-sm text-slate-500 mb-1">No activity this period.</p>
               <Link href="/expenses/new" className="text-xs text-blue-400 underline underline-offset-2">
                 Log an expense
               </Link>

@@ -25,6 +25,7 @@ function formatDuration(minutes: number): string {
 export default function ElectricSection() {
   const { settings, updateSettings, toggleAppliance, setAppliancePinned } = useApp();
   const { appliances, electricityRate, currency } = settings;
+  // Bound to the user's currency once, so every fmt() below is already in it.
   const fmt = (n: number) => fmtMoney(n, currency);
 
   // Live ticker — re-renders every 10 s so running appliances update their cost
@@ -88,11 +89,11 @@ export default function ElectricSection() {
 
   return (
     <div id="electric" className="scroll-mt-6">
-      {/* ── Hero: accumulated cost this month ── */}
+      {/* ── Hero: the running estimate for this cycle ── */}
       <div className="relative overflow-hidden rounded-2xl border border-amber-800/30 bg-gradient-to-br from-[#231a08] to-[#1a1205] p-5 mb-4">
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-amber-500/8 blur-3xl" />
         <p className="text-xs font-medium uppercase tracking-widest text-amber-400/70 mb-1">
-          Electric · This Month So Far
+          Electric · Est. This Cycle
         </p>
         <p className="text-4xl font-bold text-white tabular-nums mb-3">
           {fmt(liveTotal)}
@@ -275,7 +276,7 @@ export default function ElectricSection() {
                         {a.enabled
                           ? `on · ${formatDuration(minutes)}`
                           : minutes > 0
-                            ? formatDuration(minutes) + ' this mo'
+                            ? formatDuration(minutes) + ' this cycle'
                             : 'off'}
                       </p>
                     </div>

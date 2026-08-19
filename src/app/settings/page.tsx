@@ -475,7 +475,7 @@ export default function SettingsPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white">Reset balances</p>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Re-enter wallet balances · clears this month&apos;s expenses &amp; electric usage
+                  Re-enter wallet balances · clears this cycle&apos;s expenses &amp; electric usage
                 </p>
               </div>
               <ChevronRightIcon className="w-4 h-4 text-slate-600 shrink-0" />

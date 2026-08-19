@@ -109,9 +109,11 @@ export interface Bill {
   // Which category the payment is logged under. Defaults to 'bills'; setting it
   // to 'electric' is what makes the Electric card show the real bill.
   category: Category;
-  paidMonths: string[]; // 'YYYY-MM' strings — resets each month naturally
-  // Which expense each month's payment created, keyed by the same 'YYYY-MM'.
-  // Unticking a month deletes that expense and refunds the wallet. Months
+  // 'YYYY-MM' cycle keys, one per period the bill has been ticked paid in.
+  // Nothing clears them: a new cycle is simply a key not in the list yet.
+  paidMonths: string[];
+  // Which expense each cycle's payment created, keyed by the same 'YYYY-MM'.
+  // Unticking a cycle deletes that expense and refunds the wallet. Cycles
   // ticked before payments recorded an expense simply have no entry here.
   paidExpenseIds: Record<string, string>;
 }
@@ -188,11 +190,11 @@ interface EmergencyFund {
 
 interface Computed {
   totalBalance: number;
-  /** Expenses logged this month plus any bank fees paid on moves. */
+  /** Expenses logged this cycle plus any bank fees paid on moves. */
   totalSpentThisMonth: number;
   receivedThisMonth: number;
   /**
-   * End-of-month savings, deliberately conservative. Every error term in the
+   * End-of-cycle savings, deliberately conservative. Every error term in the
    * old formula pushed this number up — an unlogged expense, an untracked day,
    * income assumed to have arrived — so the headline figure is now the
    * pessimistic end and `optimisticSavings` is the stretch.
@@ -203,12 +205,12 @@ interface Computed {
   /** Income that was due but has not been confirmed. Excluded from the projection. */
   unconfirmedIncome: number;
   pendingPaydays: PendingPayday[];
-  /** Days this month that predate the first recorded expense. */
+  /** Days this cycle that predate the first recorded expense. */
   untrackedDays: number;
   trackedDays: number;
   /** What the untracked days were charged, at the user's own budgeted rate. */
   blindSpend: number;
-  /** Recorded + blind + projected-remaining spending for the whole month. */
+  /** Recorded + blind + projected-remaining spending for the whole cycle. */
   assumedSpending: number;
   spendingPacePercent: number;
   daysUntilPayday: number;
@@ -1682,6 +1684,11 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // wallet the money came from rather than only flipping a flag. The amount is
   // what was actually paid, which for a variable bill is not what was budgeted —
   // the bill's own amount stays the estimate and is edited deliberately.
+  //
+  // The tick follows the expense, never the other way round: if addExpense
+  // fails there is no payment, so there must be no tick either. A tick with no
+  // expense behind it is a bill that claims to be paid with nothing to take
+  // back when it is unticked.
   const markBillPaid = async (id: string, walletId: string, amount: number) => {
     const month = currentCycleKey(settings.cycleStartDay);
     const bill = settings.bills.find(b => b.id === id);

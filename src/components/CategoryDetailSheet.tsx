@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { useApp, fmt, Expense } from './AppContext';
 import BottomSheet from './BottomSheet';
+import { cycleKeyOf, cycleLabel } from '@/lib/cycle';
 import HalfCircleProgress from './HalfCircleProgress';
 
 function paceColor(pct: number): 'green' | 'amber' | 'red' {
@@ -12,31 +13,18 @@ function paceColor(pct: number): 'green' | 'amber' | 'red' {
   return 'red';
 }
 
-// Local, not UTC — a late-evening expense in PH would otherwise land in the
-// next month's group.
-function monthKeyOf(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function monthLabelOf(key: string): string {
-  const [y, m] = key.split('-');
-  return new Date(parseInt(y), parseInt(m) - 1)
-    .toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
-}
-
 interface Props {
   categoryKey: string;
   icon: string;
   label: string;
   budget: number;
-  /** This month's spend — matches the card. */
+  /** This cycle's spend — matches the card. */
   spent: number;
   currency: string;
   onClose: () => void;
 }
 
-interface MonthGroup {
+interface CycleGroup {
   key: string;
   total: number;
   items: Expense[];
@@ -45,7 +33,8 @@ interface MonthGroup {
 export default function CategoryDetailSheet({
   categoryKey, icon, label, budget, spent, currency, onClose,
 }: Props) {
-  const { expenses, wallets, debtEntries, debtPeople } = useApp();
+  const { expenses, wallets, debtEntries, debtPeople, settings, currentCycle } = useApp();
+  const { cycleStartDay } = settings;
 
   const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
 
@@ -59,27 +48,29 @@ export default function CategoryDetailSheet({
   };
 
   // Every expense ever logged against this category, newest first, grouped by
-  // the month it fell in.
+  // the CYCLE it fell in — the hero above totals a cycle, so grouping by
+  // calendar month would print a different figure for the same period with
+  // nothing on screen to explain the gap.
   const { groups, count, allTimeTotal } = useMemo(() => {
     const mine = expenses
       .filter(e => e.category === categoryKey)
       .sort((a, b) => b.date.localeCompare(a.date));
 
-    const byMonth = new Map<string, MonthGroup>();
+    const byCycle = new Map<string, CycleGroup>();
     mine.forEach(e => {
-      const key = monthKeyOf(e.date);
-      const g = byMonth.get(key) ?? { key, total: 0, items: [] };
+      const key = cycleKeyOf(new Date(e.date), cycleStartDay);
+      const g = byCycle.get(key) ?? { key, total: 0, items: [] };
       g.total += e.amount;
       g.items.push(e);
-      byMonth.set(key, g);
+      byCycle.set(key, g);
     });
 
     return {
-      groups: [...byMonth.values()],
+      groups: [...byCycle.values()],
       count: mine.length,
       allTimeTotal: mine.reduce((s, e) => s + e.amount, 0),
     };
-  }, [expenses, categoryKey]);
+  }, [expenses, categoryKey, cycleStartDay]);
 
   const hasBudget = budget > 0;
   const remaining = budget - spent;
@@ -96,7 +87,7 @@ export default function CategoryDetailSheet({
           </div>
           <div className="min-w-0">
             <p className="text-base font-semibold text-white truncate">{label}</p>
-            <p className="text-xs text-slate-500">This month</p>
+            <p className="text-xs text-slate-500">{cycleLabel(currentCycle, cycleStartDay)}</p>
           </div>
         </div>
 
@@ -155,7 +146,7 @@ export default function CategoryDetailSheet({
             <div key={g.key}>
               <div className="flex items-center justify-between gap-3 mb-2 px-1">
                 <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                  {monthLabelOf(g.key)}
+                  {cycleLabel(g.key, cycleStartDay)}
                 </p>
                 <p className="text-xs font-medium text-red-400 tabular-nums shrink-0">
                   -{fmt(g.total, currency)}
