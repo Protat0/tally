@@ -76,20 +76,29 @@ export function cycleLabel(key: CycleKey, startDay: number): string {
   return `${start.toLocaleDateString('en-PH', opts)} – ${last.toLocaleDateString('en-PH', opts)}`;
 }
 
-// A cycle spans at most two calendar months, and a given day-of-month falls in
-// exactly one of them: if it has already passed when the cycle opens, it must
-// be the occurrence in the following month.
+// A cycle spans at most two calendar months, and a given day-of-month usually
+// falls in exactly one of them: if it has already passed when the cycle opens,
+// it must be the occurrence in the following month.
+//
+// "Usually", because a start day that clamps in the end month makes the cycle
+// stop short of that day-of-month: with startDay 31, the cycle '2024-03' runs
+// Mar 31 – Apr 30, so due day 30 lands on Apr 30 — the exclusive end, i.e. the
+// NEXT cycle. Left unpinned the same date appears in two consecutive cycles and
+// gets counted twice by paydaysInCycle. So pin it to the cycle's last day, the
+// same collapse clampDay performs elsewhere; datesInCycle already dedupes.
+// Unreachable at startDay 1, where every clamped day-of-month is inside the month.
 export function dueDateInCycle(dueDay: number, key: CycleKey, startDay: number): Date {
   const { start, end } = cycleRange(key, startDay);
   const first = new Date(
     start.getFullYear(), start.getMonth(),
     clampDay(start.getFullYear(), start.getMonth(), dueDay),
   );
-  if (first >= start) return first;
-  return new Date(
+  let d = first >= start ? first : new Date(
     end.getFullYear(), end.getMonth(),
     clampDay(end.getFullYear(), end.getMonth(), dueDay),
   );
+  if (d >= end) d = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 1);
+  return d;
 }
 
 // Every one of these days-of-month, as concrete dates inside the cycle,

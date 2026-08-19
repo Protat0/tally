@@ -82,6 +82,46 @@ test('a due day resolves to its one occurrence inside the cycle', () => {
   assert.deepEqual(dueDateInCycle(31, '2026-02', 15), new Date(2026, 1, 28));
 });
 
+// A start day that clamps in the cycle's end month used to push a due day onto
+// the exclusive end — a date owned by the NEXT cycle, so paydaysInCycle counted
+// that payday in both. These three were the shape of the 17 real failures.
+test('a due day that overruns the cycle is pinned to its last day', () => {
+  assert.deepEqual(dueDateInCycle(30, '2024-03', 31), new Date(2024, 3, 29));
+  assert.deepEqual(dueDateInCycle(29, '2025-01', 31), new Date(2025, 1, 27));
+  assert.deepEqual(dueDateInCycle(28, '2025-01', 29), new Date(2025, 1, 27));
+});
+
+// The invariant the example tests above only ever sample. Exhaustive over every
+// start day, every due day and two years of cycles.
+test('a due day always resolves inside the cycle it was asked about', () => {
+  for (let startDay = 1; startDay <= 31; startDay++) {
+    for (let month = 0; month < 24; month++) {
+      const key = shiftCycleKey('2024-01', month);
+      const { start, end } = cycleRange(key, startDay);
+      for (let dueDay = 1; dueDay <= 31; dueDay++) {
+        const d = dueDateInCycle(dueDay, key, startDay);
+        assert.ok(d >= start && d < end, `dueDay=${dueDay} startDay=${startDay} key=${key} -> ${d.toDateString()}`);
+      }
+    }
+  }
+});
+
+// Half-open ranges are only trustworthy if they tile: no day may fall in two
+// cycles, and none in the gap between them.
+test('consecutive cycles tile the calendar exactly', () => {
+  for (let startDay = 1; startDay <= 31; startDay++) {
+    for (let month = 0; month < 24; month++) {
+      const key = shiftCycleKey('2024-01', month);
+      const next = shiftCycleKey(key, 1);
+      assert.equal(
+        cycleRange(key, startDay).end.getTime(),
+        cycleRange(next, startDay).start.getTime(),
+        `startDay=${startDay} ${key} -> ${next}`,
+      );
+    }
+  }
+});
+
 // The reason paydays move to cycles: a 1st-and-15th cycle starting on the 15th
 // contains BOTH paydays, so income and spending finally share a window.
 test('both paydays fall inside a cycle that starts on the 15th', () => {
