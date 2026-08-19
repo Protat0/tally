@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   useApp, fmt, Category, Bill, calcElectric,
 } from '@/components/AppContext';
-import { currentCycleKey, cycleKeyOf, cycleLabel } from '@/lib/cycle';
+import { currentCycleKey, cycleKeyOf, cycleLabel, dueDateInCycle } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
 import { ScrollLock } from '@/components/ModalLock';
@@ -240,6 +240,14 @@ export default function BudgetPage() {
     setEditBill(null);
   };
 
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const overdueCount = bills.filter(b =>
+    b.dueDay !== null
+    && !b.paidMonths.includes(currentCycle)
+    && dueDateInCycle(b.dueDay, currentCycle, cycleStartDay) < startOfToday
+  ).length;
+
   return (
     <div className="min-h-screen bg-[#0b0f1a]">
       <BottomNav />
@@ -287,10 +295,13 @@ export default function BudgetPage() {
                 status={
                   bills.length === 0
                     ? 'none yet'
-                    : `${bills.filter(b => !b.paidMonths.includes(currentCycle)).length} of ${bills.length} unpaid`
+                    : overdueCount > 0
+                      ? `${overdueCount} overdue`
+                      : `${bills.filter(b => !b.paidMonths.includes(currentCycle)).length} of ${bills.length} unpaid`
                 }
                 statusTone={
-                  bills.length > 0 && bills.every(b => b.paidMonths.includes(currentCycle)) ? 'good' : 'default'
+                  overdueCount > 0 ? 'warn'
+                    : bills.length > 0 && bills.every(b => b.paidMonths.includes(currentCycle)) ? 'good' : 'default'
                 }
                 onClick={() => setBillsOpen(true)}
               />

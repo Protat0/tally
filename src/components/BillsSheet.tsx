@@ -6,6 +6,7 @@ import BottomSheet from './BottomSheet';
 import WalletPicker from './WalletPicker';
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon } from './Icons';
 import { visibleCategories } from '@/lib/categories';
+import { dueDateInCycle } from '@/lib/cycle';
 
 function uid() { return crypto.randomUUID(); }
 
@@ -61,6 +62,32 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
   const remove = (id: string) =>
     updateSettings({ bills: bills.filter(b => b.id !== id) });
 
+  const { cycleStartDay } = settings;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  // Bills without a due day sort last: they cannot be chased, so they should
+  // not sit above the ones that can.
+  const dueOf = (b: Bill) =>
+    b.dueDay === null ? null : dueDateInCycle(b.dueDay, currentCycle, cycleStartDay);
+
+  const sorted = [...bills].sort((a, b) => {
+    const da = dueOf(a), db = dueOf(b);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.getTime() - db.getTime();
+  });
+
+  const dueLabel = (b: Bill): { text: string; overdue: boolean } | null => {
+    const due = dueOf(b);
+    if (!due) return null;
+    const days = Math.round((due.getTime() - startOfToday.getTime()) / 86_400_000);
+    if (days === 0) return { text: 'due today', overdue: false };
+    if (days < 0) return { text: `overdue by ${-days} day${days === -1 ? '' : 's'}`, overdue: true };
+    return { text: `due in ${days} day${days === 1 ? '' : 's'}`, overdue: false };
+  };
+
   return (
     <BottomSheet onClose={onClose}>
       <div className="flex items-center justify-between gap-3 mb-5">
@@ -80,7 +107,7 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
           </div>
         )}
 
-        {bills.map(b => {
+        {sorted.map(b => {
           const isPaid = b.paidMonths.includes(currentCycle);
           const isPaying = payingId === b.id;
           return (
@@ -93,9 +120,16 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
               }`}
             >
             <div className="flex items-center gap-2">
-              <p className={`flex-1 text-sm min-w-0 truncate ${isPaid ? 'text-slate-500' : 'text-white'}`}>
-                {b.name}
-              </p>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm truncate ${isPaid ? 'text-slate-500' : 'text-white'}`}>{b.name}</p>
+                {dueLabel(b) && (
+                  <p className={`text-xs ${
+                    isPaid ? 'text-slate-600' : dueLabel(b)!.overdue ? 'text-rose-400' : 'text-slate-500'
+                  }`}>
+                    {dueLabel(b)!.text}
+                  </p>
+                )}
+              </div>
               <p className="text-sm font-medium text-slate-300 shrink-0">{fmt(b.amount, currency)}</p>
               <button
                 onClick={() => (isPaid ? unmarkBillPaid(b.id) : isPaying ? setPayingId(null) : startPaying(b.id))}
