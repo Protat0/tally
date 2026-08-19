@@ -1764,6 +1764,16 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const previous = settings;
     setSettings(prev => ({ ...prev, cycleStartDay: day, bills, appliances }));
 
+    // Restores only what this function changed, so a rollback cannot undo an
+    // unrelated setting the user happened to touch while the writes were in
+    // flight — the same reason every setter here updates functionally.
+    const rollBack = () => setSettings(prev => ({
+      ...prev,
+      cycleStartDay: previous.cycleStartDay,
+      bills: previous.bills,
+      appliances: previous.appliances,
+    }));
+
     // The ticks are the data; cycle_start_day is the key that says how to read
     // them. Write the data first and the key last, so a run that dies half way
     // leaves ticks reading UNPAID rather than PAID. Unpaid costs the user a
@@ -1785,7 +1795,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const failed = writes.find(w => w.error);
     if (failed?.error) {
       console.error('cycle change failed, start day unchanged:', failed.error.message);
-      setSettings(previous);
+      rollBack();
       return;
     }
 
@@ -1793,7 +1803,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       .update({ cycle_start_day: day }).eq('user_id', userId);
     if (error) {
       console.error('cycle start day write failed:', error.message);
-      setSettings(previous);
+      rollBack();
     }
   };
 
