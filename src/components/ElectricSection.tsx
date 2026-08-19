@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import {
   useApp, fmt as fmtMoney, Appliance,
-  getApplianceMinutes, currentYYYYMM, calcElectric,
+  getApplianceMinutes, calcElectric,
 } from './AppContext';
+import { currentCycleKey } from '@/lib/cycle';
 import { PlusIcon, TrashIcon, BoltIcon, PencilIcon, CheckIcon, XIcon, HomeIcon } from './Icons';
 
 function uid() { return crypto.randomUUID(); }
@@ -45,7 +46,7 @@ export default function ElectricSection() {
 
   const addAppliance = () => {
     if (!newName.trim() || !newWatts) return;
-    const month = currentYYYYMM();
+    const month = currentCycleKey(settings.cycleStartDay);
     const a: Appliance = {
       id: uid(),
       name: newName.trim(),

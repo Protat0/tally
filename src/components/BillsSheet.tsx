@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useApp, fmt, Bill, currentYYYYMM } from './AppContext';
+import { useApp, fmt, Bill } from './AppContext';
 import BottomSheet from './BottomSheet';
 import WalletPicker from './WalletPicker';
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon } from './Icons';
@@ -16,7 +16,7 @@ interface Props {
 // Full recurring-bills management, lifted out of the Budget page so the page
 // only has to render a tile summarising it.
 export default function BillsSheet({ onClose, onEditBill }: Props) {
-  const { settings, updateSettings, markBillPaid, unmarkBillPaid, wallets } = useApp();
+  const { settings, updateSettings, markBillPaid, unmarkBillPaid, wallets, currentCycle } = useApp();
   const { bills, currency } = settings;
 
   const [addOpen, setAddOpen] = useState(false);
@@ -73,7 +73,7 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
         )}
 
         {bills.map(b => {
-          const isPaid = b.paidMonths.includes(currentYYYYMM());
+          const isPaid = b.paidMonths.includes(currentCycle);
           const isPaying = payingId === b.id;
           return (
             <div

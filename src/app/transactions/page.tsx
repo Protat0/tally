@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApp, fmt, INCOME_SOURCES } from '@/components/AppContext';
+import { currentCycleKey, cycleKeyOf, cycleLabel, cycleRange, shiftCycleKey } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import ActivityRow, { FeedItem, RowSource } from '@/components/ActivityRow';
@@ -36,7 +37,8 @@ export default function TransactionsPage() {
   const { currency } = settings;
 
   const today = new Date();
-  const [viewMonth, setViewMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+  const { cycleStartDay } = settings;
+  const [viewCycle, setViewCycle] = useState(() => currentCycleKey(cycleStartDay));
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   // Only one row may have its actions open, so the page owns which — a hook
   // per row could not enforce that.
@@ -44,9 +46,12 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<RowSource | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const y = viewMonth.getFullYear();
-  const m = viewMonth.getMonth();
-  const monthLabel = viewMonth.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+  const monthLabel = cycleLabel(viewCycle, cycleStartDay);
+  // The calendar grid below still renders a whole calendar month, so it
+  // anchors on the month the viewed cycle starts in.
+  const { start: cycleStart } = cycleRange(viewCycle, cycleStartDay);
+  const y = cycleStart.getFullYear();
+  const m = cycleStart.getMonth();
 
   const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
 
@@ -79,10 +84,7 @@ export default function TransactionsPage() {
 
   // Everything in the displayed month, normalised and bucketed by day.
   const { monthItems, totals, monthSpent, monthEarned } = useMemo(() => {
-    const inMonth = (iso: string) => {
-      const d = new Date(iso);
-      return d.getFullYear() === y && d.getMonth() === m;
-    };
+    const inMonth = (iso: string) => cycleKeyOf(new Date(iso), cycleStartDay) === viewCycle;
 
     const items: FeedItem[] = [
       ...expenses.filter(e => inMonth(e.date)).map((e): FeedItem => ({
@@ -172,7 +174,7 @@ export default function TransactionsPage() {
       monthEarned: items.filter(i => i.flow === 'earned').reduce((s, i) => s + i.amount, 0),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, y, m]);
+  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, viewCycle, cycleStartDay]);
 
   // Calendar cells: leading blanks then each day of the month.
   const cells = useMemo(() => {
@@ -206,7 +208,7 @@ export default function TransactionsPage() {
 
   const changeMonth = (delta: number) => {
     setSelectedKey(null);
-    setViewMonth(new Date(y, m + delta, 1));
+    setViewCycle(shiftCycleKey(viewCycle, delta));
   };
 
   const toggleDay = (key: string) => setSelectedKey(prev => (prev === key ? null : key));

@@ -305,22 +305,6 @@ interface AppContextValue extends Computed {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Superseded by currentCycleKey. Kept only as the zero-argument default for
-// code paths that genuinely mean "the calendar month", of which there are none
-// left — delete once the last caller is gone.
-export function currentYYYYMM(): string {
-  return currentCycleKey(1);
-}
-
-// A UTC-basis leftover: currentYYYYMM moved to a local basis (currentCycleKey)
-// and this did not follow, so it is now the only UTC month-key function left
-// in the codebase. It has no callers — cycleKeyOf(new Date(d), startDay) is
-// the correct, local-basis replacement, matching what every reader and
-// writer of a stored month/cycle key now uses. Delete once confirmed unused.
-export function yyyymmOf(date: string): string {
-  return new Date(date).toISOString().slice(0, 7);
-}
-
 export function getApplianceMinutes(a: Appliance, startDay: number): number {
   const month = currentCycleKey(startDay);
   const base = a.lastResetMonth === month ? a.totalMinutesThisMonth : 0;
@@ -347,19 +331,6 @@ function computeNextPayday(settings: Settings): Date | null {
 // which in PH (UTC+8) reports the previous day for anything before 08:00.
 export function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-// Every payday falling in a given month, ascending. A payday set to the 31st
-// still has to land in a 30-day month, so days are clamped to the month's end.
-// Superseded by paydaysInCycle; has no callers left — delete once confirmed unused.
-export function paydaysInMonth(settings: Settings, year: number, month: number): Date[] {
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const days =
-    settings.paydayCycle === '1st-15th' ? [1, 15]
-    : settings.paydayCycle === 'monthly' ? [1]
-    : settings.customPaydays;
-  const clamped = [...new Set(days.map(d => Math.min(Math.max(d, 1), lastDay)))];
-  return clamped.sort((a, b) => a - b).map(d => new Date(year, month, d));
 }
 
 // Every payday falling inside a cycle. This is why paydays moved off calendar

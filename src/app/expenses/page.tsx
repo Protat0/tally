@@ -3,8 +3,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  useApp, fmt, Category, Bill, currentYYYYMM, calcElectric,
+  useApp, fmt, Category, Bill, calcElectric,
 } from '@/components/AppContext';
+import { currentCycleKey, cycleKeyOf, cycleLabel } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
 import { ScrollLock } from '@/components/ModalLock';
@@ -165,21 +166,20 @@ export default function BudgetPage() {
     return () => clearInterval(id);
   }, []);
   const liveElectric = calcElectric(settings);
-  const now = new Date();
-  const monthLabel = now.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+  const { cycleStartDay } = settings;
+  const currentCycle = currentCycleKey(cycleStartDay);
+  const monthLabel = cycleLabel(currentCycle, cycleStartDay);
 
-  // ── this-month spend per expense category ──
+  // ── this-cycle spend per expense category ──
   const spentByCategory = useMemo(() => {
     const acc: Partial<Record<Category, number>> = {};
     expenses.forEach(e => {
-      const d = new Date(e.date);
-      if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+      if (cycleKeyOf(new Date(e.date), cycleStartDay) === currentCycle) {
         acc[e.category] = (acc[e.category] ?? 0) + e.amount;
       }
     });
     return acc;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses]);
+  }, [expenses, cycleStartDay, currentCycle]);
 
   // Electric reads from the meter; every other category from logged expenses.
   const spentFor = (key: Category): number =>
@@ -277,10 +277,10 @@ export default function BudgetPage() {
                 status={
                   bills.length === 0
                     ? 'none yet'
-                    : `${bills.filter(b => !b.paidMonths.includes(currentYYYYMM())).length} of ${bills.length} unpaid`
+                    : `${bills.filter(b => !b.paidMonths.includes(currentCycle)).length} of ${bills.length} unpaid`
                 }
                 statusTone={
-                  bills.length > 0 && bills.every(b => b.paidMonths.includes(currentYYYYMM())) ? 'good' : 'default'
+                  bills.length > 0 && bills.every(b => b.paidMonths.includes(currentCycle)) ? 'good' : 'default'
                 }
                 onClick={() => setBillsOpen(true)}
               />
