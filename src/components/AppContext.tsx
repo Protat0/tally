@@ -3,6 +3,10 @@
 import { createContext, useContext, useState, useMemo, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Deltas, mergeDeltas, negate, expenseDeltas, moveDeltas, round2 } from '@/lib/walletDeltas';
+import {
+  CycleKey, cycleKeyOf, currentCycleKey, cycleRange,
+  datesInCycle, daysInCycle, daysElapsedInCycle,
+} from '@/lib/cycle';
 
 // round2 lives with the delta arithmetic it guards, and is re-exported here
 // because SplitPanel, SettleUpSheet and the expense form already import it
@@ -132,6 +136,9 @@ export interface Settings {
   monthlyIncome: number;
   paydayCycle: PaydayCycle;
   customPaydays: number[];
+  // The day of the month the budget period begins. 1 is the calendar month and
+  // the default; 15 means a period running the 15th to the 14th.
+  cycleStartDay: number;
   emergencyFundTarget: number;
   monthlySavingsTarget: number;
   bills: Bill[];
@@ -203,6 +210,8 @@ interface Computed {
   electricBillEstimate: number;
   instalmentRemainingBalance: number;
   instalmentDebtFreeDate: string | null;
+  /** The cycle key everything on screen is currently reporting on. */
+  currentCycle: CycleKey;
 }
 
 interface AppContextValue extends Computed {
@@ -296,8 +305,11 @@ interface AppContextValue extends Computed {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Superseded by currentCycleKey. Kept only as the zero-argument default for
+// code paths that genuinely mean "the calendar month", of which there are none
+// left — delete once the last caller is gone.
 export function currentYYYYMM(): string {
-  return new Date().toISOString().slice(0, 7);
+  return currentCycleKey(1);
 }
 
 // The month key an arbitrary date falls in. Same UTC basis as currentYYYYMM,
@@ -306,8 +318,8 @@ export function yyyymmOf(date: string): string {
   return new Date(date).toISOString().slice(0, 7);
 }
 
-export function getApplianceMinutes(a: Appliance): number {
-  const month = currentYYYYMM();
+export function getApplianceMinutes(a: Appliance, startDay: number): number {
+  const month = currentCycleKey(startDay);
   const base = a.lastResetMonth === month ? a.totalMinutesThisMonth : 0;
   if (a.enabled && a.startedAt) {
     return base + (Date.now() - new Date(a.startedAt).getTime()) / 60_000;
@@ -346,6 +358,17 @@ export function paydaysInMonth(settings: Settings, year: number, month: number):
   return clamped.sort((a, b) => a - b).map(d => new Date(year, month, d));
 }
 
+// Every payday falling inside a cycle. This is why paydays moved off calendar
+// months: with a 1st-and-15th schedule and a cycle starting on the 15th, one
+// cycle contains BOTH paydays, so income and spending finally share a window.
+export function paydaysInCycle(settings: Settings, key: CycleKey): Date[] {
+  const days =
+    settings.paydayCycle === '1st-15th' ? [1, 15]
+    : settings.paydayCycle === 'monthly' ? [1]
+    : settings.customPaydays;
+  return datesInCycle(days, key, settings.cycleStartDay);
+}
+
 function daysUntil(date: Date | null): number {
   if (!date) return 0;
   const now = new Date(); now.setHours(0, 0, 0, 0); date.setHours(0, 0, 0, 0);
@@ -354,7 +377,7 @@ function daysUntil(date: Date | null): number {
 
 export function calcElectric(settings: Settings): number {
   return settings.appliances.reduce((s, a) => {
-    return s + (a.wattage * (getApplianceMinutes(a) / 60) / 1000) * settings.electricityRate;
+    return s + (a.wattage * (getApplianceMinutes(a, settings.cycleStartDay) / 60) / 1000) * settings.electricityRate;
   }, 0);
 }
 
@@ -369,6 +392,7 @@ function fromDBSettings(r: Row): Partial<Settings> {
     currency:           String(r.currency              || '₱'),
     paydayCycle:        (r.payday_cycle                || '1st-15th') as PaydayCycle,
     customPaydays:      (r.custom_paydays              || []) as number[],
+    cycleStartDay:      Number(r.cycle_start_day)      || 1,
     emergencyFundTarget: Number(r.emergency_fund_target) || 0,
     monthlySavingsTarget: Number(r.monthly_savings_target) || 0,
     electricityRate:    Number(r.electricity_rate)     || 11.8,
@@ -387,6 +411,7 @@ function toDBSettings(s: Partial<Settings>): Row {
   if ('currency'            in s) m.currency              = s.currency;
   if ('paydayCycle'         in s) m.payday_cycle          = s.paydayCycle;
   if ('customPaydays'       in s) m.custom_paydays        = s.customPaydays;
+  if ('cycleStartDay'       in s) m.cycle_start_day       = s.cycleStartDay;
   if ('emergencyFundTarget' in s) m.emergency_fund_target  = s.emergencyFundTarget;
   if ('monthlySavingsTarget' in s) m.monthly_savings_target = s.monthlySavingsTarget;
   if ('electricityRate'     in s) m.electricity_rate      = s.electricityRate;
@@ -456,6 +481,7 @@ const fromDBDebtEntry  = (r: Row): DebtEntry => ({
 
 const defaultSettings: Settings = {
   monthlyIncome: 0, paydayCycle: '1st-15th', customPaydays: [1, 15],
+  cycleStartDay: 1,
   emergencyFundTarget: 0, monthlySavingsTarget: 0,
   bills: [], budgetLines: [], appliances: [],
   electricityRate: 11.8, currency: '₱',
@@ -576,44 +602,39 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // ── Computed ─────────────────────────────────────────────────────────────
   const computed = useMemo<Computed>(() => {
     const today = new Date();
+    const startDay = settings.cycleStartDay;
+    const currentCycle = currentCycleKey(startDay);
+    const inCycle = (iso: string) => cycleKeyOf(new Date(iso), startDay) === currentCycle;
+
     const totalBalance = wallets.reduce((s, w) => s + w.balance, 0);
-    const monthExpenses = expenses.filter(e => {
-      const d = new Date(e.date);
-      return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
-    });
+    const monthExpenses = expenses.filter(e => inCycle(e.date));
     // Bank fees are not categorised expenses, but the money is gone all the same,
     // so every spending figure below counts them alongside what you bought.
     const feesThisMonth = moneyMoves
-      .filter(mm => {
-        const d = new Date(mm.date);
-        return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
-      })
+      .filter(mm => inCycle(mm.date))
       .reduce((s, mm) => s + mm.fee, 0);
     const totalSpentThisMonth = monthExpenses.reduce((s, e) => s + e.amount, 0) + feesThisMonth;
     // Actual money received this month. Kept separate from settings.monthlyIncome
     // (the planned figure) — no budget formula below reads this.
     const receivedThisMonth = moneyMoves
-      .filter(mm => {
-        if (mm.kind !== 'earned') return false;
-        const d = new Date(mm.date);
-        return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
-      })
+      .filter(mm => mm.kind === 'earned' && inCycle(mm.date))
       .reduce((s, mm) => s + mm.amount, 0);
     const totalBills = settings.bills.reduce((s, b) => s + b.amount, 0);
-    const daysElapsed = today.getDate();
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysElapsed = daysElapsedInCycle(currentCycle, startDay, today);
+    const daysInMonth = daysInCycle(currentCycle, startDay);
 
     // ── Income ───────────────────────────────────────────────────────────────
     // A payday that has come and gone without confirmation is NOT counted: the
     // money was due and there is no evidence it arrived. Future paydays are
     // counted — dropping those would be pessimistic rather than realistic.
-    const paydays = paydaysInMonth(settings, today.getFullYear(), today.getMonth());
+    const paydays = paydaysInCycle(settings, currentCycle);
     const perPayday = paydays.length > 0 ? settings.monthlyIncome / paydays.length : 0;
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const pendingPaydays: PendingPayday[] = paydays
-      .filter(d => d.getDate() <= daysElapsed && !settings.paydayLog[isoDay(d)])
+      .filter(d => d <= startOfToday && !settings.paydayLog[isoDay(d)])
       .map(d => ({ date: isoDay(d), amount: perPayday }));
     const unconfirmedIncome = pendingPaydays.reduce((s, p) => s + p.amount, 0);
-    const futureIncome = paydays.filter(d => d.getDate() > daysElapsed).length * perPayday;
+    const futureIncome = paydays.filter(d => d > startOfToday).length * perPayday;
     // receivedThisMonth is real `earned` money, so a confirmed payday is already
     // in it — adding perPayday again here would double-count.
     const projectedIncome = receivedThisMonth + futureIncome;
@@ -626,10 +647,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       (min, e) => (min === null || e.date < min ? e.date : min), null,
     );
     const trackingStart = firstExpenseDate ? new Date(firstExpenseDate) : today;
-    const startedThisMonth =
-      trackingStart.getMonth() === today.getMonth() &&
-      trackingStart.getFullYear() === today.getFullYear();
-    const untrackedDays = startedThisMonth ? Math.max(0, trackingStart.getDate() - 1) : 0;
+    const startedThisMonth = cycleKeyOf(trackingStart, startDay) === currentCycle;
+    const untrackedDays = startedThisMonth
+      ? Math.max(0, daysElapsedInCycle(currentCycle, startDay, trackingStart) - 1)
+      : 0;
     const trackedDays = Math.max(1, daysElapsed - untrackedDays);
     const remainingDays = Math.max(0, daysInMonth - daysElapsed);
 
@@ -668,6 +689,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       electricBillEstimate: calcElectric(settings),
       instalmentRemainingBalance: pending.reduce((s, p) => s + p.amount, 0),
       instalmentDebtFreeDate: pending.length > 0 ? pending[pending.length - 1].month : null,
+      currentCycle,
     };
   }, [wallets, expenses, moneyMoves, settings, instalmentSchedule]);
 
@@ -837,7 +859,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const moveBillTick = async (expenseId: string, newDate: string) => {
     const tick = billTickFor(expenseId);
     if (!tick) return;
-    const newMonth = yyyymmOf(newDate);
+    const newMonth = cycleKeyOf(new Date(newDate), settings.cycleStartDay);
     if (tick.month === newMonth) return;
 
     const paidExpenseIds = { ...tick.bill.paidExpenseIds };
@@ -1628,7 +1650,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // ── Appliances (live toggle + manual log) ─────────────────────────────────
   const toggleAppliance = async (id: string) => {
     const now = new Date();
-    const month = currentYYYYMM();
+    const month = currentCycleKey(settings.cycleStartDay);
     const appl = settings.appliances.find(a => a.id === id);
     if (!appl) return;
     const base = appl.lastResetMonth === month ? appl.totalMinutesThisMonth : 0;
@@ -1659,7 +1681,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // wallet the money came from rather than only flipping a flag. The tick
   // follows the expense: if the write fails there is nothing to mark paid with.
   const markBillPaid = async (id: string, walletId: string) => {
-    const month = currentYYYYMM();
+    const month = currentCycleKey(settings.cycleStartDay);
     const bill = settings.bills.find(b => b.id === id);
     if (!bill || bill.paidMonths.includes(month)) return;
 
@@ -1682,7 +1704,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // Unticking undoes the payment. deleteExpense refunds the wallet, so the only
   // thing tracked here is which expense to take back.
   const unmarkBillPaid = async (id: string) => {
-    const month = currentYYYYMM();
+    const month = currentCycleKey(settings.cycleStartDay);
     const bill = settings.bills.find(b => b.id === id);
     if (!bill || !bill.paidMonths.includes(month)) return;
 
@@ -1712,7 +1734,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   };
 
   const logApplianceUsage = async (id: string, minutes: number) => {
-    const month = currentYYYYMM();
+    const month = currentCycleKey(settings.cycleStartDay);
     const appl = settings.appliances.find(a => a.id === id);
     if (!appl) return;
     const base = appl.lastResetMonth === month ? appl.totalMinutesThisMonth : 0;
@@ -1731,11 +1753,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // zero out this month's appliance usage (stopping any running appliance).
   const resetBalances = async (walletBalances: Record<string, number>) => {
     if (!userId) return;
-    const month = currentYYYYMM();
-    const monthStart = `${month}-01T00:00:00.000Z`;
-    const [y, m] = month.split('-').map(Number);
-    const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
-    const nextStart = `${nextMonth}-01T00:00:00.000Z`;
+    const month = currentCycleKey(settings.cycleStartDay);
+    const { start, end } = cycleRange(month, settings.cycleStartDay);
+    const monthStart = start.toISOString();
+    const nextStart = end.toISOString();
 
     // Optimistic local updates
     setWallets(prev => prev.map(w => w.id in walletBalances ? { ...w, balance: walletBalances[w.id] } : w));
@@ -1781,6 +1802,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     setSettings(prev => ({
       ...prev,
       monthlyIncome: 0,
+      cycleStartDay: 1,
       emergencyFundTarget: 0,
       monthlySavingsTarget: 0,
       bills: [], budgetLines: [], appliances: [],
@@ -1803,6 +1825,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
     await supabase.from('settings').update({
       monthly_income: 0,
+      cycle_start_day: 1,
       emergency_fund_target: 0,
       monthly_savings_target: 0,
       category_budgets: {},
@@ -1819,7 +1842,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   };
 
   const refundApplianceUsage = async (id: string, minutes: number) => {
-    const month = currentYYYYMM();
+    const month = currentCycleKey(settings.cycleStartDay);
     const appl = settings.appliances.find(a => a.id === id);
     if (!appl) return;
     const base = appl.lastResetMonth === month ? appl.totalMinutesThisMonth : 0;
