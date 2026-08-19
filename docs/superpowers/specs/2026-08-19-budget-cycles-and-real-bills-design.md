@@ -3,7 +3,7 @@
 **Date:** 2026-08-19
 **Status:** Approved, not yet implemented
 **Scope:** New `src/lib/cycle.ts`; `src/components/AppContext.tsx`, `src/components/BillsSheet.tsx`, `src/app/expenses/page.tsx`, `src/app/transactions/page.tsx`, `src/app/settings/page.tsx`, `src/lib/categories.ts`, `src/app/expenses/new/page.tsx`, `src/components/ElectricSection.tsx`, `src/app/page.tsx`
-**Schema:** one migration — `bills` gains `due_day` and `category`
+**Schema:** two migrations — `bills` gains `due_day` and `category`; `settings` gains `cycle_start_day`
 
 ## Problem
 
@@ -34,7 +34,13 @@ The unifying diagnosis: **electricity is modelled as a meter when the money is a
 
 ### 1. The cycle primitive
 
-One new setting, `cycleStartDay: number` (1–31, default **1**). At 1 the behaviour is bit-for-bit today's, so this ships inert until the user opts in.
+One new setting, `cycleStartDay: number` (1–31, default **1**), persisted as `settings.cycle_start_day`:
+
+```sql
+alter table settings add column cycle_start_day int not null default 1;
+```
+
+At 1 the behaviour is bit-for-bit today's, so this ships inert until the user opts in.
 
 New pure module `src/lib/cycle.ts` — no React, no Supabase, testable in the `walletDeltas.ts` mould:
 
@@ -105,7 +111,7 @@ interface Bill {
 }
 ```
 
-**The one schema change in this design:**
+**The second schema change:**
 
 ```sql
 alter table bills add column due_day int;
