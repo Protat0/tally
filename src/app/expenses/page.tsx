@@ -3,8 +3,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  useApp, fmt, Category, Bill, currentYYYYMM, calcElectric,
+  useApp, fmt, Category, Bill, calcElectric,
 } from '@/components/AppContext';
+import { cycleKeyOf, cycleLabel, dueDateInCycle } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
 import { ScrollLock } from '@/components/ModalLock';
@@ -16,6 +17,7 @@ import CategoryDetailSheet from '@/components/CategoryDetailSheet';
 import ElectricSheet from '@/components/ElectricSheet';
 import SavingsSheet from '@/components/SavingsSheet';
 import { PlusIcon, CogIcon } from '@/components/Icons';
+import { visibleCategories, BUILTIN_CATEGORIES } from '@/lib/categories';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -28,22 +30,6 @@ function formatMonth(m: string): string {
 }
 
 const CATEGORY_ICON_OPTIONS = ['🎯','🐶','🎮','📚','☕','🏠','📱','💰','🌱','🎁','✈️','🍿','💪','🚿','👕','🎵'];
-
-// The fixed expense categories logged against, each user-budgetable.
-const EXPENSE_CATEGORIES: { key: Category; label: string; icon: string }[] = [
-  { key: 'food',      label: 'Food',      icon: '🍜' },
-  { key: 'transport', label: 'Transport', icon: '🚗' },
-  { key: 'bills',     label: 'Bills',     icon: '💡' },
-  { key: 'shopping',  label: 'Shopping',  icon: '🛍️' },
-  { key: 'health',    label: 'Health',    icon: '💊' },
-  { key: 'other',     label: 'Other',     icon: '✦' },
-];
-
-// Budgetable like the rest, but its spend is metered from appliance usage rather
-// than logged expenses — so it's deliberately absent from the Log Expense picker.
-const ELECTRIC_CATEGORY = { key: 'electric' as Category, label: 'Electric', icon: '⚡' };
-
-const BUDGETABLE_CATEGORIES = [...EXPENSE_CATEGORIES, ELECTRIC_CATEGORY];
 
 // ─── small components ─────────────────────────────────────────────────────────
 
@@ -73,7 +59,7 @@ export default function BudgetPage() {
     instalmentSchedule, instalmentRemainingBalance, instalmentDebtFreeDate,
     emergencyFund,
     updateBill,
-    receivedThisMonth,
+    receivedThisMonth, currentCycle,
   } = useApp();
 
   const {
@@ -83,12 +69,12 @@ export default function BudgetPage() {
 
   // Built-in categories plus any the user has added, minus any they've removed.
   const allCategories = [
-    ...BUDGETABLE_CATEGORIES,
+    ...BUILTIN_CATEGORIES,
     ...customCategories.map(c => ({ key: c.key, label: c.label, icon: c.icon })),
   ].filter(c => !hiddenCategories.includes(c.key));
 
   // Built-ins the user has removed, still restorable.
-  const hiddenBuiltIns = BUDGETABLE_CATEGORIES.filter(c => hiddenCategories.includes(c.key));
+  const hiddenBuiltIns = BUILTIN_CATEGORIES.filter(c => hiddenCategories.includes(c.key));
 
   const setCategoryBudget = (cat: Category, v: number) =>
     updateSettings({ categoryBudgets: { ...categoryBudgets, [cat]: v } });
@@ -154,36 +140,34 @@ export default function BudgetPage() {
 
   const catMetaFor = (key: Category) =>
     allCategories.find(c => c.key === key)
-    ?? BUDGETABLE_CATEGORIES.find(c => c.key === key)
+    ?? BUILTIN_CATEGORIES.find(c => c.key === key)
     ?? { key, label: String(key), icon: '✦' };
 
-  // Electric spend is metered from running appliances rather than logged
-  // expenses, so this page ticks to keep its budget row current.
+  // The ⚡ tile's forecast is read live from running appliances, so this page
+  // ticks to keep it current.
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 10_000);
     return () => clearInterval(id);
   }, []);
   const liveElectric = calcElectric(settings);
-  const now = new Date();
-  const monthLabel = now.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+  const { cycleStartDay } = settings;
+  // Taken from the context, not recomputed here: this page re-renders every 10s
+  // and a second derivation would step over the rollover before the memoised one
+  // did, leaving the Bills tile and the sheet it opens disagreeing about which
+  // cycle a bill was ticked for.
+  const monthLabel = cycleLabel(currentCycle, cycleStartDay);
 
-  // ── this-month spend per expense category ──
+  // ── this-cycle spend per expense category ──
   const spentByCategory = useMemo(() => {
     const acc: Partial<Record<Category, number>> = {};
     expenses.forEach(e => {
-      const d = new Date(e.date);
-      if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+      if (cycleKeyOf(new Date(e.date), cycleStartDay) === currentCycle) {
         acc[e.category] = (acc[e.category] ?? 0) + e.amount;
       }
     });
     return acc;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses]);
-
-  // Electric reads from the meter; every other category from logged expenses.
-  const spentFor = (key: Category): number =>
-    key === ELECTRIC_CATEGORY.key ? liveElectric : (spentByCategory[key] ?? 0);
+  }, [expenses, cycleStartDay, currentCycle]);
 
   // ── budget totals ──
   const totalBills    = bills.reduce((s, b) => s + b.amount, 0);
@@ -216,19 +200,39 @@ export default function BudgetPage() {
   const [editBill,     setEditBill]     = useState<Bill | null>(null);
   const [editBillName, setEditBillName] = useState('');
   const [editBillAmt,  setEditBillAmt]  = useState('');
+  const [editBillDue,  setEditBillDue]  = useState('');
+  const [editBillCat,  setEditBillCat]  = useState<Category>('bills');
 
   // ── handlers ──
   const openBillEdit = (bill: Bill) => {
     setEditBill(bill);
     setEditBillName(bill.name);
     setEditBillAmt(String(bill.amount));
+    setEditBillDue(bill.dueDay ? String(bill.dueDay) : '');
+    setEditBillCat(bill.category);
   };
 
   const saveBillEdit = () => {
     if (!editBill || !editBillName.trim() || !editBillAmt) return;
-    updateBill(editBill.id, { name: editBillName.trim(), amount: parseFloat(editBillAmt) || 0 });
+    updateBill(editBill.id, {
+      name: editBillName.trim(),
+      amount: parseFloat(editBillAmt) || 0,
+      dueDay: editBillDue ? Math.min(Math.max(parseInt(editBillDue), 1), 31) : null,
+      category: editBillCat,
+    });
     setEditBill(null);
   };
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const overdueCount = bills.filter(b =>
+    b.dueDay !== null
+    && !b.paidMonths.includes(currentCycle)
+    && dueDateInCycle(b.dueDay, currentCycle, cycleStartDay) < startOfToday
+  ).length;
+
+  // The bill the meter is trying to predict, if the user has one.
+  const electricBill = bills.find(b => b.category === 'electric') ?? null;
 
   return (
     <div className="min-h-screen bg-[#0b0f1a]">
@@ -277,24 +281,31 @@ export default function BudgetPage() {
                 status={
                   bills.length === 0
                     ? 'none yet'
-                    : `${bills.filter(b => !b.paidMonths.includes(currentYYYYMM())).length} of ${bills.length} unpaid`
+                    : overdueCount > 0
+                      ? `${overdueCount} overdue`
+                      : `${bills.filter(b => !b.paidMonths.includes(currentCycle)).length} of ${bills.length} unpaid`
                 }
                 statusTone={
-                  bills.length > 0 && bills.every(b => b.paidMonths.includes(currentYYYYMM())) ? 'good' : 'default'
+                  overdueCount > 0 ? 'warn'
+                    : bills.length > 0 && bills.every(b => b.paidMonths.includes(currentCycle)) ? 'good' : 'default'
                 }
                 onClick={() => setBillsOpen(true)}
               />
 
               <BudgetTile
                 icon="⚡"
-                label="Electric"
-                value={fmt(liveElectric, currency)}
+                label="Electric Usage"
+                value={`Est. ${fmt(liveElectric, currency)}`}
                 status={
-                  settings.appliances.filter(a => a.enabled).length > 0
-                    ? `${settings.appliances.filter(a => a.enabled).length} running`
-                    : 'nothing running'
+                  electricBill
+                    ? liveElectric > electricBill.amount
+                      ? `over your ${fmt(electricBill.amount, currency)} bill`
+                      : `tracking under your ${fmt(electricBill.amount, currency)} bill`
+                    : settings.appliances.filter(a => a.enabled).length > 0
+                      ? `${settings.appliances.filter(a => a.enabled).length} running`
+                      : 'from your appliances'
                 }
-                statusTone={settings.appliances.filter(a => a.enabled).length > 0 ? 'warn' : 'default'}
+                statusTone={electricBill && liveElectric > electricBill.amount ? 'warn' : 'default'}
                 onClick={() => setElectricOpen(true)}
               />
 
@@ -341,7 +352,7 @@ export default function BudgetPage() {
             {/* ── Categories ── */}
             <CategoryGrid
               categories={allCategories}
-              spentFor={spentFor}
+              amountFor={key => spentByCategory[key] ?? 0}
               budgets={categoryBudgets}
               currency={currency}
               onSelect={key => openCatEdit(key as Category)}
@@ -421,6 +432,24 @@ export default function BudgetPage() {
             className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
           />
           <InlineAmountInput label="Amount" value={editBillAmt} onChange={setEditBillAmt} />
+          <div className="mt-4">
+            <InlineAmountInput
+              label="Due day of month" value={editBillDue} onChange={setEditBillDue}
+              placeholder="e.g. 15"
+            />
+          </div>
+          <div className="mt-4">
+            <p className="text-xs text-slate-500 mb-1">Category</p>
+            <select
+              value={editBillCat}
+              onChange={e => setEditBillCat(e.target.value as Category)}
+              className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+            >
+              {visibleCategories(settings.customCategories, settings.hiddenCategories).map(c => (
+                <option key={c.key} value={c.key} className="bg-[#111827]">{c.icon} {c.label}</option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={saveBillEdit}
             disabled={!editBillName.trim() || !editBillAmt}
@@ -440,9 +469,8 @@ export default function BudgetPage() {
             icon={meta.icon}
             label={meta.label}
             budget={categoryBudgets[detailCat] ?? 0}
-            spent={spentFor(detailCat)}
+            spent={spentByCategory[detailCat] ?? 0}
             currency={currency}
-            metered={detailCat === ELECTRIC_CATEGORY.key}
             onClose={() => setDetailCat(null)}
           />
         );

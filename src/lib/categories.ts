@@ -15,6 +15,7 @@ export const BUILTIN_CATEGORIES: CategoryMeta[] = [
   { key: 'food',      label: 'Food',      icon: '🍜', color: 'bg-orange-500/15 border-orange-500/40' },
   { key: 'transport', label: 'Transport', icon: '🚗', color: 'bg-blue-500/15   border-blue-500/40' },
   { key: 'bills',     label: 'Bills',     icon: '💡', color: 'bg-amber-500/15  border-amber-500/40' },
+  { key: 'electric',  label: 'Electric',  icon: '⚡', color: 'bg-amber-500/15  border-amber-500/40' },
   { key: 'shopping',  label: 'Shopping',  icon: '🛍️', color: 'bg-pink-500/15   border-pink-500/40' },
   { key: 'health',    label: 'Health',    icon: '💊', color: 'bg-green-500/15  border-green-500/40' },
   { key: 'other',     label: 'Other',     icon: '✦',  color: 'bg-slate-500/15  border-slate-500/40' },

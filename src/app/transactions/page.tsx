@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApp, fmt, INCOME_SOURCES } from '@/components/AppContext';
+import { currentCycleKey, cycleKeyOf, cycleLabel, cycleRange, shiftCycleKey } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import ActivityRow, { FeedItem, RowSource } from '@/components/ActivityRow';
@@ -36,7 +37,8 @@ export default function TransactionsPage() {
   const { currency } = settings;
 
   const today = new Date();
-  const [viewMonth, setViewMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+  const { cycleStartDay } = settings;
+  const [viewCycle, setViewCycle] = useState(() => currentCycleKey(cycleStartDay));
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   // Only one row may have its actions open, so the page owns which — a hook
   // per row could not enforce that.
@@ -44,9 +46,7 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<RowSource | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const y = viewMonth.getFullYear();
-  const m = viewMonth.getMonth();
-  const monthLabel = viewMonth.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+  const monthLabel = cycleLabel(viewCycle, cycleStartDay);
 
   const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
 
@@ -77,12 +77,9 @@ export default function TransactionsPage() {
   const withFee = (sub: string, fee: number) =>
     fee > 0 ? [sub, `${fmt(fee, currency)} fee`].filter(Boolean).join(' · ') : sub;
 
-  // Everything in the displayed month, normalised and bucketed by day.
+  // Everything in the displayed cycle, normalised and bucketed by day.
   const { monthItems, totals, monthSpent, monthEarned } = useMemo(() => {
-    const inMonth = (iso: string) => {
-      const d = new Date(iso);
-      return d.getFullYear() === y && d.getMonth() === m;
-    };
+    const inMonth = (iso: string) => cycleKeyOf(new Date(iso), cycleStartDay) === viewCycle;
 
     const items: FeedItem[] = [
       ...expenses.filter(e => inMonth(e.date)).map((e): FeedItem => ({
@@ -172,16 +169,18 @@ export default function TransactionsPage() {
       monthEarned: items.filter(i => i.flow === 'earned').reduce((s, i) => s + i.amount, 0),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, y, m]);
+  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, viewCycle, cycleStartDay]);
 
-  // Calendar cells: leading blanks then each day of the month.
+  // Calendar cells for the viewed CYCLE, not its anchor month: leading blanks
+  // then every day from the cycle's start up to the day before it ends. A cycle
+  // that crosses a month boundary still runs contiguously, so padding by the
+  // start date's weekday keeps every date under the right column heading.
   const cells = useMemo(() => {
-    const firstWeekday = new Date(y, m, 1).getDay();
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const arr: (number | null)[] = Array(firstWeekday).fill(null);
-    for (let d = 1; d <= daysInMonth; d++) arr.push(d);
+    const { start, end } = cycleRange(viewCycle, cycleStartDay);
+    const arr: (Date | null)[] = Array(start.getDay()).fill(null);
+    for (const d = new Date(start); d < end; d.setDate(d.getDate() + 1)) arr.push(new Date(d));
     return arr;
-  }, [y, m]);
+  }, [viewCycle, cycleStartDay]);
 
   // Grouped by day (newest first), filtered to the selected date if any.
   const groups = useMemo(() => {
@@ -206,7 +205,7 @@ export default function TransactionsPage() {
 
   const changeMonth = (delta: number) => {
     setSelectedKey(null);
-    setViewMonth(new Date(y, m + delta, 1));
+    setViewCycle(shiftCycleKey(viewCycle, delta));
   };
 
   const toggleDay = (key: string) => setSelectedKey(prev => (prev === key ? null : key));
@@ -273,7 +272,7 @@ export default function TransactionsPage() {
             <div className="grid grid-cols-7 gap-1">
               {cells.map((d, i) => {
                 if (d === null) return <div key={`b${i}`} />;
-                const key = dayKey(new Date(y, m, d));
+                const key = dayKey(d);
                 const t = totals[key];
                 const active = Boolean(t && (t.spent > 0 || t.earned > 0));
                 const isToday = key === todayKey;
@@ -291,7 +290,7 @@ export default function TransactionsPage() {
                     <span className={`text-xs leading-none ${
                       isToday ? 'font-bold text-blue-400' : active ? 'text-white' : 'text-slate-600'
                     }`}>
-                      {d}
+                      {d.getDate()}
                     </span>
                     {t && t.earned > 0 ? (
                       <span className="mt-1 text-[9px] font-medium leading-none text-emerald-400">
@@ -319,14 +318,14 @@ export default function TransactionsPage() {
           {selectedKey && (
             <button onClick={() => setSelectedKey(null)}
               className="mb-3 text-xs text-blue-400 hover:text-blue-300">
-              ← Showing one day · view whole month
+              ← Showing one day · view whole cycle
             </button>
           )}
 
           {groups.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-10 text-center">
               <ReceiptIcon className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-              <p className="text-sm text-slate-500 mb-1">No activity this month.</p>
+              <p className="text-sm text-slate-500 mb-1">No activity this period.</p>
               <Link href="/expenses/new" className="text-xs text-blue-400 underline underline-offset-2">
                 Log an expense
               </Link>

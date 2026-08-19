@@ -7,7 +7,7 @@ interface CatMeta { key: string; label: string; icon: string }
 
 interface Props {
   categories: CatMeta[];
-  spentFor: (key: string) => number;
+  amountFor: (key: string) => number;
   budgets: Partial<Record<string, number>>;
   currency: string;
   /** Pencil — opens the budget editor. */
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export default function CategoryGrid({
-  categories, spentFor, budgets, currency, onSelect, onOpen, onAdd,
+  categories, amountFor, budgets, currency, onSelect, onOpen, onAdd,
 }: Props) {
   return (
     <div>
@@ -31,7 +31,7 @@ export default function CategoryGrid({
             key={c.key}
             icon={c.icon}
             label={c.label}
-            spent={spentFor(c.key)}
+            spent={amountFor(c.key)}
             budget={budgets[c.key] ?? 0}
             currency={currency}
             onEdit={() => onSelect(c.key)}

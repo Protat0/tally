@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useApp, fmt, getApplianceMinutes } from '@/components/AppContext';
+import { useApp, fmt } from '@/components/AppContext';
+import { cycleRange, daysElapsedInCycle, daysInCycle } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
 import ProgressBar from '@/components/ProgressBar';
 import PaydaySheet from '@/components/PaydaySheet';
@@ -40,7 +41,7 @@ export default function Dashboard() {
     optimisticSavings, unconfirmedIncome, pendingPaydays,
     untrackedDays, blindSpend, assumedSpending,
     spendingPacePercent, daysUntilPayday, nextPaydayDate,
-    electricBillEstimate, emergencyFund,
+    electricBillEstimate, emergencyFund, currentCycle,
     totalSpentThisMonth, toggleAppliance, setAppliancePinned,
   } = useApp();
 
@@ -61,12 +62,28 @@ export default function Dashboard() {
   const ef = emergencyFund;
 
   const today = new Date();
-  const daysElapsed = today.getDate();
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  // The same cycle arithmetic spendingPacePercent uses. Measuring elapsed days
+  // off the calendar instead would print a fraction that disagrees with the
+  // percentage beside it the moment the cycle stops starting on the 1st.
+  const daysElapsed = daysElapsedInCycle(currentCycle, settings.cycleStartDay, today);
+  const cycleDays = daysInCycle(currentCycle, settings.cycleStartDay);
   const totalBills = settings.bills.reduce((s, b) => s + b.amount, 0);
   const discretionary = settings.monthlyIncome - totalBills;
-  const expectedSoFar = discretionary > 0 ? discretionary * (daysElapsed / daysInMonth) : 0;
-  const monthLabel = today.toLocaleDateString('en-PH', { month: 'short' });
+  const expectedSoFar = discretionary > 0 ? discretionary * (daysElapsed / cycleDays) : 0;
+
+  // The blind days run from the cycle's opening day, which need not be the 1st
+  // of any month, so the range names its real dates instead of counting from one.
+  const untrackedLabel = (() => {
+    const { start } = cycleRange(currentCycle, settings.cycleStartDay);
+    const last = new Date(start.getFullYear(), start.getMonth(), start.getDate() + untrackedDays - 1);
+    const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+    const from = start.toLocaleDateString('en-PH', opts);
+    if (untrackedDays <= 1) return `${from} untracked`;
+    const to = last.getMonth() === start.getMonth()
+      ? String(last.getDate())
+      : last.toLocaleDateString('en-PH', opts);
+    return `${from}–${to} untracked`;
+  })();
 
   const nextPaydayStr = nextPaydayDate
     ? nextPaydayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
@@ -182,7 +199,7 @@ export default function Dashboard() {
                   <Row label="Logged so far" value={`− ${fmt(totalSpentThisMonth, currency)}`} />
                   {untrackedDays > 0 && (
                     <Row
-                      label={`${monthLabel} 1–${untrackedDays} untracked`}
+                      label={untrackedLabel}
                       value={`− ${fmt(blindSpend, currency)}`}
                       hint="charged at your budget rate, not counted as zero"
                     />
@@ -256,15 +273,16 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Electric Bill */}
+            {/* Electric Estimate */}
             <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <BoltIcon className="w-4 h-4 text-slate-400" />
-                  <p className="text-sm font-medium text-white">Electric Bill</p>
+                  <p className="text-sm font-medium text-white">Electric Estimate</p>
                 </div>
                 <p className="text-2xl font-bold text-white">{fmt(electricBillEstimate, currency)}</p>
               </div>
+              <p className="mb-3 text-xs text-slate-500">from your appliances this cycle</p>
 
               {/* Pinned appliance toggles */}
               {settings.appliances.filter(a => a.pinnedToHome).length > 0 && (

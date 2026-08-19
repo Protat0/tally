@@ -5,27 +5,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp, fmt, round2, Category } from '@/components/AppContext';
 import { XIcon } from '@/components/Icons';
 import SplitPanel, { SplitResult } from '@/components/SplitPanel';
-
-const CATEGORIES: { key: Category; label: string; icon: string; color: string }[] = [
-  { key: 'food',      label: 'Food',      icon: '🍜', color: 'bg-orange-500/15 border-orange-500/40' },
-  { key: 'transport', label: 'Transport', icon: '🚗', color: 'bg-blue-500/15   border-blue-500/40' },
-  { key: 'bills',     label: 'Bills',     icon: '💡', color: 'bg-amber-500/15  border-amber-500/40' },
-  { key: 'shopping',  label: 'Shopping',  icon: '🛍️', color: 'bg-pink-500/15   border-pink-500/40' },
-  { key: 'health',    label: 'Health',    icon: '💊', color: 'bg-green-500/15  border-green-500/40' },
-  { key: 'other',     label: 'Other',     icon: '✦',  color: 'bg-slate-500/15  border-slate-500/40' },
-];
+import { visibleCategories } from '@/lib/categories';
 
 function ExpenseForm() {
   const { wallets, addExpense, settings } = useApp();
-  // Built-in categories plus any user-defined custom ones (given a neutral
-  // color), minus any the user has removed on the Budget page.
-  const categories = [
-    ...CATEGORIES,
-    ...settings.customCategories.map(c => ({
-      key: c.key, label: c.label, icon: c.icon,
-      color: 'bg-slate-500/15 border-slate-500/40',
-    })),
-  ].filter(c => !settings.hiddenCategories.includes(c.key));
+  // Built-in categories plus any user-defined custom ones, minus any the user
+  // has removed on the Budget page — the single shared list, not a local copy.
+  const categories = visibleCategories(settings.customCategories, settings.hiddenCategories);
   const router = useRouter();
   const searchParams = useSearchParams();
   const presetWalletId = searchParams.get('walletId') ?? '';
