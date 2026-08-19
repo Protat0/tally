@@ -1790,7 +1790,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
   // Wipe everything the user has entered, leaving the account itself and the
   // few preferences that are configuration rather than data: currency, payday
-  // cycle and electricity rate.
+  // cycle, cycle start day and electricity rate.
   const resetAccount = async () => {
     if (!userId) return;
 
@@ -1802,7 +1802,6 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     setSettings(prev => ({
       ...prev,
       monthlyIncome: 0,
-      cycleStartDay: 1,
       emergencyFundTarget: 0,
       monthlySavingsTarget: 0,
       bills: [], budgetLines: [], appliances: [],
@@ -1825,7 +1824,6 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
     await supabase.from('settings').update({
       monthly_income: 0,
-      cycle_start_day: 1,
       emergency_fund_target: 0,
       monthly_savings_target: 0,
       category_budgets: {},

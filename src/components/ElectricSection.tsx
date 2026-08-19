@@ -204,7 +204,7 @@ export default function ElectricSection() {
       {appliances.length > 0 && (
         <div className="space-y-2">
           {appliances.map(a => {
-            const minutes = getApplianceMinutes(a);
+            const minutes = getApplianceMinutes(a, settings.cycleStartDay);
             const cost = (a.wattage * (minutes / 60) / 1000) * electricityRate;
             const isEditing = editId === a.id;
 
