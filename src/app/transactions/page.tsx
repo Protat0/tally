@@ -82,7 +82,7 @@ export default function TransactionsPage() {
   const withFee = (sub: string, fee: number) =>
     fee > 0 ? [sub, `${fmt(fee, currency)} fee`].filter(Boolean).join(' · ') : sub;
 
-  // Everything in the displayed month, normalised and bucketed by day.
+  // Everything in the displayed cycle, normalised and bucketed by day.
   const { monthItems, totals, monthSpent, monthEarned } = useMemo(() => {
     const inMonth = (iso: string) => cycleKeyOf(new Date(iso), cycleStartDay) === viewCycle;
 
@@ -176,7 +176,7 @@ export default function TransactionsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, viewCycle, cycleStartDay]);
 
-  // Calendar cells: leading blanks then each day of the month.
+  // Calendar cells for the viewed cycle's anchor month: leading blanks then each day.
   const cells = useMemo(() => {
     const firstWeekday = new Date(y, m, 1).getDay();
     const daysInMonth = new Date(y, m + 1, 0).getDate();

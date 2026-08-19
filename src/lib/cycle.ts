@@ -17,7 +17,7 @@ export type CycleKey = string; // 'YYYY-MM', one-based month
 // `month` is zero-based here, as in the Date constructor.
 //
 // A start day of 31 still has to land in a 30-day month, so it clamps to that
-// month's end — the same rule paydaysInMonth already applies to paydays.
+// month's end — the same rule paydaysInCycle already applies to paydays.
 export function clampDay(year: number, month: number, day: number): number {
   const lastDay = new Date(year, month + 1, 0).getDate();
   return Math.min(Math.max(day, 1), lastDay);
