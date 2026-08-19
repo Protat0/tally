@@ -30,11 +30,9 @@ interface Props {
   icon: string;
   label: string;
   budget: number;
-  /** This month's spend — matches the card, and is metered for Electric. */
+  /** This month's spend — matches the card. */
   spent: number;
   currency: string;
-  /** Electric is metered from appliance usage, so it has no logged expenses. */
-  metered?: boolean;
   onClose: () => void;
 }
 
@@ -45,7 +43,7 @@ interface MonthGroup {
 }
 
 export default function CategoryDetailSheet({
-  categoryKey, icon, label, budget, spent, currency, metered = false, onClose,
+  categoryKey, icon, label, budget, spent, currency, onClose,
 }: Props) {
   const { expenses, wallets, debtEntries, debtPeople } = useApp();
 
@@ -146,21 +144,10 @@ export default function CategoryDetailSheet({
 
       {groups.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-8 text-center">
-          {metered ? (
-            <p className="text-sm text-slate-500">
-              Electric is metered from your appliances, so it has no logged expenses.
-            </p>
-          ) : (
-            <>
-              <p className="text-sm text-slate-500 mb-1">Nothing logged here yet.</p>
-              <Link
-                href="/expenses/new"
-                className="text-xs text-blue-400 underline underline-offset-2"
-              >
-                Log an expense
-              </Link>
-            </>
-          )}
+          <p className="text-sm text-slate-500 mb-1">Nothing logged here yet.</p>
+          <Link href="/expenses/new" className="text-xs text-blue-400 underline underline-offset-2">
+            Log an expense
+          </Link>
         </div>
       ) : (
         <div className="space-y-5">

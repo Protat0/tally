@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useApp, fmt, getApplianceMinutes } from '@/components/AppContext';
+import { useApp, fmt } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import ProgressBar from '@/components/ProgressBar';
 import PaydaySheet from '@/components/PaydaySheet';
@@ -256,15 +256,16 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Electric Bill */}
+            {/* Electric Estimate */}
             <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <BoltIcon className="w-4 h-4 text-slate-400" />
-                  <p className="text-sm font-medium text-white">Electric Bill</p>
+                  <p className="text-sm font-medium text-white">Electric Estimate</p>
                 </div>
                 <p className="text-2xl font-bold text-white">{fmt(electricBillEstimate, currency)}</p>
               </div>
+              <p className="mb-3 text-xs text-slate-500">from your appliances this cycle</p>
 
               {/* Pinned appliance toggles */}
               {settings.appliances.filter(a => a.pinnedToHome).length > 0 && (

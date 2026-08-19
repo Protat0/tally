@@ -17,7 +17,7 @@ import CategoryDetailSheet from '@/components/CategoryDetailSheet';
 import ElectricSheet from '@/components/ElectricSheet';
 import SavingsSheet from '@/components/SavingsSheet';
 import { PlusIcon, CogIcon } from '@/components/Icons';
-import { visibleCategories } from '@/lib/categories';
+import { visibleCategories, BUILTIN_CATEGORIES } from '@/lib/categories';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -30,22 +30,6 @@ function formatMonth(m: string): string {
 }
 
 const CATEGORY_ICON_OPTIONS = ['🎯','🐶','🎮','📚','☕','🏠','📱','💰','🌱','🎁','✈️','🍿','💪','🚿','👕','🎵'];
-
-// The fixed expense categories logged against, each user-budgetable.
-const EXPENSE_CATEGORIES: { key: Category; label: string; icon: string }[] = [
-  { key: 'food',      label: 'Food',      icon: '🍜' },
-  { key: 'transport', label: 'Transport', icon: '🚗' },
-  { key: 'bills',     label: 'Bills',     icon: '💡' },
-  { key: 'shopping',  label: 'Shopping',  icon: '🛍️' },
-  { key: 'health',    label: 'Health',    icon: '💊' },
-  { key: 'other',     label: 'Other',     icon: '✦' },
-];
-
-// Budgetable like the rest, but its spend is metered from appliance usage rather
-// than logged expenses — so it's deliberately absent from the Log Expense picker.
-const ELECTRIC_CATEGORY = { key: 'electric' as Category, label: 'Electric', icon: '⚡' };
-
-const BUDGETABLE_CATEGORIES = [...EXPENSE_CATEGORIES, ELECTRIC_CATEGORY];
 
 // ─── small components ─────────────────────────────────────────────────────────
 
@@ -85,12 +69,12 @@ export default function BudgetPage() {
 
   // Built-in categories plus any the user has added, minus any they've removed.
   const allCategories = [
-    ...BUDGETABLE_CATEGORIES,
+    ...BUILTIN_CATEGORIES,
     ...customCategories.map(c => ({ key: c.key, label: c.label, icon: c.icon })),
   ].filter(c => !hiddenCategories.includes(c.key));
 
   // Built-ins the user has removed, still restorable.
-  const hiddenBuiltIns = BUDGETABLE_CATEGORIES.filter(c => hiddenCategories.includes(c.key));
+  const hiddenBuiltIns = BUILTIN_CATEGORIES.filter(c => hiddenCategories.includes(c.key));
 
   const setCategoryBudget = (cat: Category, v: number) =>
     updateSettings({ categoryBudgets: { ...categoryBudgets, [cat]: v } });
@@ -156,11 +140,11 @@ export default function BudgetPage() {
 
   const catMetaFor = (key: Category) =>
     allCategories.find(c => c.key === key)
-    ?? BUDGETABLE_CATEGORIES.find(c => c.key === key)
+    ?? BUILTIN_CATEGORIES.find(c => c.key === key)
     ?? { key, label: String(key), icon: '✦' };
 
-  // Electric spend is metered from running appliances rather than logged
-  // expenses, so this page ticks to keep its budget row current.
+  // The ⚡ tile's forecast is read live from running appliances, so this page
+  // ticks to keep it current.
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 10_000);
@@ -181,10 +165,6 @@ export default function BudgetPage() {
     });
     return acc;
   }, [expenses, cycleStartDay, currentCycle]);
-
-  // Electric reads from the meter; every other category from logged expenses.
-  const spentFor = (key: Category): number =>
-    key === ELECTRIC_CATEGORY.key ? liveElectric : (spentByCategory[key] ?? 0);
 
   // ── budget totals ──
   const totalBills    = bills.reduce((s, b) => s + b.amount, 0);
@@ -248,6 +228,9 @@ export default function BudgetPage() {
     && dueDateInCycle(b.dueDay, currentCycle, cycleStartDay) < startOfToday
   ).length;
 
+  // The bill the meter is trying to predict, if the user has one.
+  const electricBill = bills.find(b => b.category === 'electric') ?? null;
+
   return (
     <div className="min-h-screen bg-[#0b0f1a]">
       <BottomNav />
@@ -309,13 +292,17 @@ export default function BudgetPage() {
               <BudgetTile
                 icon="⚡"
                 label="Electric"
-                value={fmt(liveElectric, currency)}
+                value={`Est. ${fmt(liveElectric, currency)}`}
                 status={
-                  settings.appliances.filter(a => a.enabled).length > 0
-                    ? `${settings.appliances.filter(a => a.enabled).length} running`
-                    : 'nothing running'
+                  electricBill
+                    ? liveElectric > electricBill.amount
+                      ? `over your ${fmt(electricBill.amount, currency)} bill`
+                      : `tracking under your ${fmt(electricBill.amount, currency)} bill`
+                    : settings.appliances.filter(a => a.enabled).length > 0
+                      ? `${settings.appliances.filter(a => a.enabled).length} running`
+                      : 'from your appliances'
                 }
-                statusTone={settings.appliances.filter(a => a.enabled).length > 0 ? 'warn' : 'default'}
+                statusTone={electricBill && liveElectric > electricBill.amount ? 'warn' : 'default'}
                 onClick={() => setElectricOpen(true)}
               />
 
@@ -362,7 +349,7 @@ export default function BudgetPage() {
             {/* ── Categories ── */}
             <CategoryGrid
               categories={allCategories}
-              spentFor={spentFor}
+              amountFor={key => spentByCategory[key] ?? 0}
               budgets={categoryBudgets}
               currency={currency}
               onSelect={key => openCatEdit(key as Category)}
@@ -479,9 +466,8 @@ export default function BudgetPage() {
             icon={meta.icon}
             label={meta.label}
             budget={categoryBudgets[detailCat] ?? 0}
-            spent={spentFor(detailCat)}
+            spent={spentByCategory[detailCat] ?? 0}
             currency={currency}
-            metered={detailCat === ELECTRIC_CATEGORY.key}
             onClose={() => setDetailCat(null)}
           />
         );
