@@ -4,6 +4,7 @@ import {
   cycleKeyOf, cycleRange, cycleLabel, dueDateInCycle,
   datesInCycle, daysInCycle, daysElapsedInCycle, shiftCycleKey, clampDay,
 } from './cycle.ts';
+import { rekeyBillTicks } from './cycle.ts';
 
 const at = (y: number, m: number, d: number) => new Date(y, m - 1, d);
 
@@ -109,4 +110,75 @@ test('stepping a cycle key moves whole cycles and rolls the year', () => {
   assert.equal(shiftCycleKey('2026-08', -1), '2026-07');
   assert.equal(shiftCycleKey('2026-12', 1), '2027-01');
   assert.equal(shiftCycleKey('2026-01', -1), '2025-12');
+});
+
+// A bill paid on Aug 5 was stored under '2026-08' meaning "August". Once the
+// cycle starts on the 15th, '2026-08' means Aug 15 – Sep 14 — a period that
+// payment does NOT belong to. Left alone the bill would read as already paid.
+test('a tick moves to the cycle its payment actually falls in', () => {
+  const out = rekeyBillTicks(
+    [{ id: 'b1', paidMonths: ['2026-08'], paidExpenseIds: { '2026-08': 'e1' } }],
+    { e1: new Date(2026, 7, 5).toISOString() },
+    15,
+  );
+
+  assert.deepEqual(out[0].paidMonths, ['2026-07']);
+  assert.deepEqual(out[0].paidExpenseIds, { '2026-07': 'e1' });
+});
+
+test('a tick already in the right cycle is left where it is', () => {
+  const out = rekeyBillTicks(
+    [{ id: 'b1', paidMonths: ['2026-08'], paidExpenseIds: { '2026-08': 'e1' } }],
+    { e1: new Date(2026, 7, 20).toISOString() },
+    15,
+  );
+
+  assert.deepEqual(out[0].paidMonths, ['2026-08']);
+  assert.deepEqual(out[0].paidExpenseIds, { '2026-08': 'e1' });
+});
+
+// Months ticked before payments recorded an expense have no date to re-key
+// from. Inventing one would be worse than leaving them.
+test('a legacy tick with no expense is left untouched', () => {
+  const out = rekeyBillTicks(
+    [{ id: 'b1', paidMonths: ['2026-06', '2026-08'], paidExpenseIds: { '2026-08': 'e1' } }],
+    { e1: new Date(2026, 7, 5).toISOString() },
+    15,
+  );
+
+  assert.deepEqual(out[0].paidMonths.sort(), ['2026-06', '2026-07']);
+});
+
+// An expense id pointing at a row that no longer exists must not silently drop
+// the tick — the bill would become payable twice.
+test('a tick whose expense is missing keeps its original key', () => {
+  const out = rekeyBillTicks(
+    [{ id: 'b1', paidMonths: ['2026-08'], paidExpenseIds: { '2026-08': 'gone' } }],
+    {},
+    15,
+  );
+
+  assert.deepEqual(out[0].paidMonths, ['2026-08']);
+  assert.deepEqual(out[0].paidExpenseIds, { '2026-08': 'gone' });
+});
+
+// The confirm sheet may be re-run, and a failed write may be retried.
+test('re-keying twice changes nothing the second time', () => {
+  const bills = [{ id: 'b1', paidMonths: ['2026-08'], paidExpenseIds: { '2026-08': 'e1' } }];
+  const dates = { e1: new Date(2026, 7, 5).toISOString() };
+
+  const once = rekeyBillTicks(bills, dates, 15);
+
+  assert.deepEqual(rekeyBillTicks(once, dates, 15), once);
+});
+
+test('fields other than the ticks survive re-keying', () => {
+  const out = rekeyBillTicks(
+    [{ id: 'b1', name: 'Electric', amount: 2500, paidMonths: [], paidExpenseIds: {} }],
+    {},
+    15,
+  );
+
+  assert.equal(out[0].name, 'Electric');
+  assert.equal(out[0].amount, 2500);
 });

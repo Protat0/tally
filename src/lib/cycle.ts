@@ -117,3 +117,49 @@ export function daysElapsedInCycle(key: CycleKey, startDay: number, now: Date = 
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.floor((today.getTime() - start.getTime()) / DAY_MS) + 1;
 }
+
+export interface TickedBill {
+  id: string;
+  paidMonths: string[];
+  paidExpenseIds: Record<string, string>;
+}
+
+// Changing the cycle start day silently reinterprets every stored tick: the
+// string '2026-08' stops meaning "August" and starts meaning "Aug 15 – Sep 14".
+// The payment's own date is the only reliable evidence of which cycle it
+// belongs to, so each tick is re-keyed from the expense it created.
+//
+// Ticks with no usable expense date keep their original key. Two ticks landing
+// on the same new key is possible in principle; the later month wins, which is
+// deterministic and matches "the most recent payment for this period".
+export function rekeyBillTicks<T extends TickedBill>(
+  bills: T[],
+  expenseDates: Record<string, string>,
+  newStartDay: number,
+): T[] {
+  return bills.map(bill => {
+    const paidExpenseIds: Record<string, string> = {};
+    const keys = new Set<string>();
+
+    for (const month of [...bill.paidMonths].sort()) {
+      const expenseId = bill.paidExpenseIds[month];
+      const iso = expenseId ? expenseDates[expenseId] : undefined;
+      const key = iso ? cycleKeyOf(new Date(iso), newStartDay) : month;
+
+      keys.add(key);
+      if (expenseId) paidExpenseIds[key] = expenseId;
+    }
+
+    // A tick recorded in paidExpenseIds but absent from paidMonths would be
+    // dropped by the loop above, stranding the expense it points at.
+    for (const [month, expenseId] of Object.entries(bill.paidExpenseIds)) {
+      if (bill.paidMonths.includes(month)) continue;
+      const iso = expenseDates[expenseId];
+      const key = iso ? cycleKeyOf(new Date(iso), newStartDay) : month;
+      keys.add(key);
+      paidExpenseIds[key] = expenseId;
+    }
+
+    return { ...bill, paidMonths: [...keys].sort(), paidExpenseIds };
+  });
+}
