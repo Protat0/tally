@@ -1,5 +1,6 @@
 // Release notes, shown once after an update. Newest first. Adding an entry here
-// is part of shipping the change it describes.
+// is part of shipping the change it describes: `npm run patch-notes` drafts one
+// from the Patch-note: lines on commits since the last draft (see AGENTS.md).
 
 export interface PatchNote {
   /** Unique per release. It is saved on the device once seen, so never reuse one. */
@@ -38,6 +39,9 @@ export const PATCH_NOTES: PatchNote[] = [
     ],
   },
 ];
+
+// Patch notes drafted through commit f140c218937ed516f6a2ae26c1c088b83412ce89
+// `npm run patch-notes` drafts from the commit after this one, then moves it forward.
 
 export const SEEN_VERSION_KEY = 'tally-seen-version';
 
