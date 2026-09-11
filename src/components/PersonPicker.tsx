@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useApp, type DebtPerson } from './AppContext';
-import BottomSheet from './BottomSheet';
+import NestedSheet from './NestedSheet';
 import PersonAvatar from './PersonAvatar';
 import { CheckIcon, ChevronRightIcon, PlusIcon, SearchIcon } from './Icons';
 import { groupPeople, searchPeople, canAddPerson } from '@/lib/people';
@@ -63,14 +62,8 @@ export default function PersonPicker(props: Props) {
   );
 }
 
-const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-
-// Mounted fresh on each open, so the search always starts empty.
-//
-// Portalled to <body>: the forms that open it are sheets and full-screen
-// overlays themselves. React still bubbles events from a portal to the
-// components that rendered it, so touches and clicks stop at the wrapper —
-// otherwise swiping this sheet down would drag the sheet beneath it too.
+// Mounted fresh on each open, so the search always starts empty. A nested
+// sheet, since the forms that open it are sheets and full-screen overlays.
 function PeopleSheet(props: Props & { onDone: () => void }) {
   const { debtPeople, debtEntries, addDebtPerson } = useApp();
   const [query, setQuery]   = useState('');
@@ -134,71 +127,68 @@ function PeopleSheet(props: Props & { onDone: () => void }) {
     <p className="mb-1 mt-3 px-2 text-[11px] font-semibold uppercase tracking-widest text-ink-3">{text}</p>
   );
 
-  return createPortal(
-    <div onClick={stop} onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop}>
-      <BottomSheet onClose={props.onDone}>
-        <p className="mb-4 text-lg font-semibold text-ink">{title}</p>
+  return (
+    <NestedSheet onClose={props.onDone}>
+      <p className="mb-4 text-lg font-semibold text-ink">{title}</p>
 
-        {/* Stays in reach while a long list scrolls beneath it. */}
-        <div className="sticky top-0 z-10 -mx-6 bg-surface px-6 py-2">
-          <div className="flex items-center gap-2 rounded-xl border border-line bg-canvas px-3 focus-within:border-primary">
-            <SearchIcon className="h-4 w-4 shrink-0 text-ink-4" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') create(); }}
-              placeholder={debtPeople.length > 0 ? 'Search or add a name' : 'Add a name'}
-              // Only when there is nobody to pick: a keyboard over the list gets in the way.
-              autoFocus={debtPeople.length === 0}
-              className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-ink placeholder-ink-5 outline-none"
-            />
-          </div>
+      {/* Stays in reach while a long list scrolls beneath it. */}
+      <div className="sticky top-0 z-10 -mx-6 bg-surface px-6 py-2">
+        <div className="flex items-center gap-2 rounded-xl border border-line bg-canvas px-3 focus-within:border-primary">
+          <SearchIcon className="h-4 w-4 shrink-0 text-ink-4" />
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') create(); }}
+            placeholder={debtPeople.length > 0 ? 'Search or add a name' : 'Add a name'}
+            // Only when there is nobody to pick: a keyboard over the list gets in the way.
+            autoFocus={debtPeople.length === 0}
+            className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-ink placeholder-ink-5 outline-none"
+          />
         </div>
+      </div>
 
-        <div role={props.multiple ? 'group' : 'radiogroup'} aria-label={title}>
-          {canAdd && (
-            <button
-              type="button"
-              onClick={create}
-              disabled={saving}
-              className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left text-sm text-primary-text hover:bg-raised disabled:opacity-40"
-            >
-              <PersonAvatar name={query} size="sm" />
-              <span className="min-w-0 flex-1 truncate">
-                {saving ? 'Adding…' : `Add “${query.trim()}”`}
-              </span>
-              <PlusIcon className="h-4 w-4 shrink-0" />
-            </button>
-          )}
-
-          {searching ? matches.map(row) : (
-            <>
-              {headed && heading('Recent')}
-              {recent.map(row)}
-              {headed && heading('Everyone')}
-              {rest.map(row)}
-            </>
-          )}
-
-          {debtPeople.length === 0 && !searching && (
-            <p className="px-2 py-6 text-center text-sm text-ink-4">
-              No one yet. Type a name to add someone.
-            </p>
-          )}
-        </div>
-
-        {props.multiple && (
+      <div role={props.multiple ? 'group' : 'radiogroup'} aria-label={title}>
+        {canAdd && (
           <button
             type="button"
-            onClick={props.onDone}
-            className="mt-4 w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary hover:bg-primary-hover transition-colors"
+            onClick={create}
+            disabled={saving}
+            className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left text-sm text-primary-text hover:bg-raised disabled:opacity-40"
           >
-            Done{props.selected.length > 0 ? ` · ${props.selected.length} selected` : ''}
+            <PersonAvatar name={query} size="sm" />
+            <span className="min-w-0 flex-1 truncate">
+              {saving ? 'Adding…' : `Add “${query.trim()}”`}
+            </span>
+            <PlusIcon className="h-4 w-4 shrink-0" />
           </button>
         )}
-      </BottomSheet>
-    </div>,
-    document.body,
+
+        {searching ? matches.map(row) : (
+          <>
+            {headed && heading('Recent')}
+            {recent.map(row)}
+            {headed && heading('Everyone')}
+            {rest.map(row)}
+          </>
+        )}
+
+        {debtPeople.length === 0 && !searching && (
+          <p className="px-2 py-6 text-center text-sm text-ink-4">
+            No one yet. Type a name to add someone.
+          </p>
+        )}
+      </div>
+
+      {props.multiple && (
+        <button
+          type="button"
+          onClick={props.onDone}
+          className="mt-4 w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary hover:bg-primary-hover transition-colors"
+        >
+          Done{props.selected.length > 0 ? ` · ${props.selected.length} selected` : ''}
+        </button>
+      )}
+    </NestedSheet>
   );
 }
