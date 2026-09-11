@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useApp, fmt, DebtDirection } from './AppContext';
 import BottomSheet from './BottomSheet';
 import WalletPicker from './WalletPicker';
-import PersonAvatar from './PersonAvatar';
+import PersonPicker from './PersonPicker';
+import { rankPeople } from '@/lib/people';
 
 function todayInputValue(): string {
   const d = new Date();
@@ -17,11 +18,12 @@ interface Props {
 }
 
 export default function AddDebtSheet({ onClose }: Props) {
-  const { debtPeople, addDebtPerson, addDebtEntry, settings } = useApp();
+  const { debtPeople, debtEntries, addDebtEntry, settings } = useApp();
 
-  const [personId,  setPersonId]  = useState<string>(debtPeople[0]?.id ?? '');
-  const [newName,   setNewName]   = useState('');
-  const [creating,  setCreating]  = useState(debtPeople.length === 0);
+  // Starts on whoever you last had a debt with, the likeliest next one.
+  const [personId,  setPersonId]  = useState<string | null>(
+    () => rankPeople(debtPeople, debtEntries)[0]?.id ?? null,
+  );
   const [direction, setDirection] = useState<DebtDirection>('owed_to_me');
   const [amount,    setAmount]    = useState('');
   const [note,      setNote]      = useState('');
@@ -30,22 +32,14 @@ export default function AddDebtSheet({ onClose }: Props) {
   const [saving,    setSaving]    = useState(false);
 
   const amountValue = parseFloat(amount);
-  const validPerson = creating ? newName.trim().length > 0 : personId.length > 0;
-  const canSave = validPerson && !isNaN(amountValue) && amountValue > 0 && !saving;
+  const canSave = personId !== null && !isNaN(amountValue) && amountValue > 0 && !saving;
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
 
-    // A new person must be inserted first — the entry references its real id.
-    const targetId = creating
-      ? await addDebtPerson({ name: newName.trim(), emoji: '' })
-      : personId;
-
-    if (!targetId) { setSaving(false); return; }
-
     await addDebtEntry({
-      personId: targetId,
+      personId,
       direction,
       amount: amountValue,
       note: note.trim(),
@@ -64,50 +58,9 @@ export default function AddDebtSheet({ onClose }: Props) {
 
       {/* Person */}
       <p className="text-xs text-ink-3 mb-2">Person</p>
-      {debtPeople.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {debtPeople.map(p => (
-            <button
-              key={p.id}
-              onClick={() => { setCreating(false); setPersonId(p.id); }}
-              className={`flex max-w-full min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                !creating && personId === p.id
-                  ? 'border-primary bg-primary-tint text-ink'
-                  : 'border-line bg-raised text-ink-2 hover:text-ink'
-              }`}
-            >
-              <PersonAvatar name={p.name} size="xs" />
-              <span className="truncate">{p.name}</span>
-            </button>
-          ))}
-          <button
-            onClick={() => setCreating(true)}
-            className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-              creating
-                ? 'border-primary bg-primary-tint text-ink'
-                : 'border-dashed border-line bg-raised text-primary-text hover:border-primary-edge'
-            }`}
-          >
-            + New person
-          </button>
-        </div>
-      )}
-
-      {creating && (
-        <div className="mb-4 rounded-xl border border-line bg-raised p-3">
-          <div className="flex items-center gap-2.5">
-            <PersonAvatar name={newName} />
-          <input
-            type="text"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            placeholder="Name"
-            autoFocus
-            className="min-w-0 flex-1 rounded-lg bg-canvas border border-line px-3 py-2 text-sm text-ink placeholder-ink-5 outline-none focus:border-primary"
-          />
-          </div>
-        </div>
-      )}
+      <div className="mb-4">
+        <PersonPicker title="Who is this debt with?" selected={personId} onChange={setPersonId} />
+      </div>
 
       {/* Direction */}
       <p className="text-xs text-ink-3 mb-2">Direction</p>

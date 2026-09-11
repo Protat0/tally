@@ -21,6 +21,7 @@ export {
   X as XIcon,
   TrendingUp as TrendingUpIcon,
   Users as UsersIcon,
+  Search as SearchIcon,
   TriangleAlert as AlertIcon,
   Pencil as PencilIcon,
   ArrowUp as ArrowUpIcon,
