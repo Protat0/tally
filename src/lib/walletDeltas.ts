@@ -46,6 +46,10 @@ export function moveDeltas(m: {
   if (m.kind === 'earned')   return { [m.walletId]:  m.amount };
   if (m.kind === 'debt_in')  return { [m.walletId]:  m.amount };
   if (m.kind === 'debt_out') return { [m.walletId]: -m.amount };
+  // Money set aside into the emergency fund leaves the wallet; a withdrawal
+  // from the fund lands back in it.
+  if (m.kind === 'fund_deposit')    return { [m.walletId]: -m.amount };
+  if (m.kind === 'fund_withdrawal') return { [m.walletId]:  m.amount };
   if (m.toWalletId) {
     // Transfers, and withdrawals from the point they started landing in cash.
     return mergeDeltas(

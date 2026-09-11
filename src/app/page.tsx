@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useApp, fmt } from '@/components/AppContext';
 import { cycleLabel, cycleRange, daysElapsedInCycle, daysInCycle } from '@/lib/cycle';
 import { homeOrder } from '@/lib/electric';
+import { averageDeposit } from '@/lib/emergencyFund';
 import BottomNav from '@/components/BottomNav';
 import ProgressBar, { type Tone } from '@/components/ProgressBar';
 import PaydaySheet from '@/components/PaydaySheet';
@@ -152,10 +153,9 @@ export default function Dashboard() {
 
   const projectedCompletion = (() => {
     if (settings.emergencyFundTarget <= 0 || ef.currentAmount >= settings.emergencyFundTarget) return null;
-    const recent = ef.entries.slice(0, 3);
-    if (recent.length === 0) return null;
-    const avg = recent.reduce((s, e) => s + e.amount, 0) / recent.length;
-    if (avg <= 0) return null;
+    // Withdrawals say nothing about how fast the fund grows.
+    const avg = averageDeposit(ef.entries, 3);
+    if (!avg) return null;
     const months = Math.ceil((settings.emergencyFundTarget - ef.currentAmount) / avg);
     const d = new Date();
     d.setMonth(d.getMonth() + months);
@@ -360,6 +360,12 @@ export default function Dashboard() {
                   to start tracking.
                 </p>
               )}
+
+              <div className="mt-auto flex justify-end">
+                <Link href="/emergency-fund" className="text-xs font-medium text-primary-text hover:text-primary-hover transition-colors">
+                  Add or withdraw →
+                </Link>
+              </div>
             </div>
 
             {/* Electric Estimate */}
