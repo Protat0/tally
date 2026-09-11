@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp, fmt } from '@/components/AppContext';
 import { cycleLabel, cycleRange, daysElapsedInCycle, daysInCycle } from '@/lib/cycle';
+import { homeOrder } from '@/lib/electric';
 import BottomNav from '@/components/BottomNav';
 import ProgressBar, { type Tone } from '@/components/ProgressBar';
 import PaydaySheet from '@/components/PaydaySheet';
@@ -61,6 +62,19 @@ function HeroStat({ label, value, toneClass }: { label: string; value: string; t
       <p className="text-xs leading-tight text-teal-100">{label}</p>
       <p className={`mt-2 text-[22px] font-bold leading-none tabular-nums ${toneClass}`}>{value}</p>
     </div>
+  );
+}
+
+// A running appliance's dot pings, so "on" reads at a glance; off is a still
+// grey dot in the same spot, so toggling never shifts the name beside it.
+function LiveDot({ on }: { on: boolean }) {
+  return (
+    <span aria-hidden className="relative flex h-2 w-2 shrink-0">
+      {on && (
+        <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-60 motion-safe:animate-ping" />
+      )}
+      <span className={`relative inline-flex h-2 w-2 rounded-full ${on ? 'bg-primary' : 'bg-line-strong'}`} />
+    </span>
   );
 }
 
@@ -148,7 +162,8 @@ export default function Dashboard() {
     return d.toLocaleDateString('en-PH', { month: 'short', year: 'numeric' });
   })();
 
-  const pinned = settings.appliances.filter(a => a.pinnedToHome);
+  // Every appliance can be switched from here; pinning only puts one first.
+  const appliances = homeOrder(settings.appliances);
   const runningCount = settings.appliances.filter(a => a.enabled).length;
 
   return (
@@ -357,15 +372,29 @@ export default function Dashboard() {
                 {fmt(electricBillEstimate, currency)}
               </p>
 
-              {pinned.length > 0 && (
+              {appliances.length > 0 && (
                 <>
-                  {/* Phone: a list of switches */}
+                  {/* Phone: a list of switches. A running row lights up whole —
+                      tint, teal name, a live dot and a glowing switch — so what
+                      is on reads from across the room, not just from the knob. */}
                   <div className="flex flex-col md:hidden">
-                    {pinned.map(a => (
-                      <div key={a.id} className="flex items-center justify-between gap-3 border-t border-divider py-[11px]">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium leading-tight">{a.name}</p>
-                          <p className="mt-[3px] text-xs leading-tight tabular-nums text-ink-4">{a.wattage} W</p>
+                    {appliances.map(a => (
+                      <div
+                        key={a.id}
+                        className={`-mx-2 flex items-center justify-between gap-3 border-t border-divider px-2 py-[11px] transition-colors duration-200 ${
+                          a.enabled ? 'rounded-lg bg-primary-tint' : ''
+                        }`}
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <LiveDot on={a.enabled} />
+                          <div className="min-w-0">
+                            <p className={`truncate text-sm font-medium leading-tight ${a.enabled ? 'text-primary-text' : ''}`}>
+                              {a.name}
+                            </p>
+                            <p className={`mt-[3px] text-xs leading-tight tabular-nums ${a.enabled ? 'text-primary-text' : 'text-ink-4'}`}>
+                              {a.enabled ? `On · ${a.wattage} W` : `${a.wattage} W`}
+                            </p>
+                          </div>
                         </div>
                         <button
                           role="switch"
@@ -373,7 +402,7 @@ export default function Dashboard() {
                           aria-label={a.name}
                           onClick={() => toggleAppliance(a.id)}
                           className={`flex h-7 w-12 shrink-0 rounded-full p-[3px] transition-colors duration-200 ${
-                            a.enabled ? 'justify-end bg-primary' : 'justify-start bg-line-strong'
+                            a.enabled ? 'justify-end bg-primary elev-fab' : 'justify-start bg-line-strong'
                           }`}
                         >
                           <span className="h-[22px] w-[22px] rounded-full bg-white elev-knob" />
@@ -384,23 +413,35 @@ export default function Dashboard() {
 
                   {/* Desktop: tiles, each one the whole tap target */}
                   <div className="hidden grid-cols-2 gap-2.5 md:grid">
-                    {pinned.map(a => (
+                    {appliances.map(a => (
                       <button
                         key={a.id}
                         role="switch"
                         aria-checked={a.enabled}
                         onClick={() => toggleAppliance(a.id)}
-                        className={`min-w-0 rounded-xl border px-3.5 py-[13px] text-left transition-colors ${
-                          a.enabled ? 'border-primary-edge bg-primary-tint' : 'border-line bg-canvas hover:border-line-strong'
+                        className={`min-w-0 rounded-xl border px-3.5 py-[13px] text-left transition-colors duration-200 ${
+                          a.enabled ? 'border-primary bg-primary-tint elev-fab' : 'border-line bg-canvas hover:border-line-strong'
                         }`}
                       >
                         <span className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-semibold leading-none">{a.name}</span>
-                          <span className={`text-[11px] font-semibold leading-none ${a.enabled ? 'text-primary-text' : 'text-ink-4'}`}>
+                          <span className="flex min-w-0 items-center gap-2">
+                            <LiveDot on={a.enabled} />
+                            <span className={`truncate text-sm font-semibold leading-none ${a.enabled ? 'text-primary-text' : ''}`}>
+                              {a.name}
+                            </span>
+                          </span>
+                          <span
+                            // Same padding either way, so the tile keeps its height when toggled.
+                            className={`shrink-0 rounded-full px-2 py-[3px] text-[11px] font-semibold leading-none ${
+                              a.enabled ? 'bg-primary text-on-primary' : 'text-ink-4'
+                            }`}
+                          >
                             {a.enabled ? 'ON' : 'OFF'}
                           </span>
                         </span>
-                        <span className="mt-[7px] block text-xs leading-none tabular-nums text-ink-4">{a.wattage} W</span>
+                        <span className={`mt-[7px] block text-xs leading-none tabular-nums ${a.enabled ? 'text-primary-text' : 'text-ink-4'}`}>
+                          {a.wattage} W
+                        </span>
                       </button>
                     ))}
                   </div>
