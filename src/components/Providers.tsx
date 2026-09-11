@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { AuthProvider, useAuth } from './AuthContext';
 import { AppProvider, useApp } from './AppContext';
 import GlobalFAB from './GlobalFAB';
+import PatchNotes from './PatchNotes';
 
 function Splash() {
   return (
@@ -42,9 +43,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 // Sits inside AppProvider — shows splash while Supabase data loads
 function AppShell({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const { dataLoading } = useApp();
   if (dataLoading) return <Splash />;
-  return <>{children}<GlobalFAB /></>;
+  // Patch notes wait for a signed-in user: on /auth there is no account age to
+  // judge by, and deciding then would mark the release seen before login.
+  return <>{children}<GlobalFAB />{user && <PatchNotes />}</>;
 }
 
 function AppContent({ children }: { children: React.ReactNode }) {
