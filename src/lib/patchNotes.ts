@@ -1,5 +1,6 @@
 // Release notes, shown once after an update. Newest first. Adding an entry here
-// is part of shipping the change it describes.
+// is part of shipping the change it describes: `npm run patch-notes` drafts one
+// from the Patch-note: lines on commits since the last draft (see AGENTS.md).
 
 export interface PatchNote {
   /** Unique per release. It is saved on the device once seen, so never reuse one. */
@@ -11,6 +12,20 @@ export interface PatchNote {
 }
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: '2026-09-11-2',
+    date: '2026-09-11',
+    title: 'Debts, wallets and your emergency fund',
+    items: [
+      'Withdraw from your emergency fund. Adding or withdrawing can move money from or into a wallet, or none.',
+      'Delete an emergency fund entry that shouldn’t be there. Any wallet money it moved goes back.',
+      'Choose people for a split or a debt from a searchable list, with the people you use most at the top.',
+      'The debts page tucks away people you’re settled up with. Tap anyone to see their debts.',
+      'Add a debt straight from the + button.',
+      'Switch any appliance on or off from home.',
+      'Pick your bank or e-wallet by its logo when adding a wallet.',
+    ],
+  },
   {
     version: '2026-09-11',
     date: '2026-09-11',
@@ -24,6 +39,9 @@ export const PATCH_NOTES: PatchNote[] = [
     ],
   },
 ];
+
+// Patch notes drafted through commit f140c218937ed516f6a2ae26c1c088b83412ce89
+// `npm run patch-notes` drafts from the commit after this one, then moves it forward.
 
 export const SEEN_VERSION_KEY = 'tally-seen-version';
 

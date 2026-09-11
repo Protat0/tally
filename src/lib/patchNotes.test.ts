@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { PATCH_NOTES, unseenNotes, type PatchNote } from './patchNotes.ts';
+import { draftedThrough } from './patchNoteDraft.ts';
 
 const note = (version: string, date: string): PatchNote => ({ version, date, title: version, items: ['x'] });
 
@@ -56,4 +58,18 @@ test('the shipped notes are newest first, with unique versions and real dates', 
   }
   const dates = PATCH_NOTES.map(n => n.date);
   assert.deepEqual(dates, [...dates].sort().reverse(), 'newest first');
+});
+
+// `npm run patch-notes` drafts an entry with a placeholder title. The suite
+// fails until it is named, so an unreviewed draft can't ship.
+test('no shipped note still has its draft title', () => {
+  for (const n of PATCH_NOTES) {
+    assert.ok(!n.title.startsWith('TODO'), `${n.version} still needs a title`);
+  }
+});
+
+// The next draft starts from this marker; without it the script has nowhere to start.
+test('the notes file records the commit drafting has reached', () => {
+  const source = readFileSync(new URL('./patchNotes.ts', import.meta.url), 'utf8');
+  assert.ok(draftedThrough(source), 'marker present');
 });
