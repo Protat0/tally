@@ -2,15 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from './AuthContext';
+import { HomeIcon, WalletIcon, TrendingUpIcon, HistoryIcon, UsersIcon, CogIcon } from './Icons';
 
-const links = [
-  { href: '/',             label: 'Dashboard' },
-  { href: '/wallets',      label: 'Wallets' },
-  { href: '/expenses',     label: 'Budget' },
-  { href: '/transactions', label: 'Activity' },
-  { href: '/debts',        label: 'Debts' },
-  { href: '/settings',     label: 'Settings' },
+// Budget and Debts wear the same icons as their actions in the + menu, so a
+// destination looks the same wherever it is offered.
+const links: { href: string; label: string; Icon: LucideIcon }[] = [
+  { href: '/',             label: 'Dashboard', Icon: HomeIcon },
+  { href: '/wallets',      label: 'Wallets',   Icon: WalletIcon },
+  { href: '/expenses',     label: 'Budget',    Icon: TrendingUpIcon },
+  { href: '/transactions', label: 'Activity',  Icon: HistoryIcon },
+  { href: '/debts',        label: 'Debts',     Icon: UsersIcon },
+  { href: '/settings',     label: 'Settings',  Icon: CogIcon },
 ];
 
 // The mobile bar fits five comfortably. Settings is the rarest destination and
@@ -23,18 +27,23 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* ── Mobile: fixed bottom bar. A teal dot marks where you are; the label does the naming. ── */}
+      {/* ── Mobile: fixed bottom bar. Where you are, the icon and label turn teal. ── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 border-t border-line bg-surface px-1.5 pt-2.5 pb-5">
-        {mobileLinks.map(({ href, label }) => {
+        {mobileLinks.map(({ href, label, Icon }) => {
           const active = pathname === href;
           return (
             <Link
               key={href}
               href={href}
               aria-current={active ? 'page' : undefined}
-              className="flex flex-col items-center gap-1.5 rounded-xl py-1 transition-colors active:bg-raised"
+              className="flex flex-col items-center gap-1 rounded-xl py-1 transition-colors active:bg-raised"
             >
-              <span className={`h-[5px] w-[5px] rounded-full ${active ? 'bg-primary' : 'bg-transparent'}`} />
+              {/* Decorative: the label beside it is what gets announced. */}
+              <Icon
+                aria-hidden
+                strokeWidth={active ? 2.25 : 1.75}
+                className={`h-[22px] w-[22px] ${active ? 'text-primary-text' : 'text-ink-4'}`}
+              />
               <span className={`text-[11px] leading-none ${active ? 'font-semibold text-primary-text' : 'text-ink-4'}`}>
                 {label}
               </span>
