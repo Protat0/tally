@@ -1,29 +1,137 @@
 @import "tailwindcss";
 
-:root {
-  --bg: #0b0f1a;
-  --card: #111827;
-  --card-elevated: #1a2332;
-  --border: #1e2d40;
-  --muted: #94a3b8;
+/* Tally's palette, named by role rather than hue. Teal is the only color that
+   means "tap this"; green, amber and red only ever carry meaning — good money,
+   nearing a limit, over. Each of those has a full-strength fill, a lighter
+   shade for text (the fills are too dim to read as small type on these
+   surfaces), and a tint + edge pair for tinted backgrounds. */
+@theme {
+  /* Surfaces, darkest to lightest */
+  --color-canvas: #121110;
+  --color-surface: #1c1a19;
+  --color-divider: #262322;
+  --color-raised: #2a2725;
+  --color-line: #34302d;
+  --color-line-strong: #3f3a36;
+
+  /* Text, strongest to faintest */
+  --color-ink: #f5f3f0;
+  --color-ink-2: #c4beb8;
+  --color-ink-3: #a39c95;
+  --color-ink-4: #9b948c;
+  --color-ink-5: #78716c;
+
+  --color-primary: #14b8a6;
+  --color-primary-hover: #2dd4bf;
+  --color-primary-deep: #0f766e;
+  --color-primary-text: #5eead4;
+  --color-on-primary: #06302c;
+  --color-primary-tint: #0f2e2b;
+  --color-primary-edge: #1f5c55;
+
+  --color-growth: #22c55e;
+  --color-growth-text: #4ade80;
+  --color-growth-tint: #10291a;
+  --color-growth-edge: #1e5233;
+
+  --color-warning: #f59e0b;
+  --color-warning-text: #fbbf24;
+  --color-warning-tint: #2e2410;
+  --color-warning-edge: #6b4b12;
+
+  --color-danger: #ef4444;
+  --color-danger-strong: #dc2626;
+  --color-danger-text: #f87171;
+  --color-danger-tint: #2e1618;
+  --color-danger-edge: #6b2a2a;
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-public-sans);
 }
 
+/* Shadows change with the theme — black on dark, warm and teal-tinted on light
+   — so they are variables too, applied through the elev-* utilities below. */
+:root {
+  color-scheme: dark;
+  --elev-hero: 0 8px 20px rgb(0 0 0 / 0.6);
+  --elev-sheet: 0 -8px 32px rgb(0 0 0 / 0.65);
+  --elev-fab: 0 6px 18px rgb(20 184 166 / 0.28);
+  --elev-knob: 0 1px 3px rgb(0 0 0 / 0.55);
+  --selection: #134e4a;
+}
+
+/* Light theme: the same roles over inverted surfaces, from the Claude Design
+   "Tally Refresh" board. Teal drops back to #0F766E, which reads on white, and
+   the meaning colors take darker text shades instead of lighter ones. Set on
+   <html> by the boot script in layout.tsx and by the Settings switch. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-canvas: #fafaf9;
+  --color-surface: #ffffff;
+  --color-divider: #f0efed;
+  --color-raised: #f5f5f4;
+  --color-line: #e7e5e4;
+  --color-line-strong: #d6d3d1;
+
+  --color-ink: #1c1917;
+  --color-ink-2: #57534e;
+  --color-ink-3: #78716c;
+  --color-ink-4: #a8a29e;
+  --color-ink-5: #a8a29e;
+
+  --color-primary: #0f766e;
+  --color-primary-hover: #115e56;
+  --color-primary-deep: #0f766e;
+  --color-primary-text: #0f766e;
+  --color-on-primary: #ffffff;
+  --color-primary-tint: #f0fdfa;
+  --color-primary-edge: #99f6e4;
+
+  --color-growth: #22c55e;
+  --color-growth-text: #15803d;
+  --color-growth-tint: #f0fdf4;
+  --color-growth-edge: #bbf7d0;
+
+  --color-warning: #f59e0b;
+  --color-warning-text: #b45309;
+  --color-warning-tint: #fffbeb;
+  --color-warning-edge: #fde68a;
+
+  --color-danger: #ef4444;
+  --color-danger-strong: #dc2626;
+  --color-danger-text: #dc2626;
+  --color-danger-tint: #fef2f2;
+  --color-danger-edge: #fecaca;
+
+  --elev-hero: 0 8px 20px rgb(15 118 110 / 0.22);
+  --elev-sheet: 0 -8px 32px rgb(28 25 23 / 0.16);
+  --elev-fab: 0 6px 18px rgb(15 118 110 / 0.35);
+  --elev-knob: 0 1px 3px rgb(28 25 23 / 0.28);
+  --selection: #ccfbf1;
+}
+
+@utility elev-hero { box-shadow: var(--elev-hero); }
+@utility elev-sheet { box-shadow: var(--elev-sheet); }
+@utility elev-fab { box-shadow: var(--elev-fab); }
+@utility elev-knob { box-shadow: var(--elev-knob); }
+
 html {
-  background: var(--bg);
-  color: #f8fafc;
+  background: var(--color-canvas);
+  color: var(--color-ink);
 }
 
 body {
-  background: var(--bg);
-  color: #f8fafc;
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-public-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--selection);
 }
 
 * {
@@ -101,6 +209,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e2d40;
+  background: var(--color-line);
   border-radius: 2px;
 }

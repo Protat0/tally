@@ -6,11 +6,13 @@ import { useApp, fmt, Expense } from './AppContext';
 import BottomSheet from './BottomSheet';
 import { cycleKeyOf, cycleLabel } from '@/lib/cycle';
 import HalfCircleProgress from './HalfCircleProgress';
+import type { Tone } from './ProgressBar';
+import { IconTile } from './AppIcon';
 
-function paceColor(pct: number): 'green' | 'amber' | 'red' {
-  if (pct <= 80) return 'green';
-  if (pct <= 100) return 'amber';
-  return 'red';
+function paceTone(pct: number): Tone {
+  if (pct <= 80) return 'growth';
+  if (pct <= 100) return 'warning';
+  return 'danger';
 }
 
 interface Props {
@@ -80,33 +82,31 @@ export default function CategoryDetailSheet({
   return (
     <BottomSheet onClose={onClose}>
       {/* ── Hero ── */}
-      <div className="rounded-2xl bg-white/5 border border-[#1e2d40] p-4 mb-5">
+      <div className="rounded-2xl bg-canvas border border-line p-4 mb-5">
         <div className="flex items-center gap-3 mb-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-xl shrink-0">
-            {icon}
-          </div>
+          <IconTile icon={icon} />
           <div className="min-w-0">
-            <p className="text-base font-semibold text-white truncate">{label}</p>
-            <p className="text-xs text-slate-500">{cycleLabel(currentCycle, cycleStartDay)}</p>
+            <p className="text-base font-semibold text-ink truncate">{label}</p>
+            <p className="text-xs text-ink-3">{cycleLabel(currentCycle, cycleStartDay)}</p>
           </div>
         </div>
 
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-2xl font-bold text-white tabular-nums truncate">
+            <p className="text-2xl font-bold text-ink tabular-nums truncate">
               {fmt(spent, currency)}
             </p>
             {hasBudget ? (
-              <p className="mt-1 text-xs text-slate-500 truncate">
+              <p className="mt-1 text-xs text-ink-3 truncate">
                 of {fmt(budget, currency)} ·{' '}
-                <span className={over ? 'text-red-400' : 'text-slate-400'}>
+                <span className={over ? 'text-danger-text font-semibold' : 'text-ink-2'}>
                   {over
                     ? `${fmt(Math.abs(remaining), currency)} over`
                     : `${fmt(remaining, currency)} left`}
                 </span>
               </p>
             ) : (
-              <p className="mt-1 text-xs text-slate-600">No budget set</p>
+              <p className="mt-1 text-xs text-ink-4">No budget set</p>
             )}
           </div>
 
@@ -114,7 +114,7 @@ export default function CategoryDetailSheet({
             <HalfCircleProgress
               value={spent}
               max={budget}
-              color={paceColor(pct)}
+              tone={paceTone(pct)}
               className="w-[104px]"
             />
           )}
@@ -123,20 +123,20 @@ export default function CategoryDetailSheet({
 
       {/* ── Transactions ── */}
       <div className="flex items-baseline justify-between gap-3 mb-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-widest text-ink-3">
           Transactions
         </p>
         {count > 0 && (
-          <p className="text-[11px] text-slate-600 tabular-nums shrink-0">
+          <p className="text-[11px] text-ink-4 tabular-nums shrink-0">
             {count} · {fmt(allTimeTotal, currency)} all time
           </p>
         )}
       </div>
 
       {groups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-8 text-center">
-          <p className="text-sm text-slate-500 mb-1">Nothing logged here yet.</p>
-          <Link href="/expenses/new" className="text-xs text-blue-400 underline underline-offset-2">
+        <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center">
+          <p className="text-sm text-ink-3 mb-1">Nothing logged here yet.</p>
+          <Link href="/expenses/new" className="text-xs text-primary-text underline underline-offset-2">
             Log an expense
           </Link>
         </div>
@@ -145,10 +145,10 @@ export default function CategoryDetailSheet({
           {groups.map(g => (
             <div key={g.key}>
               <div className="flex items-center justify-between gap-3 mb-2 px-1">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                <p className="text-xs font-semibold uppercase tracking-widest text-ink-3">
                   {cycleLabel(g.key, cycleStartDay)}
                 </p>
-                <p className="text-xs font-medium text-red-400 tabular-nums shrink-0">
+                <p className="text-xs font-medium text-danger-text tabular-nums shrink-0">
                   -{fmt(g.total, currency)}
                 </p>
               </div>
@@ -162,15 +162,15 @@ export default function CategoryDetailSheet({
                   return (
                     <div
                       key={e.id}
-                      className="flex items-center gap-3 rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3"
+                      className="flex items-center gap-3 rounded-xl bg-raised border border-line px-4 py-3"
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{e.note || label}</p>
-                        <p className="text-xs text-slate-500 truncate">
+                        <p className="text-sm text-ink truncate">{e.note || label}</p>
+                        <p className="text-xs text-ink-3 truncate">
                           {[day, wallet].filter(Boolean).join(' · ')}
                         </p>
                       </div>
-                      <p className="text-sm font-medium text-red-400 tabular-nums shrink-0">
+                      <p className="text-sm font-medium text-danger-text tabular-nums shrink-0">
                         -{fmt(e.amount, currency)}
                       </p>
                     </div>

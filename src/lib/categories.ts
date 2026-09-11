@@ -7,21 +7,25 @@
 
 export interface CategoryMeta {
   key: string; label: string; icon: string;
-  // Tailwind classes for a selectable chip. Custom categories get a neutral one.
+  // Tailwind classes for a selected chip.
   color: string;
 }
 
+// One chip color for every category. Teal marks the selection; hue is kept for
+// what the money is doing, so a category can't borrow amber or red.
+const CHIP = 'bg-primary-tint border-primary-edge';
+
 export const BUILTIN_CATEGORIES: CategoryMeta[] = [
-  { key: 'food',      label: 'Food',      icon: '🍜', color: 'bg-orange-500/15 border-orange-500/40' },
-  { key: 'transport', label: 'Transport', icon: '🚗', color: 'bg-blue-500/15   border-blue-500/40' },
-  { key: 'bills',     label: 'Bills',     icon: '💡', color: 'bg-amber-500/15  border-amber-500/40' },
-  { key: 'electric',  label: 'Electric',  icon: '⚡', color: 'bg-amber-500/15  border-amber-500/40' },
-  { key: 'shopping',  label: 'Shopping',  icon: '🛍️', color: 'bg-pink-500/15   border-pink-500/40' },
-  { key: 'health',    label: 'Health',    icon: '💊', color: 'bg-green-500/15  border-green-500/40' },
-  { key: 'other',     label: 'Other',     icon: '✦',  color: 'bg-slate-500/15  border-slate-500/40' },
+  { key: 'food',      label: 'Food',      icon: 'utensils-crossed', color: CHIP },
+  { key: 'transport', label: 'Transport', icon: 'car', color: CHIP },
+  { key: 'bills',     label: 'Bills',     icon: 'receipt-text', color: CHIP },
+  { key: 'electric',  label: 'Electric',  icon: 'zap', color: CHIP },
+  { key: 'shopping',  label: 'Shopping',  icon: 'shopping-bag', color: CHIP },
+  { key: 'health',    label: 'Health',    icon: 'pill', color: CHIP },
+  { key: 'other',     label: 'Other',     icon: 'shapes', color: CHIP },
 ];
 
-const CUSTOM_COLOR = 'bg-slate-500/15 border-slate-500/40';
+const CUSTOM_COLOR = CHIP;
 
 // Built-ins plus the user's own, minus any they have hidden on the Budget page.
 export function visibleCategories(
@@ -43,5 +47,5 @@ export function categoryMeta(
 ): { icon: string; label: string } {
   const found = custom.find(c => c.key === key)
     ?? BUILTIN_CATEGORIES.find(c => c.key === key);
-  return found ? { icon: found.icon, label: found.label } : { icon: '✦', label: key };
+  return found ? { icon: found.icon, label: found.label } : { icon: 'shapes', label: key };
 }

@@ -5,6 +5,7 @@ import { useApp, fmt, PendingPayday } from './AppContext';
 import BottomSheet from './BottomSheet';
 import WalletPicker from './WalletPicker';
 import NumberField from './NumberField';
+import { IconTile } from './AppIcon';
 
 interface Props {
   payday: PendingPayday;
@@ -51,33 +52,33 @@ export default function PaydaySheet({ payday, onClose }: Props) {
   return (
     <BottomSheet onClose={onClose}>
       <div className="flex items-center gap-3 mb-1.5">
-        <span className="text-2xl">💰</span>
-        <p className="font-semibold text-white">Payday {dateLabel}</p>
+        <IconTile icon="banknote" tone="growth" />
+        <p className="font-semibold text-ink">Payday {dateLabel}</p>
       </div>
-      <p className="text-xs text-slate-500 mb-5 leading-relaxed">
+      <p className="text-xs text-ink-3 mb-5 leading-relaxed">
         Your projection leaves this money out until you confirm it landed.
       </p>
 
-      <p className="text-xs text-slate-500 mb-1.5">Amount received</p>
+      <p className="text-xs text-ink-3 mb-1.5">Amount received</p>
       <div className="flex items-center gap-2 mb-5">
-        <span className="text-sm text-slate-500 shrink-0">{currency}</span>
+        <span className="text-sm text-ink-3 shrink-0">{currency}</span>
         <NumberField
           value={amount}
           onChange={setAmount}
           step={500}
           min={0}
           className="flex-1 min-w-0"
-          inputClassName="w-full min-w-0 rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-emerald-500/50"
+          inputClassName="w-full min-w-0 rounded-xl bg-canvas border border-line px-4 py-2.5 text-sm text-ink placeholder-ink-5 outline-none focus:border-primary"
         />
       </div>
 
       {wallets.length === 0 ? (
-        <p className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-xs text-amber-300">
+        <p className="rounded-xl bg-warning-tint border border-warning-edge px-4 py-3 text-xs text-warning-text">
           Add a wallet first — the money has to land somewhere.
         </p>
       ) : (
         <>
-          <p className="text-xs text-slate-500 mb-2">
+          <p className="text-xs text-ink-3 mb-2">
             {cashflowWalletId ? 'Landed in' : 'Which wallet did it land in?'}
           </p>
           <WalletPicker value={walletId} onChange={setWalletId} />
@@ -87,14 +88,14 @@ export default function PaydaySheet({ payday, onClose }: Props) {
       <button
         onClick={handleConfirm}
         disabled={!canConfirm}
-        className="mt-6 w-full rounded-xl bg-emerald-600 py-3.5 font-semibold text-white active:bg-emerald-700 disabled:opacity-40 transition-colors"
+        className="mt-6 w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary active:bg-primary-hover disabled:opacity-40 transition-colors"
       >
         {busy ? 'Saving…' : `Yes, received ${fmt(amount, currency)}`}
       </button>
       <button
         onClick={handleDismiss}
         disabled={busy}
-        className="mt-2 w-full rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-400 active:bg-white/10 disabled:opacity-40 transition-colors"
+        className="mt-2 w-full rounded-xl bg-raised py-3 text-sm font-medium text-ink-2 active:bg-line disabled:opacity-40 transition-colors"
       >
         Didn&apos;t get it, or already logged it
       </button>

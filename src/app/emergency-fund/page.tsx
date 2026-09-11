@@ -6,7 +6,7 @@ import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import { ScrollLock } from '@/components/ModalLock';
 import { useSwipeToClose } from '@/components/useSwipeToClose';
-import { PlusIcon, ShieldIcon } from '@/components/Icons';
+import { PlusIcon, ShieldIcon, CheckIcon } from '@/components/Icons';
 
 function ArcProgress({ value, max }: { value: number; max: number }) {
   const r = 80;
@@ -84,7 +84,7 @@ export default function EmergencyFundPage() {
   const marks = milestones(target);
 
   return (
-    <div className="min-h-screen bg-[#0b0f1a]">
+    <div className="min-h-screen bg-canvas">
       <BottomNav />
 
       <div className="md:pl-64">
@@ -95,7 +95,7 @@ export default function EmergencyFundPage() {
             right={
               <button
                 onClick={() => setShowAdd(true)}
-                className="flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+                className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary"
               >
                 <PlusIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Add</span>
@@ -105,11 +105,11 @@ export default function EmergencyFundPage() {
 
           {target <= 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white/5 mb-5">
-                <ShieldIcon className="w-10 h-10 text-slate-600" />
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-raised mb-5">
+                <ShieldIcon className="w-10 h-10 text-ink-4" />
               </div>
-              <p className="text-white font-semibold text-lg mb-2">No target set</p>
-              <p className="text-sm text-slate-500 max-w-xs">Set an emergency fund goal in Settings to start tracking.</p>
+              <p className="text-ink font-semibold text-lg mb-2">No target set</p>
+              <p className="text-sm text-ink-3 max-w-xs">Set an emergency fund goal in Settings to start tracking.</p>
             </div>
           ) : (
             <div className="md:grid md:grid-cols-2 md:gap-6">
@@ -118,28 +118,28 @@ export default function EmergencyFundPage() {
                 <div className="flex flex-col items-center pt-2 md:pt-0 mb-6">
                   <ArcProgress value={currentAmount} max={target} />
                   <div className="mt-3 text-center">
-                    <p className="text-3xl font-bold text-white">{fmt(currentAmount, currency)}</p>
-                    <p className="text-sm text-slate-500">of {fmt(target, currency)} goal</p>
+                    <p className="text-3xl font-bold text-ink">{fmt(currentAmount, currency)}</p>
+                    <p className="text-sm text-ink-3">of {fmt(target, currency)} goal</p>
                     {projected && (
-                      <p className="mt-1 text-xs text-emerald-400">Projected full by {projected}</p>
+                      <p className="mt-1 text-xs text-growth-text">Projected full by {projected}</p>
                     )}
                   </div>
                 </div>
 
                 {/* Milestones */}
-                <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-4">
-                  <p className="text-xs text-slate-500 mb-3">Milestones</p>
+                <div className="rounded-2xl bg-surface border border-line p-4">
+                  <p className="text-xs text-ink-3 mb-3">Milestones</p>
                   <div className="space-y-2.5">
                     {marks.map((m, i) => {
                       const labels = ['25%', '50%', '75%', '100%'];
                       const reached = currentAmount >= m;
                       return (
                         <div key={i} className="flex items-center gap-3">
-                          <div className={`h-4 w-4 rounded-full border-2 shrink-0 ${reached ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'}`} />
-                          <p className={`flex-1 text-sm ${reached ? 'text-white' : 'text-slate-500'}`}>
+                          <div className={`h-4 w-4 rounded-full border-2 shrink-0 ${reached ? 'bg-growth border-growth' : 'border-line-strong'}`} />
+                          <p className={`flex-1 text-sm ${reached ? 'text-ink' : 'text-ink-3'}`}>
                             {labels[i]} — {fmt(m, currency)}
                           </p>
-                          {reached && <span className="text-xs text-emerald-400">✓</span>}
+                          {reached && <CheckIcon className="h-3.5 w-3.5 text-growth-text" aria-label="Reached" />}
                         </div>
                       );
                     })}
@@ -149,13 +149,13 @@ export default function EmergencyFundPage() {
 
               {/* Contribution log */}
               <div>
-                <p className="text-xs text-slate-500 mb-2 px-1">Contribution History</p>
+                <p className="text-xs text-ink-3 mb-2 px-1">Contribution History</p>
                 {entries.length === 0 ? (
-                  <div className="rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-8 text-center">
-                    <p className="text-sm text-slate-500">No contributions yet.</p>
+                  <div className="rounded-xl bg-surface border border-line px-4 py-8 text-center">
+                    <p className="text-sm text-ink-3">No contributions yet.</p>
                     <button
                       onClick={() => setShowAdd(true)}
-                      className="mt-3 text-sm text-emerald-400 underline underline-offset-2"
+                      className="mt-3 text-sm text-growth-text underline underline-offset-2"
                     >
                       Add first contribution
                     </button>
@@ -163,15 +163,15 @@ export default function EmergencyFundPage() {
                 ) : (
                   <div className="space-y-2">
                     {entries.map(e => (
-                      <div key={e.id} className="flex items-center gap-3 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3.5">
+                      <div key={e.id} className="flex items-center gap-3 rounded-xl bg-surface border border-line px-4 py-3.5">
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-white">{fmt(e.amount, currency)}</p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-sm font-medium text-ink">{fmt(e.amount, currency)}</p>
+                          <p className="text-xs text-ink-3">
                             {new Date(e.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                             {e.note ? ` · ${e.note}` : ''}
                           </p>
                         </div>
-                        <span className="text-emerald-400 text-sm font-semibold">+{fmt(e.amount, currency)}</span>
+                        <span className="text-growth-text text-sm font-semibold">+{fmt(e.amount, currency)}</span>
                       </div>
                     ))}
                   </div>
@@ -189,32 +189,32 @@ export default function EmergencyFundPage() {
           <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-10 md:pb-6"
+            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-surface border border-line p-6 pb-10 md:pb-6"
             onClick={e => e.stopPropagation()}
             style={swipe.style}
             {...swipe.handlers}
           >
-            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
-            <p className="mb-5 text-center font-semibold text-white text-lg">Add Contribution</p>
-            <p className="mb-2 text-xs text-slate-500">Amount</p>
+            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-line md:hidden" />
+            <p className="mb-5 text-center font-semibold text-ink text-lg">Add Contribution</p>
+            <p className="mb-2 text-xs text-ink-3">Amount</p>
             <input
               type="number"
               inputMode="decimal"
               value={inputAmt}
               onChange={e => setInputAmt(e.target.value)}
               placeholder="0.00"
-              className="mb-4 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 text-center text-2xl font-bold"
+              className="mb-4 w-full rounded-xl bg-canvas border border-line px-4 py-3 text-ink placeholder-ink-4 outline-none focus:border-primary text-center text-2xl font-bold"
               autoFocus
             />
-            <p className="mb-2 text-xs text-slate-500">Note <span className="text-slate-600">(optional)</span></p>
+            <p className="mb-2 text-xs text-ink-3">Note <span className="text-ink-4">(optional)</span></p>
             <input
               type="text"
               value={inputNote}
               onChange={e => setInputNote(e.target.value)}
               placeholder="e.g. April savings"
-              className="mb-5 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 text-sm"
+              className="mb-5 w-full rounded-xl bg-canvas border border-line px-4 py-3 text-ink placeholder-ink-4 outline-none focus:border-primary text-sm"
             />
-            <button onClick={handleAdd} disabled={!inputAmt} className="w-full rounded-xl bg-emerald-600 py-3.5 font-semibold text-white disabled:opacity-40">
+            <button onClick={handleAdd} disabled={!inputAmt} className="w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary disabled:opacity-40">
               Add Contribution
             </button>
           </div>

@@ -10,6 +10,10 @@ interface Props {
   onBack?: () => void;
 }
 
+const roundButton =
+  'flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-line bg-surface text-ink-3 ' +
+  'hover:border-primary-text hover:text-primary-text transition-colors md:hidden';
+
 export default function PageHeader({ title, right, onBack }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -19,22 +23,15 @@ export default function PageHeader({ title, right, onBack }: Props) {
 
   return (
     <header className="flex items-center justify-between gap-3 pt-12 pb-5 md:pt-10 md:pb-6">
-      <button
-        onClick={onBack ?? (() => router.back())}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/5 active:bg-white/10 transition-colors md:hidden"
-      >
-        <ChevronLeftIcon className="w-5 h-5 text-slate-400" />
+      <button onClick={onBack ?? (() => router.back())} aria-label="Back" className={roundButton}>
+        <ChevronLeftIcon className="w-[18px] h-[18px]" />
       </button>
-      <h1 className="text-base font-semibold text-white md:text-2xl md:font-bold truncate">{title}</h1>
+      <h1 className="truncate text-[19px] font-bold tracking-tight md:text-[22px]">{title}</h1>
       <div className="flex shrink-0 items-center justify-end gap-2">
         {right}
         {showCog && (
-          <Link
-            href="/settings"
-            aria-label="Settings"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 active:bg-white/10 transition-colors md:hidden"
-          >
-            <CogIcon className="w-5 h-5 text-slate-400" />
+          <Link href="/settings" aria-label="Settings" className={roundButton}>
+            <CogIcon className="w-[18px] h-[18px]" />
           </Link>
         )}
       </div>

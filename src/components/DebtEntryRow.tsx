@@ -25,21 +25,21 @@ export default function DebtEntryRow({
 
   return (
     <div className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 transition-colors ${
-      settled ? 'bg-white/[0.02] border-[#1e2d40]' : 'bg-white/5 border-[#1e2d40]'
+      settled ? 'bg-canvas border-line' : 'bg-raised border-line'
     }`}>
-      <span className={`text-xs shrink-0 ${owedToMe ? 'text-emerald-400' : 'text-red-400'}`}>
+      <span className={`text-xs shrink-0 ${owedToMe ? 'text-growth-text' : 'text-danger-text'}`}>
         {owedToMe ? '→' : '←'}
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className={`text-sm truncate ${settled ? 'text-slate-500 line-through' : 'text-white'}`}>
+        <p className={`text-sm truncate ${settled ? 'text-ink-3 line-through' : 'text-ink'}`}>
           {entry.note || (owedToMe ? 'They owe you' : 'You owe them')}
         </p>
-        <p className="text-[11px] text-slate-600">{day}</p>
+        <p className="text-[11px] text-ink-4">{day}</p>
       </div>
 
       <p className={`text-sm font-medium tabular-nums shrink-0 ${
-        settled ? 'text-slate-600' : owedToMe ? 'text-emerald-400' : 'text-red-400'
+        settled ? 'text-ink-4' : owedToMe ? 'text-growth-text' : 'text-danger-text'
       }`}>
         {owedToMe ? '+' : '-'}{fmt(entry.amount, currency)}
       </p>
@@ -50,8 +50,8 @@ export default function DebtEntryRow({
         aria-label={settled ? 'Mark unsettled' : 'Mark settled'}
         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
           settled
-            ? 'bg-emerald-500/20 text-emerald-400'
-            : 'bg-white/5 text-slate-500 hover:text-slate-200 hover:bg-white/10'
+            ? 'bg-growth-tint text-growth-text'
+            : 'bg-raised text-ink-3 hover:text-ink hover:bg-line'
         }`}
       >
         <CheckIcon className="w-3.5 h-3.5" />
@@ -61,9 +61,9 @@ export default function DebtEntryRow({
         onClick={onDelete}
         title={deleteLabel}
         aria-label={deleteLabel}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full hover:bg-line transition-colors"
       >
-        <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
+        <TrashIcon className="w-3.5 h-3.5 text-ink-4 hover:text-danger-text" />
       </button>
     </div>
   );

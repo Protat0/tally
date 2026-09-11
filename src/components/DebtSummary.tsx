@@ -9,6 +9,26 @@ interface Props {
   currency: string;
 }
 
+// Red text can't be read on the teal hero, so money you owe is marked with a
+// red dot beside a light figure instead.
+function Owing({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-danger" />
+      <span className="truncate text-teal-50">{children}</span>
+    </span>
+  );
+}
+
+function Figure({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11.5px] leading-tight text-teal-100">{label}</p>
+      <div className="mt-[7px] truncate text-[17px] font-bold leading-none tabular-nums">{children}</div>
+    </div>
+  );
+}
+
 // The three numbers the page exists to answer, before any detail — sitting
 // under the cash you actually hold. The divider is deliberate: a balance is
 // money in your wallets, a debt is money that isn't. Adding them would be
@@ -17,38 +37,32 @@ export default function DebtSummary({ owedToMe, iOwe, totalBalance, currency }: 
   const net = owedToMe - iOwe;
 
   return (
-    <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
-      <div className="mb-4 pb-4 border-b border-[#1e2d40]">
-        <p className="text-[11px] uppercase tracking-widest text-slate-500">Total balance</p>
-        <p className="mt-1 text-2xl font-bold text-white tabular-nums">
-          {fmt(totalBalance, currency)}
-        </p>
+    <div className="rounded-2xl bg-primary-deep px-4 pt-5 pb-[18px] elev-hero md:px-6">
+      <p className="text-[11px] font-semibold uppercase leading-none tracking-widest text-teal-100">Total balance</p>
+      <p className="mt-2.5 text-[32px] font-bold leading-[1.1] tracking-[-0.035em] tabular-nums text-teal-50">
+        {fmt(totalBalance, currency)}
+      </p>
+
+      <div className="mt-[18px] grid grid-cols-3 gap-2.5 border-t border-white/20 pt-4">
+        <Figure label="You’re owed">
+          <span className="text-green-200">{fmt(owedToMe, currency)}</span>
+        </Figure>
+        <Figure label="You owe">
+          {iOwe > 0
+            ? <Owing>{fmt(iOwe, currency)}</Owing>
+            : <span className="text-teal-50">{fmt(0, currency)}</span>}
+        </Figure>
+        <Figure label="Net">
+          {net > 0
+            ? <span className="text-green-200">+{fmt(net, currency)}</span>
+            : net < 0
+              ? <Owing>-{fmt(Math.abs(net), currency)}</Owing>
+              : <span className="text-teal-100">{fmt(0, currency)}</span>}
+        </Figure>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-widest text-slate-500">You&rsquo;re owed</p>
-          <p className="mt-1 text-lg font-bold text-emerald-400 tabular-nums truncate">
-            {fmt(owedToMe, currency)}
-          </p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-widest text-slate-500">You owe</p>
-          <p className="mt-1 text-lg font-bold text-red-400 tabular-nums truncate">
-            {fmt(iOwe, currency)}
-          </p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-[11px] uppercase tracking-widest text-slate-500">Net</p>
-          <p className={`mt-1 text-lg font-bold tabular-nums truncate ${
-            net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : 'text-slate-400'
-          }`}>
-            {net > 0 ? '+' : net < 0 ? '-' : ''}{fmt(Math.abs(net), currency)}
-          </p>
-        </div>
-      </div>
       {net !== 0 && (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-teal-100">
           {net > 0 ? 'Overall, people owe you.' : 'Overall, you owe people.'}
         </p>
       )}

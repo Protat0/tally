@@ -2,16 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HomeIcon, WalletIcon, TrendingUpIcon, ReceiptIcon, UsersIcon, CogIcon, LogOutIcon } from './Icons';
 import { useAuth } from './AuthContext';
 
 const links = [
-  { href: '/',             label: 'Dashboard', Icon: HomeIcon },
-  { href: '/wallets',      label: 'Wallets',   Icon: WalletIcon },
-  { href: '/expenses',     label: 'Budget',    Icon: TrendingUpIcon },
-  { href: '/transactions', label: 'Activity',  Icon: ReceiptIcon },
-  { href: '/debts',        label: 'Debts',     Icon: UsersIcon },
-  { href: '/settings',     label: 'Settings',  Icon: CogIcon },
+  { href: '/',             label: 'Dashboard' },
+  { href: '/wallets',      label: 'Wallets' },
+  { href: '/expenses',     label: 'Budget' },
+  { href: '/transactions', label: 'Activity' },
+  { href: '/debts',        label: 'Debts' },
+  { href: '/settings',     label: 'Settings' },
 ];
 
 // The mobile bar fits five comfortably. Settings is the rarest destination and
@@ -24,69 +23,68 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* ── Mobile: fixed bottom bar ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0e1420]/95 backdrop-blur-md border-t border-[#1e2d40]">
-        <div className="flex items-center justify-around px-2 py-2 pb-2">
-          {mobileLinks.map(({ href, label, Icon }) => {
-            const active = pathname === href;
-            return (
-              <Link
-                key={href}
-                href={href}
-                className="flex flex-1 flex-col items-center gap-1 py-1 rounded-xl transition-colors active:bg-white/5"
-              >
-                <Icon className={`w-6 h-6 ${active ? 'text-blue-400' : 'text-slate-500'}`} />
-                <span className={`text-[10px] font-medium ${active ? 'text-blue-400' : 'text-slate-500'}`}>
-                  {label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
+      {/* ── Mobile: fixed bottom bar. A teal dot marks where you are; the label does the naming. ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 border-t border-line bg-surface px-1.5 pt-2.5 pb-5">
+        {mobileLinks.map(({ href, label }) => {
+          const active = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active ? 'page' : undefined}
+              className="flex flex-col items-center gap-1.5 rounded-xl py-1 transition-colors active:bg-raised"
+            >
+              <span className={`h-[5px] w-[5px] rounded-full ${active ? 'bg-primary' : 'bg-transparent'}`} />
+              <span className={`text-[11px] leading-none ${active ? 'font-semibold text-primary-text' : 'text-ink-4'}`}>
+                {label}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
 
       {/* ── Desktop: fixed left sidebar ── */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 flex-col bg-[#0e1420] border-r border-[#1e2d40] z-50">
+      <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 flex-col border-r border-line bg-surface px-4 py-6 z-50">
         {/* Logo */}
-        <div className="flex items-center gap-3 px-6 pt-8 pb-7">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shrink-0">
-            <span className="text-sm font-bold text-white">T</span>
+        <div className="flex items-center gap-2.5 px-2 pb-[26px]">
+          <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-primary">
+            <span className="text-base font-bold text-on-primary">T</span>
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">Tally</span>
+          <span className="text-[22px] font-bold leading-none tracking-tight text-primary-text">Tally</span>
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 px-3 space-y-0.5">
-          {links.map(({ href, label, Icon }) => {
+        <nav className="flex flex-col gap-0.5">
+          {links.map(({ href, label }) => {
             const active = pathname === href;
             return (
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                aria-current={active ? 'page' : undefined}
+                className={`flex items-center gap-2.5 rounded-[10px] px-3 py-[11px] text-sm transition-colors ${
                   active
-                    ? 'bg-blue-600/20 text-blue-400'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                    ? 'bg-primary-tint font-semibold text-primary-text'
+                    : 'font-medium text-ink-2 hover:bg-canvas hover:text-ink'
                 }`}
               >
-                <Icon className="w-5 h-5 shrink-0" />
-                <span className="text-sm font-medium">{label}</span>
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-primary' : 'bg-line'}`} />
+                {label}
               </Link>
             );
           })}
         </nav>
 
         {/* Footer: user email + sign out */}
-        <div className="px-3 py-4 border-t border-[#1e2d40] space-y-1">
+        <div className="mt-auto flex flex-col gap-[7px] border-t border-divider px-3 pt-4">
           {user && (
-            <p className="px-4 pb-1 text-xs text-slate-600 truncate">{user.email}</p>
+            <p className="truncate text-[12.5px] text-ink-3">{user.email}</p>
           )}
           <button
             onClick={signOut}
-            className="flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+            className="self-start text-[13px] font-semibold text-primary-text hover:text-primary-hover transition-colors"
           >
-            <LogOutIcon className="w-5 h-5 shrink-0" />
-            <span className="text-sm font-medium">Sign out</span>
+            Sign out
           </button>
         </div>
       </aside>

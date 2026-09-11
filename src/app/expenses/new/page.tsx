@@ -6,6 +6,7 @@ import { useApp, fmt, round2, Category } from '@/components/AppContext';
 import { XIcon } from '@/components/Icons';
 import SplitPanel, { SplitResult } from '@/components/SplitPanel';
 import { visibleCategories } from '@/lib/categories';
+import AppIcon from '@/components/AppIcon';
 
 function ExpenseForm() {
   const { wallets, addExpense, settings } = useApp();
@@ -63,28 +64,28 @@ function ExpenseForm() {
   const selectedWallet = wallets.find(w => w.id === walletId);
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#0b0f1a] md:bg-black/75 md:backdrop-blur-sm flex md:items-center md:justify-center">
-      <div className="w-full h-full md:h-auto md:max-h-[92vh] md:w-[460px] md:rounded-3xl md:overflow-hidden bg-[#0b0f1a] md:bg-[#111827] md:border md:border-[#1e2d40] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-canvas md:bg-black/75 md:backdrop-blur-sm flex md:items-center md:justify-center">
+      <div className="w-full h-full md:h-auto md:max-h-[92vh] md:w-[460px] md:rounded-3xl md:overflow-hidden bg-canvas md:bg-surface md:border md:border-line flex flex-col">
 
         {/* ── Top bar ── */}
         <div className="flex items-center justify-between px-5 pt-8 md:pt-6 pb-2 shrink-0">
           <button
             onClick={() => router.back()}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 active:bg-white/10"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-raised active:bg-line"
           >
-            <XIcon className="w-5 h-5 text-slate-400" />
+            <XIcon className="w-5 h-5 text-ink-2" />
           </button>
-          <p className="font-semibold text-white">Log Expense</p>
+          <p className="font-semibold text-ink">Log Expense</p>
           <div className="w-9" />
         </div>
 
         {/* ── Amount ── */}
         <div className="flex flex-col items-center py-2 md:py-5 shrink-0">
-          <p className="text-xs text-slate-500 mb-1.5 uppercase tracking-widest">Amount</p>
+          <p className="text-xs text-ink-3 mb-1.5 uppercase tracking-widest">Amount</p>
           {/* The field sizes to a fixed width rather than growing, so the
               currency and the number stay centred together as one unit. */}
           <div className="flex items-baseline justify-center gap-1.5">
-            <span className="text-3xl md:text-4xl font-bold text-slate-500 shrink-0">{settings.currency}</span>
+            <span className="text-3xl md:text-4xl font-bold text-ink-3 shrink-0">{settings.currency}</span>
             <input
               type="number"
               inputMode="decimal"
@@ -94,7 +95,7 @@ function ExpenseForm() {
               min="0"
               step="0.01"
               autoFocus
-              className="w-40 md:w-48 bg-transparent text-left text-4xl md:text-5xl font-bold text-white placeholder-slate-700 tabular-nums outline-none border-0 p-0"
+              className="w-40 md:w-48 bg-transparent text-left text-4xl md:text-5xl font-bold text-ink placeholder-ink-5 tabular-nums outline-none border-0 p-0"
             />
           </div>
         </div>
@@ -102,12 +103,12 @@ function ExpenseForm() {
         {/* ── Wallet strip — always visible ── */}
         <div className="px-5 pb-2 shrink-0">
           {wallets.length === 0 ? (
-            <p className="text-xs text-slate-500 text-center py-2">
+            <p className="text-xs text-ink-3 text-center py-2">
               No wallets yet — add one in Wallets.
             </p>
           ) : (
             <div className={split?.mode === 'person' ? 'opacity-40 pointer-events-none' : ''}>
-              <p className="text-xs text-slate-500 mb-2">
+              <p className="text-xs text-ink-3 mb-2">
                 {split?.mode === 'person' ? 'No wallet involved' : 'Pay from'}
               </p>
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
@@ -119,16 +120,16 @@ function ExpenseForm() {
                       onClick={() => setWalletId(w.id)}
                       className={`flex items-center gap-2 rounded-full shrink-0 pl-2.5 pr-3.5 py-2 border transition-colors ${
                         selected
-                          ? 'border-blue-500 bg-blue-500/15'
-                          : 'border-[#1e2d40] bg-white/5'
+                          ? 'border-primary bg-primary-tint'
+                          : 'border-line bg-raised'
                       }`}
                     >
-                      <span className="text-base leading-none">{w.icon}</span>
+                      <AppIcon icon={w.icon} fallback="wallet" className="h-4 w-4 text-primary-text" />
                       <div className="text-left">
-                        <p className={`text-xs font-medium leading-tight ${selected ? 'text-blue-300' : 'text-white'}`}>
+                        <p className={`text-xs font-medium leading-tight ${selected ? 'text-primary-hover' : 'text-ink'}`}>
                           {w.name}
                         </p>
-                        <p className="text-[10px] text-slate-400 leading-tight">
+                        <p className="text-[10px] text-ink-2 leading-tight">
                           {fmt(w.balance, settings.currency)}
                         </p>
                       </div>
@@ -153,18 +154,18 @@ function ExpenseForm() {
 
           {/* Category */}
           <div>
-            <p className="text-xs text-slate-500 mb-2">Category</p>
+            <p className="text-xs text-ink-3 mb-2">Category</p>
             <div className="grid grid-cols-3 gap-2">
               {categories.map(c => (
                 <button
                   key={c.key}
                   onClick={() => setCategory(c.key)}
                   className={`flex flex-col items-center gap-1.5 rounded-xl border py-3 transition-colors ${
-                    category === c.key ? c.color : 'bg-white/5 border-[#1e2d40]'
+                    category === c.key ? c.color : 'bg-raised border-line'
                   }`}
                 >
-                  <span className="text-xl">{c.icon}</span>
-                  <span className="text-xs text-slate-300">{c.label}</span>
+                  <AppIcon icon={c.icon} className={`h-5 w-5 ${category === c.key ? 'text-primary-text' : 'text-ink-3'}`} />
+                  <span className="text-xs text-ink-2">{c.label}</span>
                 </button>
               ))}
             </div>
@@ -172,15 +173,15 @@ function ExpenseForm() {
 
           {/* Note */}
           <div className="pb-2">
-            <p className="text-xs text-slate-500 mb-2">
-              Note <span className="text-slate-600">(optional)</span>
+            <p className="text-xs text-ink-3 mb-2">
+              Note <span className="text-ink-4">(optional)</span>
             </p>
             <input
               type="text"
               value={note}
               onChange={e => setNote(e.target.value)}
               placeholder="What's this for?"
-              className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-blue-500/50 text-sm"
+              className="w-full rounded-xl bg-canvas border border-line px-4 py-3 text-ink placeholder-ink-4 outline-none focus:border-primary text-sm"
             />
           </div>
         </div>
@@ -190,7 +191,7 @@ function ExpenseForm() {
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="w-full rounded-2xl bg-blue-600 py-4 font-bold text-white text-base active:bg-blue-700 disabled:opacity-30 transition-colors"
+            className="w-full rounded-2xl bg-primary py-4 font-bold text-on-primary text-base active:bg-primary-hover disabled:opacity-30 transition-colors"
           >
             {!canSubmit
               ? 'Log Expense'

@@ -20,12 +20,12 @@ export default function BottomSheet({ onClose, children }: Props) {
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6 max-h-[85vh] overflow-y-auto overflow-x-hidden"
+        className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-surface md:border md:border-line elev-sheet p-6 pb-8 md:pb-6 max-h-[85vh] overflow-y-auto overflow-x-hidden"
         onClick={e => e.stopPropagation()}
         style={swipe.style}
         {...swipe.handlers}
       >
-        <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
+        <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-line md:hidden" />
         {children}
       </div>
     </div>

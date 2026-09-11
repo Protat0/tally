@@ -8,7 +8,8 @@ import DebtSummary from '@/components/DebtSummary';
 import DebtPersonSection from '@/components/DebtPersonSection';
 import AddDebtSheet from '@/components/AddDebtSheet';
 import { ScrollLock } from '@/components/ModalLock';
-import { PlusIcon, UsersIcon } from '@/components/Icons';
+import { UsersIcon } from '@/components/Icons';
+import PersonAvatar from '@/components/PersonAvatar';
 
 export interface PersonGroup {
   person: DebtPerson;
@@ -48,21 +49,21 @@ export default function DebtsPage() {
   }, [debtPeople, debtEntries]);
 
   return (
-    <div className="min-h-screen bg-[#0b0f1a]">
+    <div className="min-h-screen bg-canvas">
       <BottomNav />
 
       <div className="md:pl-64">
         <div className="mx-auto max-w-5xl px-4 md:px-8 pb-28 md:pb-12">
 
           <PageHeader
-            title="Debt Board"
+            title="Debts"
             right={
               <button
                 onClick={() => setAddOpen(true)}
                 aria-label="Add debt"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 transition-colors"
+                className="px-1 text-[13px] font-semibold text-primary-text hover:text-primary-hover transition-colors"
               >
-                <PlusIcon className="w-4 h-4 text-white" />
+                Add
               </button>
             }
           />
@@ -74,12 +75,17 @@ export default function DebtsPage() {
             currency={currency}
           />
 
-          <div className="mt-6 space-y-4">
+          <div className="mt-3 space-y-3">
+            {groups.length > 0 && (
+              <p className="px-0.5 pt-2 text-[11px] font-semibold uppercase tracking-widest text-ink-3">
+                By person
+              </p>
+            )}
             {groups.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#1e2d40] px-4 py-12 text-center">
-                <UsersIcon className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-                <p className="text-sm text-slate-500 mb-1">No debts tracked yet.</p>
-                <p className="text-xs text-slate-600">
+              <div className="rounded-2xl border border-dashed border-line px-4 py-12 text-center">
+                <UsersIcon className="w-8 h-8 text-ink-5 mx-auto mb-2" />
+                <p className="text-sm text-ink-3 mb-1">No debts tracked yet.</p>
+                <p className="text-xs text-ink-4">
                   Add one when you cover someone&rsquo;s meal — or they cover yours.
                 </p>
               </div>
@@ -108,21 +114,21 @@ export default function DebtsPage() {
           <ScrollLock />
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"
+            className="relative w-full max-w-sm rounded-2xl bg-surface border border-line p-6 text-center"
             onClick={e => e.stopPropagation()}
           >
-            <p className="text-3xl mb-3">{confirmDeletePerson.emoji}</p>
-            <p className="font-semibold text-white mb-1">
+            <PersonAvatar name={confirmDeletePerson.name} size="lg" className="mx-auto mb-3" />
+            <p className="font-semibold text-ink mb-1">
               Delete {confirmDeletePerson.name}?
             </p>
-            <p className="text-sm text-slate-500 mb-5">
+            <p className="text-sm text-ink-3 mb-5">
               Every debt logged with them is deleted too, settled ones included. This
               cannot be undone.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setConfirmDeletePerson(null)}
-                className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
+                className="flex-1 rounded-xl bg-raised py-3 text-sm font-medium text-ink-2 hover:bg-line transition-colors"
               >
                 Cancel
               </button>
@@ -131,7 +137,7 @@ export default function DebtsPage() {
                   deleteDebtPerson(confirmDeletePerson.id);
                   setConfirmDeletePerson(null);
                 }}
-                className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white hover:bg-red-500 transition-colors"
+                className="flex-1 rounded-xl bg-danger-strong py-3 text-sm font-semibold text-white hover:bg-danger transition-colors"
               >
                 Delete
               </button>

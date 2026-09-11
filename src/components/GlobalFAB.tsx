@@ -10,29 +10,31 @@ import {
   PlusIcon, XIcon, ReceiptIcon, BoltIcon, UsersIcon, ShieldIcon,
   WalletIcon, ArrowDownIcon, TrendingUpIcon,
 } from './Icons';
+import type { LucideIcon } from 'lucide-react';
 
 const HIDDEN = ['/auth', '/expenses/new'];
 
 // The action sheet's contents. `href` hands off to the page that owns the flow;
 // `opens` raises one of this component's own modals. Ordered by how often the
 // thing gets logged, not by where it lives in the nav.
+//
+// Every action wears the same teal: they are all things to tap, and green,
+// amber and red are kept for what the money is doing.
 type Action = {
   label: string;
-  Icon: (p: { className?: string }) => React.ReactElement;
-  chip: string;
-  tint: string;
+  Icon: LucideIcon;
   href?: string;
   opens?: 'electric';
 };
 
 const ACTIONS: Action[] = [
-  { label: 'Expense',        Icon: ReceiptIcon,     chip: 'bg-blue-500/15',    tint: 'text-blue-400',    href: '/expenses/new' },
-  { label: 'Electric usage', Icon: BoltIcon,        chip: 'bg-amber-500/15',   tint: 'text-amber-400',   opens: 'electric' },
-  { label: 'Debt',           Icon: UsersIcon,       chip: 'bg-violet-500/15',  tint: 'text-violet-400',  href: '/debts' },
-  { label: 'Money in / out', Icon: WalletIcon,      chip: 'bg-emerald-500/15', tint: 'text-emerald-400', href: '/wallets' },
-  { label: 'Instalment',     Icon: ArrowDownIcon,   chip: 'bg-purple-500/15',  tint: 'text-purple-400',  href: '/instalments' },
-  { label: 'Emergency fund', Icon: ShieldIcon,      chip: 'bg-sky-500/15',     tint: 'text-sky-400',     href: '/emergency-fund' },
-  { label: 'Budget',         Icon: TrendingUpIcon,  chip: 'bg-teal-500/15',    tint: 'text-teal-400',    href: '/expenses' },
+  { label: 'Expense',        Icon: ReceiptIcon,    href: '/expenses/new' },
+  { label: 'Electric usage', Icon: BoltIcon,       opens: 'electric' },
+  { label: 'Debt',           Icon: UsersIcon,      href: '/debts' },
+  { label: 'Money in / out', Icon: WalletIcon,     href: '/wallets' },
+  { label: 'Instalment',     Icon: ArrowDownIcon,  href: '/instalments' },
+  { label: 'Emergency fund', Icon: ShieldIcon,     href: '/emergency-fund' },
+  { label: 'Budget',         Icon: TrendingUpIcon, href: '/expenses' },
 ];
 
 export default function GlobalFAB() {
@@ -74,8 +76,8 @@ export default function GlobalFAB() {
 
   // One accent for the whole modal, so the direction is legible at a glance.
   const tone = refunding
-    ? { ring: 'border-rose-500/50 bg-rose-500/10', icon: 'text-rose-400', focus: 'focus:border-rose-500/50', cta: 'bg-rose-600 hover:bg-rose-500 text-white' }
-    : { ring: 'border-amber-500/50 bg-amber-500/10', icon: 'text-amber-400', focus: 'focus:border-amber-500/50', cta: 'bg-amber-500 hover:bg-amber-400 text-black' };
+    ? { ring: 'border-danger-edge bg-danger-tint', icon: 'text-danger-text', cta: 'bg-danger-strong hover:bg-danger text-white' }
+    : { ring: 'border-primary bg-primary-tint', icon: 'text-primary-text', cta: 'bg-primary hover:bg-primary-hover text-on-primary' };
 
   return (
     <>
@@ -88,9 +90,9 @@ export default function GlobalFAB() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Log something"
-          className="flex h-14 w-14 items-center justify-center rounded-full shadow-lg bg-blue-600 hover:bg-blue-500 shadow-blue-900/50 transition-colors"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-primary hover:bg-primary-hover elev-fab transition-colors"
         >
-          <PlusIcon className="w-7 h-7 text-white" />
+          <PlusIcon className="w-7 h-7 text-on-primary" />
         </button>
       </div>
 
@@ -102,19 +104,19 @@ export default function GlobalFAB() {
           <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm warp-scrim" />
           <div
-            className="warp-panel relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
+            className="warp-panel relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-surface border border-line p-6 pb-8 md:pb-6"
             onClick={e => e.stopPropagation()}
             style={swipe.style}
             {...swipe.handlers}
           >
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 md:hidden" />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-line md:hidden" />
 
             <div className="flex items-start justify-between mb-5">
-              <p className="font-semibold text-white text-lg">What are you logging?</p>
+              <p className="font-semibold text-ink text-lg">What are you logging?</p>
               {/* Desktop only: on a phone the grab handle, the swipe down and the
                   tap outside all already close this, and a target in the far
                   corner is the worst of the four to reach. */}
-              <button onClick={closeAll} className="hidden md:block text-slate-500 hover:text-slate-300 transition-colors">
+              <button onClick={closeAll} className="hidden md:block text-ink-3 hover:text-ink-2 transition-colors">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -123,13 +125,13 @@ export default function GlobalFAB() {
               {ACTIONS.map(a => {
                 const body = (
                   <>
-                    <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${a.chip}`}>
-                      <a.Icon className={`w-5 h-5 ${a.tint}`} />
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary-edge bg-primary-tint">
+                      <a.Icon className="w-5 h-5 text-primary-text" />
                     </span>
-                    <span className="text-[11px] leading-tight text-center text-slate-300">{a.label}</span>
+                    <span className="text-[11px] leading-tight text-center text-ink-2">{a.label}</span>
                   </>
                 );
-                const cls = 'flex flex-col items-center gap-2 rounded-2xl border border-[#1e2d40] bg-white/5 px-2 py-3.5 transition-colors hover:bg-white/10 active:bg-white/10';
+                const cls = 'flex flex-col items-center gap-2 rounded-2xl border border-line bg-canvas px-2 py-3.5 transition-colors hover:border-line-strong hover:bg-raised active:bg-raised';
                 return a.href ? (
                   <Link key={a.label} href={a.href} onClick={closeAll} className={cls}>{body}</Link>
                 ) : (
@@ -156,16 +158,16 @@ export default function GlobalFAB() {
           <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-8 md:pb-6"
+            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-surface border border-line p-6 pb-8 md:pb-6"
             onClick={e => e.stopPropagation()}
             style={swipe.style}
             {...swipe.handlers}
           >
-            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20 md:hidden" />
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-line md:hidden" />
 
             <div className="flex items-start justify-between mb-4">
-              <p className="font-semibold text-white text-lg">Electric Usage</p>
-              <button onClick={closeAll} className="hidden md:block text-slate-500 hover:text-slate-300 transition-colors">
+              <p className="font-semibold text-ink text-lg">Electric Usage</p>
+              <button onClick={closeAll} className="hidden md:block text-ink-3 hover:text-ink-2 transition-colors">
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
@@ -175,7 +177,7 @@ export default function GlobalFAB() {
               <button
                 onClick={() => setRefunding(false)}
                 className={`rounded-xl border px-3 py-2.5 text-sm transition-colors ${
-                  refunding ? 'border-[#1e2d40] bg-white/5 text-slate-400' : 'border-amber-500/50 bg-amber-500/10 text-white'
+                  refunding ? 'border-line bg-canvas text-ink-3' : 'border-primary bg-primary-tint text-ink'
                 }`}
               >
                 Add time
@@ -183,13 +185,13 @@ export default function GlobalFAB() {
               <button
                 onClick={() => setRefunding(true)}
                 className={`rounded-xl border px-3 py-2.5 text-sm transition-colors ${
-                  refunding ? 'border-rose-500/50 bg-rose-500/10 text-white' : 'border-[#1e2d40] bg-white/5 text-slate-400'
+                  refunding ? 'border-danger-edge bg-danger-tint text-ink' : 'border-line bg-canvas text-ink-3'
                 }`}
               >
                 Remove time
               </button>
             </div>
-            <p className="text-xs text-slate-500 mb-5">
+            <p className="text-xs text-ink-3 mb-5">
               {refunding
                 ? 'Logged too much by mistake? Remove the time manually.'
                 : 'Forgot to toggle an appliance? Add the time manually.'}
@@ -197,36 +199,36 @@ export default function GlobalFAB() {
 
             {appliances.length === 0 ? (
               <div className="py-4 text-center">
-                <p className="text-sm text-slate-500 mb-3">No appliances set up yet.</p>
+                <p className="text-sm text-ink-3 mb-3">No appliances set up yet.</p>
                 <Link href="/expenses#electric" onClick={closeAll}
-                  className="text-sm text-blue-400 underline underline-offset-2">
+                  className="text-sm text-primary-text underline underline-offset-2">
                   Set up appliances →
                 </Link>
               </div>
             ) : (
               <>
                 {/* Appliance picker */}
-                <p className="text-xs text-slate-500 mb-2">Which appliance?</p>
+                <p className="text-xs text-ink-3 mb-2">Which appliance?</p>
                 <div className="grid grid-cols-2 gap-2 mb-5">
                   {appliances.map(a => (
                     <button
                       key={a.id}
                       onClick={() => setAppId(a.id)}
                       className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                        appId === a.id ? tone.ring : 'border-[#1e2d40] bg-white/5 hover:bg-white/8'
+                        appId === a.id ? tone.ring : 'border-line bg-raised hover:bg-line'
                       }`}
                     >
-                      <BoltIcon className={`w-4 h-4 shrink-0 ${appId === a.id ? tone.icon : 'text-slate-500'}`} />
+                      <BoltIcon className={`w-4 h-4 shrink-0 ${appId === a.id ? tone.icon : 'text-ink-3'}`} />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{a.name}</p>
-                        <p className="text-[10px] text-slate-500">{a.wattage}W</p>
+                        <p className="text-sm font-medium text-ink truncate">{a.name}</p>
+                        <p className="text-[10px] text-ink-3">{a.wattage}W</p>
                       </div>
                     </button>
                   ))}
                 </div>
 
                 {/* Duration */}
-                <p className="text-xs text-slate-500 mb-2">
+                <p className="text-xs text-ink-3 mb-2">
                   {refunding ? 'How much time to remove?' : 'How long was it on?'}
                 </p>
                 <div className="flex gap-3 mb-5">
@@ -238,9 +240,9 @@ export default function GlobalFAB() {
                       onChange={e => setHrs(e.target.value)}
                       placeholder="0"
                       min="0" max="24"
-                      className={`w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none ${tone.focus}`}
+                      className="w-full rounded-xl bg-canvas border border-line px-3 py-3 text-center text-lg font-semibold text-ink placeholder-ink-5 outline-none focus:border-primary"
                     />
-                    <span className="text-sm text-slate-500 shrink-0">hr</span>
+                    <span className="text-sm text-ink-3 shrink-0">hr</span>
                   </div>
                   <div className="flex-1 flex items-center gap-2">
                     <input
@@ -250,9 +252,9 @@ export default function GlobalFAB() {
                       onChange={e => setMins(e.target.value)}
                       placeholder="0"
                       min="0" max="59"
-                      className={`w-full rounded-xl bg-white/5 border border-[#1e2d40] px-3 py-3 text-center text-lg font-semibold text-white placeholder-slate-600 outline-none ${tone.focus}`}
+                      className="w-full rounded-xl bg-canvas border border-line px-3 py-3 text-center text-lg font-semibold text-ink placeholder-ink-5 outline-none focus:border-primary"
                     />
-                    <span className="text-sm text-slate-500 shrink-0">min</span>
+                    <span className="text-sm text-ink-3 shrink-0">min</span>
                   </div>
                 </div>
 

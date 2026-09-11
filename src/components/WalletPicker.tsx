@@ -1,6 +1,7 @@
 'use client';
 
 import { useApp } from './AppContext';
+import AppIcon from './AppIcon';
 
 interface Props {
   value: string;                     // '' means no wallet
@@ -18,15 +19,15 @@ export default function WalletPicker({ value, onChange }: Props) {
   const chip = (selected: boolean) =>
     `flex max-w-full min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
       selected
-        ? 'border-blue-500 bg-blue-500/15 text-white'
-        : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
+        ? 'border-primary bg-primary-tint text-ink'
+        : 'border-line bg-raised text-ink-2 hover:text-ink'
     }`;
 
   return (
     <div className="flex flex-wrap gap-2">
       {wallets.map(w => (
         <button key={w.id} onClick={() => onChange(w.id)} className={chip(value === w.id)}>
-          <span className="shrink-0">{w.icon}</span>
+          <AppIcon icon={w.icon} fallback="wallet" className="h-4 w-4 shrink-0 text-primary-text" />
           <span className="truncate">{w.name}</span>
         </button>
       ))}

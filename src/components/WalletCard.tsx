@@ -5,6 +5,7 @@ import { useApp, fmt, Wallet, IncomeSource, INCOME_SOURCES } from './AppContext'
 import { ScrollLock } from './ModalLock';
 import { useSwipeToClose } from './useSwipeToClose';
 import { PlusIcon, ArrowUpIcon, ArrowDownIcon, SwitchIcon, TrashIcon } from './Icons';
+import AppIcon, { IconTile } from './AppIcon';
 
 interface Props {
   wallet: Wallet;
@@ -15,6 +16,11 @@ interface Props {
 interface ActionModal {
   type: 'add' | 'withdraw' | 'transfer';
 }
+
+const fieldLabel = 'text-[11px] font-semibold uppercase leading-none tracking-widest text-ink-3';
+const fieldInput =
+  'w-full rounded-xl border border-line bg-canvas px-3.5 py-[13px] text-sm text-ink placeholder-ink-5 outline-none ' +
+  'focus:border-primary-text focus:bg-surface focus:ring-[3px] focus:ring-primary-hover/25 transition-colors';
 
 export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
   const { wallets, addIncome, addWithdrawal, addTransfer, settings } = useApp();
@@ -70,29 +76,38 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
     { label: 'Transfer', Icon: SwitchIcon, action: () => setModal({ type: 'transfer' as const }) },
   ];
 
+  const title = modal?.type === 'add' ? 'Add funds' : modal?.type === 'withdraw' ? 'Withdraw' : 'Transfer';
+  // Once the amount is real, the button says exactly what it is about to do.
+  const sourceLabel = INCOME_SOURCES.find(s => s.key === source)?.label ?? '';
+  const amountStr = fmt(amount, settings.currency);
+  const ctaLabel = !canConfirm
+    ? title
+    : modal?.type === 'add'
+      ? `Add ${amountStr} from ${sourceLabel}`
+      : `${title} ${amountStr}`;
+
   return (
     <>
-      <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
+      <div className="rounded-2xl border border-line bg-surface p-5">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/15 text-xl">
-              {wallet.icon}
-            </div>
+            <IconTile icon={wallet.icon} fallback="wallet" />
             <div>
-              <p className="text-sm font-medium text-white">{wallet.name}</p>
-              <p className="text-xs text-slate-500">Balance</p>
+              <p className="text-sm font-medium">{wallet.name}</p>
+              <p className="text-xs text-ink-3">Balance</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <p className={`text-xl font-bold ${wallet.balance < 0 ? 'text-red-400' : 'text-white'}`}>
+            <p className={`text-xl font-bold tabular-nums ${wallet.balance < 0 ? 'text-danger-text' : ''}`}>
               {fmt(wallet.balance)}
             </p>
             {onDelete && (
               <button
                 onClick={onDelete}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/10 hover:bg-red-500/20 active:bg-red-500/30 transition-colors"
+                aria-label={`Delete ${wallet.name}`}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-danger-tint hover:bg-danger-edge transition-colors"
               >
-                <TrashIcon className="w-4 h-4 text-red-400" />
+                <TrashIcon className="w-4 h-4 text-danger-text" />
               </button>
             )}
           </div>
@@ -102,10 +117,10 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
             <button
               key={label}
               onClick={action}
-              className="flex flex-col items-center gap-1.5 rounded-xl bg-white/5 py-3 transition-colors active:bg-white/10"
+              className="flex flex-col items-center gap-1.5 rounded-xl border border-line bg-canvas py-3 transition-colors hover:border-line-strong active:bg-raised"
             >
-              <Icon className="w-5 h-5 text-slate-300" />
-              <span className="text-[11px] text-slate-400">{label}</span>
+              <Icon className="w-5 h-5 text-primary-text" />
+              <span className="text-[11px] text-ink-2">{label}</span>
             </button>
           ))}
         </div>
@@ -116,94 +131,129 @@ export default function WalletCard({ wallet, onExpense, onDelete }: Props) {
           <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-[430px] rounded-t-3xl bg-[#111827] border-t border-[#1e2d40] p-6 pb-10"
+            className="relative flex w-full max-w-[430px] flex-col gap-5 rounded-t-3xl bg-surface px-5 pt-3 pb-8 elev-sheet"
             onClick={e => e.stopPropagation()}
             style={swipe.style}
             {...swipe.handlers}
           >
-            <p className={`text-center font-semibold text-white capitalize ${modal.type === 'withdraw' ? 'mb-1' : 'mb-4'}`}>
-              {modal.type === 'add' ? 'Add Funds' : modal.type === 'withdraw' ? 'Withdraw' : 'Transfer'}
-            </p>
-            {modal.type === 'withdraw' && cashWallet && (
-              <p className="mb-4 text-center text-xs text-slate-500">
-                Moves into {cashWallet.icon} {cashWallet.name} — you still have the money.
+            <div className="mx-auto h-1 w-10 rounded-full bg-line" />
+
+            <div className="text-center">
+              <p className="text-lg font-bold leading-none tracking-tight">{title}</p>
+              {modal.type === 'withdraw' && cashWallet && (
+                <p className="mt-2 text-xs text-ink-4">
+                  Moves into {cashWallet.name} — you still have the money.
+                </p>
+              )}
+            </div>
+
+            {/* The amount is the point of the sheet, so it is the biggest thing on it. */}
+            <div className="flex flex-col items-center gap-1.5 pt-2 pb-1">
+              <div className="flex items-center justify-center gap-0.5">
+                <span className="text-[30px] font-semibold leading-none text-ink-4">{settings.currency}</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={inputVal}
+                  onChange={e => setInputVal(e.target.value)}
+                  placeholder="0.00"
+                  aria-label="Amount"
+                  className="w-[230px] bg-transparent p-0 text-center text-[46px] font-bold leading-[1.1] tracking-[-0.04em] tabular-nums text-ink placeholder-ink-5 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div className="h-0.5 w-[200px] rounded-full bg-primary" />
+              <p className="mt-1 text-[12.5px] text-ink-4">
+                {modal.type === 'add' ? 'Goes to' : 'From'} {wallet.name}
               </p>
-            )}
-            <input
-              type="number"
-              inputMode="decimal"
-              value={inputVal}
-              onChange={e => setInputVal(e.target.value)}
-              placeholder="Amount"
-              className="mb-3 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 text-center text-2xl font-bold outline-none focus:border-blue-500/50"
-              autoFocus
-            />
+            </div>
+
             {modal.type === 'add' && (
-              <>
-                <p className="mb-2 text-xs text-slate-500">Source</p>
-                <div className="mb-3 flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2.5">
+                <p className={fieldLabel}>Source</p>
+                <div className="flex flex-wrap gap-2">
                   {INCOME_SOURCES.map(s => (
                     <button
                       key={s.key}
                       onClick={() => setSource(s.key)}
-                      className={`flex items-center gap-1.5 rounded-xl px-3 py-2 border text-sm transition-colors ${source === s.key ? 'border-emerald-500 bg-emerald-500/15 text-white' : 'border-[#1e2d40] bg-white/5 text-slate-300'}`}
+                      className={`flex items-center gap-[7px] rounded-full border px-3.5 py-2.5 text-[13.5px] font-semibold leading-none transition-colors ${
+                        source === s.key
+                          ? 'border-primary bg-primary-tint text-primary-text'
+                          : 'border-line bg-surface text-ink-2 hover:border-line-strong'
+                      }`}
                     >
-                      <span>{s.icon}</span>{s.label}
+                      <AppIcon icon={s.icon} className="h-4 w-4" />{s.label}
                     </button>
                   ))}
                 </div>
-              </>
+              </div>
             )}
 
             {modal.type === 'transfer' && (
-              <div className="mb-3 space-y-2">
+              <div className="flex flex-col gap-2.5">
+                <p className={fieldLabel}>To</p>
                 {others.length === 0 ? (
-                  <p className="text-center text-sm text-slate-500">No other wallets to transfer to.</p>
+                  <p className="text-center text-sm text-ink-3">No other wallets to transfer to.</p>
                 ) : (
-                  others.map(w => (
-                    <button
-                      key={w.id}
-                      onClick={() => setTargetId(w.id)}
-                      className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 border transition-colors ${targetId === w.id ? 'border-blue-500 bg-blue-500/10' : 'border-[#1e2d40] bg-white/5'}`}
-                    >
-                      <span className="text-lg">{w.icon}</span>
-                      <span className="text-sm text-white">{w.name}</span>
-                      <span className="ml-auto text-sm text-slate-400">{fmt(w.balance)}</span>
-                    </button>
-                  ))
+                  <div className="space-y-2">
+                    {others.map(w => (
+                      <button
+                        key={w.id}
+                        onClick={() => setTargetId(w.id)}
+                        className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
+                          targetId === w.id ? 'border-primary bg-primary-tint' : 'border-line bg-canvas hover:border-line-strong'
+                        }`}
+                      >
+                        <IconTile icon={w.icon} fallback="wallet" size="sm" />
+                        <span className="text-sm">{w.name}</span>
+                        <span className="ml-auto text-sm tabular-nums text-ink-3">{fmt(w.balance)}</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
 
             {(modal.type === 'withdraw' || modal.type === 'transfer') && (
-              <input
-                type="number"
-                inputMode="decimal"
-                value={feeVal}
-                onChange={e => setFeeVal(e.target.value)}
-                placeholder="Fee (optional)"
-                className="mb-3 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 text-sm outline-none focus:border-blue-500/50"
-              />
+              <div className="flex flex-col gap-2">
+                <p className={fieldLabel}>Fee</p>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={feeVal}
+                  onChange={e => setFeeVal(e.target.value)}
+                  placeholder="Optional"
+                  className={fieldInput}
+                />
+              </div>
             )}
 
-            <input
-              type="text"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="Note (optional)"
-              className="mb-3 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 text-sm outline-none focus:border-blue-500/50"
-            />
+            <div className="flex flex-col gap-2">
+              <p className={fieldLabel}>Note</p>
+              <input
+                type="text"
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="Optional"
+                className={fieldInput}
+              />
+            </div>
 
-            <button
-              onClick={confirm}
-              disabled={!canConfirm}
-              className="w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white active:bg-blue-700 disabled:opacity-40 transition-colors"
-            >
-              Confirm
-            </button>
-            <button onClick={closeModal} className="mt-3 w-full text-center text-sm text-slate-500">
-              Cancel
-            </button>
+            <div className="flex flex-col items-center gap-3 pt-0.5">
+              <button
+                onClick={confirm}
+                disabled={!canConfirm}
+                className="w-full rounded-[14px] bg-primary py-4 text-[15.5px] font-semibold leading-none text-on-primary hover:bg-primary-hover disabled:opacity-40 disabled:hover:bg-primary transition-colors"
+              >
+                {ctaLabel}
+              </button>
+              <button
+                onClick={closeModal}
+                className="text-[13.5px] font-semibold text-ink-3 hover:text-ink transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

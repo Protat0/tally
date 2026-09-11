@@ -16,8 +16,10 @@ import CategoryGrid from '@/components/CategoryGrid';
 import CategoryDetailSheet from '@/components/CategoryDetailSheet';
 import ElectricSheet from '@/components/ElectricSheet';
 import SavingsSheet from '@/components/SavingsSheet';
-import { PlusIcon, CogIcon } from '@/components/Icons';
+import { CogIcon } from '@/components/Icons';
 import { visibleCategories, BUILTIN_CATEGORIES } from '@/lib/categories';
+import AppIcon, { IconTile } from '@/components/AppIcon';
+import type { IconKey } from '@/lib/icons';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -29,7 +31,10 @@ function formatMonth(m: string): string {
     .toLocaleDateString('en-PH', { month: 'short', year: 'numeric' });
 }
 
-const CATEGORY_ICON_OPTIONS = ['🎯','🐶','🎮','📚','☕','🏠','📱','💰','🌱','🎁','✈️','🍿','💪','🚿','👕','🎵'];
+const CATEGORY_ICON_OPTIONS: IconKey[] = [
+  'target', 'paw-print', 'gamepad-2', 'book-open', 'coffee', 'house', 'smartphone', 'piggy-bank',
+  'sprout', 'gift', 'plane', 'popcorn', 'dumbbell', 'shower-head', 'shirt', 'music',
+];
 
 // ─── small components ─────────────────────────────────────────────────────────
 
@@ -38,14 +43,14 @@ function InlineAmountInput({
 }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div>
-      <p className="text-xs text-slate-500 mb-1">{label}</p>
+      <p className="text-xs text-ink-3 mb-1">{label}</p>
       <input
         type="number"
         inputMode="decimal"
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50"
+        className="w-full rounded-xl bg-canvas border border-line px-4 py-2.5 text-sm text-ink placeholder-ink-5 outline-none focus:border-primary"
       />
     </div>
   );
@@ -101,7 +106,7 @@ export default function BudgetPage() {
   // ── add category sheet ──
   const [addCatOpen, setAddCatOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
-  const [newCatIcon, setNewCatIcon] = useState('🎯');
+  const [newCatIcon, setNewCatIcon] = useState<string>('target');
   const [newCatBudget, setNewCatBudget] = useState('');
 
   const handleAddCategory = () => {
@@ -113,7 +118,7 @@ export default function BudgetPage() {
       categoryBudgets: budgetVal > 0 ? { ...categoryBudgets, [key]: budgetVal } : categoryBudgets,
     });
     setAddCatOpen(false);
-    setNewCatName(''); setNewCatIcon('🎯'); setNewCatBudget('');
+    setNewCatName(''); setNewCatIcon('target'); setNewCatBudget('');
   };
 
   // ── category deletion ──
@@ -141,7 +146,7 @@ export default function BudgetPage() {
   const catMetaFor = (key: Category) =>
     allCategories.find(c => c.key === key)
     ?? BUILTIN_CATEGORIES.find(c => c.key === key)
-    ?? { key, label: String(key), icon: '✦' };
+    ?? { key, label: String(key), icon: 'shapes' };
 
   // The ⚡ tile's forecast is read live from running appliances, so this page
   // ticks to keep it current.
@@ -235,35 +240,32 @@ export default function BudgetPage() {
   const electricBill = bills.find(b => b.category === 'electric') ?? null;
 
   return (
-    <div className="min-h-screen bg-[#0b0f1a]">
+    <div className="min-h-screen bg-canvas">
       <BottomNav />
 
       <div className="md:pl-64">
         <div className="mx-auto max-w-5xl px-4 md:px-8 pb-28 md:pb-12">
 
-          {/* ── Log Expense ── */}
-          <div className="flex justify-end items-center gap-2 pt-14 pb-4 md:pt-10">
-            <Link
-              href="/settings"
-              aria-label="Settings"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 active:bg-white/10 transition-colors md:hidden"
-            >
-              <CogIcon className="w-5 h-5 text-slate-400" />
-            </Link>
-            <Link
-              href="/expenses/new"
-              className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
-            >
-              <PlusIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">Log Expense</span>
-            </Link>
-          </div>
+          {/* ── Header ── Logging an expense is the FAB's first action, so the
+              header only has to say where you are. */}
+          <header className="flex items-center justify-between gap-3 pt-14 pb-4 md:pt-10 md:pb-6">
+            <h1 className="text-[19px] font-bold tracking-tight md:text-[22px]">Budget</h1>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-ink-3 md:text-[13px]">{monthLabel} cycle</p>
+              <Link
+                href="/settings"
+                aria-label="Settings"
+                className="flex h-[34px] w-[34px] items-center justify-center rounded-full border border-line bg-surface text-ink-3 hover:border-primary-text hover:text-primary-text transition-colors md:hidden"
+              >
+                <CogIcon className="w-[18px] h-[18px]" />
+              </Link>
+            </div>
+          </header>
 
-          <div className="space-y-6">
+          <div className="space-y-4">
 
             {/* ── Hero — always open ── */}
             <BudgetHero
-              monthLabel={monthLabel}
               allocated={totalAllocated}
               unallocated={unallocated}
               allocatedPct={allocatedPct}
@@ -275,7 +277,7 @@ export default function BudgetPage() {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
 
               <BudgetTile
-                icon="💡"
+                icon="receipt-text"
                 label="Bills"
                 value={`${fmt(totalBills, currency)}/mo`}
                 status={
@@ -293,7 +295,7 @@ export default function BudgetPage() {
               />
 
               <BudgetTile
-                icon="⚡"
+                icon="zap"
                 label="Electric Usage"
                 value={`Est. ${fmt(liveElectric, currency)}`}
                 status={
@@ -310,7 +312,7 @@ export default function BudgetPage() {
               />
 
               <BudgetTile
-                icon="🌱"
+                icon="piggy-bank"
                 label="Savings"
                 value={monthlySavingsTarget > 0 ? `${fmt(monthlySavingsTarget, currency)}/mo` : 'Not set'}
                 status={monthlySavingsTarget > 0 ? 'set aside each month' : 'tap to set a target'}
@@ -318,7 +320,7 @@ export default function BudgetPage() {
               />
 
               <BudgetTile
-                icon="💳"
+                icon="credit-card"
                 label="Instalments"
                 value={instalmentMonthly > 0 ? fmt(instalmentMonthly, currency) : 'Nothing due'}
                 status={
@@ -331,7 +333,7 @@ export default function BudgetPage() {
               />
 
               <BudgetTile
-                icon="🛡️"
+                icon="shield-check"
                 label="Emergency"
                 value={`${fmt(emergencyFund.currentAmount, currency)} of ${fmt(settings.emergencyFundTarget, currency)}`}
                 status={
@@ -373,27 +375,25 @@ export default function BudgetPage() {
             <ScrollLock />
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
             <div
-              className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"
+              className="relative w-full max-w-sm rounded-2xl bg-surface border border-line p-6 text-center"
               onClick={e => e.stopPropagation()}
             >
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-2xl">
-                {icon}
-              </div>
-              <p className="font-semibold text-white mb-1">
+              <IconTile icon={icon} size="lg" className="mx-auto mb-3" />
+              <p className="font-semibold text-ink mb-1">
                 {isCustom ? `Delete ${label}?` : `Remove ${label}?`}
               </p>
-              <p className="text-sm text-slate-400 mb-5">
+              <p className="text-sm text-ink-2 mb-5">
                 {isCustom
                   ? 'The category and its budget are removed. Expenses already logged under it are kept.'
                   : 'Hidden from the category pickers and its budget cleared. Expenses already logged under it are kept, and you can restore it any time.'}
               </p>
               <div className="flex gap-3">
                 <button onClick={() => setConfirmDeleteCat(null)}
-                  className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-300">
+                  className="flex-1 rounded-xl bg-raised py-3 text-sm font-medium text-ink-2">
                   Cancel
                 </button>
                 <button onClick={() => deleteCategory(confirmDeleteCat)}
-                  className="flex-1 rounded-xl bg-red-600 py-3 text-sm font-medium text-white">
+                  className="flex-1 rounded-xl bg-danger-strong py-3 text-sm font-medium text-white">
                   {isCustom ? 'Delete' : 'Remove'}
                 </button>
               </div>
@@ -420,16 +420,16 @@ export default function BudgetPage() {
       {editBill && (
         <BottomSheet onClose={() => setEditBill(null)}>
           <div className="flex items-center gap-3 mb-5">
-            <span className="text-2xl">💡</span>
-            <p className="font-semibold text-white">Edit Bill</p>
+            <IconTile icon="receipt-text" />
+            <p className="font-semibold text-ink">Edit Bill</p>
           </div>
-          <p className="text-xs text-slate-500 mb-1">Name</p>
+          <p className="text-xs text-ink-3 mb-1">Name</p>
           <input
             type="text"
             value={editBillName}
             onChange={e => setEditBillName(e.target.value)}
             placeholder="Bill name"
-            className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
+            className="w-full rounded-xl bg-canvas border border-line px-4 py-2.5 text-sm text-ink placeholder-ink-5 outline-none focus:border-primary mb-4"
           />
           <InlineAmountInput label="Amount" value={editBillAmt} onChange={setEditBillAmt} />
           <div className="mt-4">
@@ -439,21 +439,21 @@ export default function BudgetPage() {
             />
           </div>
           <div className="mt-4">
-            <p className="text-xs text-slate-500 mb-1">Category</p>
+            <p className="text-xs text-ink-3 mb-1">Category</p>
             <select
               value={editBillCat}
               onChange={e => setEditBillCat(e.target.value as Category)}
-              className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500/50"
+              className="w-full rounded-xl bg-canvas border border-line px-4 py-2.5 text-sm text-ink outline-none focus:border-primary"
             >
               {visibleCategories(settings.customCategories, settings.hiddenCategories).map(c => (
-                <option key={c.key} value={c.key} className="bg-[#111827]">{c.icon} {c.label}</option>
+                <option key={c.key} value={c.key} className="bg-surface">{c.label}</option>
               ))}
             </select>
           </div>
           <button
             onClick={saveBillEdit}
             disabled={!editBillName.trim() || !editBillAmt}
-            className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
+            className="mt-5 w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary disabled:opacity-40"
           >
             Save
           </button>
@@ -478,22 +478,22 @@ export default function BudgetPage() {
 
       {/* ── Edit Category Budget Sheet ── */}
       {editCat && (() => {
-        const meta = allCategories.find(c => c.key === editCat) ?? { icon: '✦', label: 'Category' };
+        const meta = allCategories.find(c => c.key === editCat) ?? { icon: 'shapes', label: 'Category' };
         return (
           <BottomSheet onClose={() => setEditCat(null)}>
             <div className="flex items-center gap-3 mb-5">
-              <span className="text-2xl">{meta.icon}</span>
-              <p className="font-semibold text-white">{meta.label} Budget</p>
+              <IconTile icon={meta.icon} />
+              <p className="font-semibold text-ink">{meta.label} Budget</p>
             </div>
             <InlineAmountInput label="Monthly budget" value={editCatBudget} onChange={setEditCatBudget} />
-            <button onClick={saveCatEdit} className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white">
+            <button onClick={saveCatEdit} className="mt-5 w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary">
               Save
             </button>
             {/* The per-card trash icon is gone, so this sheet is the only route
                 to deletion. Close it first, so one overlay shows at a time. */}
             <button
               onClick={() => { const k = editCat; setEditCat(null); setConfirmDeleteCat(k); }}
-              className="mt-3 w-full rounded-xl bg-white/5 py-3 text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+              className="mt-3 w-full rounded-xl bg-raised py-3 text-sm font-medium text-danger-text hover:bg-danger-tint transition-colors"
             >
               {customCategories.some(c => c.key === editCat) ? 'Delete category' : 'Remove category'}
             </button>
@@ -504,45 +504,45 @@ export default function BudgetPage() {
       {/* ── Add Category Sheet ── */}
       {addCatOpen && (
         <BottomSheet onClose={() => setAddCatOpen(false)}>
-          <p className="font-semibold text-white text-lg mb-5">New Category</p>
-          <p className="text-xs text-slate-500 mb-2">Icon</p>
+          <p className="font-semibold text-ink text-lg mb-5">New Category</p>
+          <p className="text-xs text-ink-3 mb-2">Icon</p>
           <div className="flex flex-wrap gap-2 mb-4">
             {CATEGORY_ICON_OPTIONS.map(ico => (
-              <button key={ico} onClick={() => setNewCatIcon(ico)}
-                className={`h-10 w-10 rounded-xl text-xl border transition-colors ${newCatIcon === ico ? 'border-blue-500 bg-blue-500/15' : 'border-[#1e2d40] bg-white/5'}`}>
-                {ico}
+              <button key={ico} onClick={() => setNewCatIcon(ico)} aria-label={ico}
+                className={`flex h-10 w-10 items-center justify-center rounded-xl border transition-colors ${newCatIcon === ico ? 'border-primary bg-primary-tint text-primary-text' : 'border-line bg-raised text-ink-3 hover:text-ink'}`}>
+                <AppIcon icon={ico} className="h-5 w-5" />
               </button>
             ))}
           </div>
-          <p className="text-xs text-slate-500 mb-1">Name</p>
+          <p className="text-xs text-ink-3 mb-1">Name</p>
           <input
             type="text"
             value={newCatName}
             onChange={e => setNewCatName(e.target.value)}
             placeholder="e.g. Pets"
-            className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50 mb-4"
+            className="w-full rounded-xl bg-canvas border border-line px-4 py-2.5 text-sm text-ink placeholder-ink-5 outline-none focus:border-primary mb-4"
           />
           <InlineAmountInput label="Monthly budget (optional)" value={newCatBudget} onChange={setNewCatBudget} />
           <button onClick={handleAddCategory} disabled={!newCatName.trim()}
-            className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40">
+            className="mt-5 w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary disabled:opacity-40">
             Add Category
           </button>
 
           {/* Removed built-ins — restorable, since they can't be truly deleted. */}
           {hiddenBuiltIns.length > 0 && (
-            <div className="mt-6 border-t border-[#1e2d40] pt-4">
-              <p className="mb-2 text-[11px] uppercase tracking-widest text-slate-600">Removed</p>
+            <div className="mt-6 border-t border-line pt-4">
+              <p className="mb-2 text-[11px] uppercase tracking-widest text-ink-4">Removed</p>
               <div className="flex flex-wrap gap-2">
                 {hiddenBuiltIns.map(({ key, label, icon }) => (
                   <button
                     key={key}
                     onClick={() => restoreCategory(key)}
                     title={`Restore ${label}`}
-                    className="flex items-center gap-1.5 rounded-lg border border-[#1e2d40] bg-white/5 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-colors"
+                    className="flex items-center gap-1.5 rounded-lg border border-line bg-raised px-2.5 py-1.5 text-xs text-ink-2 hover:text-ink hover:border-line-strong transition-colors"
                   >
-                    <span className="opacity-50">{icon}</span>
+                    <AppIcon icon={icon} className="h-3.5 w-3.5 opacity-60" />
                     {label}
-                    <span className="text-slate-600">· restore</span>
+                    <span className="text-ink-4">· restore</span>
                   </button>
                 ))}
               </div>
