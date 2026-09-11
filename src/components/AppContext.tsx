@@ -9,6 +9,7 @@ import {
 } from '@/lib/cycle';
 import type { IconKey } from '@/lib/icons';
 import { netOf } from '@/lib/debtGroups';
+import { fundBalance, canWithdraw, canDeleteEntry, type FundDirection } from '@/lib/emergencyFund';
 
 // round2 lives with the delta arithmetic it guards, and is re-exported here
 // because SplitPanel, SettleUpSheet and the expense form already import it
@@ -52,7 +53,11 @@ export interface Expense {
 // debt_out / debt_in — a debt board movement. Excluded from earned and spent
 // totals: lending is not consumption and a repayment is not income. Both are
 // your own money changing location.
-export type MoneyMoveKind = 'earned' | 'withdrawn' | 'moved' | 'debt_out' | 'debt_in';
+// fund_deposit / fund_withdrawal — money set aside into the emergency fund from
+// a wallet, or taken back out into one. Like debt movements, neither is spending
+// or income: it is your own money changing place.
+export type MoneyMoveKind =
+  | 'earned' | 'withdrawn' | 'moved' | 'debt_out' | 'debt_in' | 'fund_deposit' | 'fund_withdrawal';
 export type IncomeSource = 'salary' | 'freelance' | 'gift' | 'refund' | 'other';
 
 export const INCOME_SOURCES: { key: IncomeSource; label: string; icon: IconKey }[] = [
@@ -131,6 +136,11 @@ export interface InstalmentPayment {
 
 export interface EmergencyFundEntry {
   id: string; amount: number; date: string; note: string;
+  // Amounts are always positive; the direction says which way the money went.
+  direction: FundDirection;
+  // The wallet it came from or went to, and the movement that recorded it.
+  // Both null for money set aside, or spent, without a wallet of yours moving.
+  walletId: string | null; moveId: string | null;
 }
 
 export interface Settings {
@@ -266,7 +276,10 @@ interface AppContextValue extends Computed {
   updateInstalmentPayment: (id: string, updates: Partial<InstalmentPayment>) => Promise<void>;
   deleteInstalmentPayment: (id: string) => Promise<void>;
   setInstalmentNewPurchaseLock: (locked: boolean) => Promise<void>;
-  addEmergencyFundEntry: (e: Omit<EmergencyFundEntry, 'id' | 'date'>) => Promise<void>;
+  recordEmergencyFundEntry: (e: {
+    direction: FundDirection; amount: number; note: string; walletId: string | null;
+  }) => Promise<boolean>;
+  deleteEmergencyFundEntry: (id: string) => Promise<boolean>;
   addBudgetLine: (b: Omit<BudgetLine, 'id'>) => Promise<void>;
   updateBudgetLine: (id: string, updates: Partial<BudgetLine>) => Promise<void>;
   deleteBudgetLine: (id: string) => Promise<void>;
@@ -446,6 +459,8 @@ const fromDBInstalment = (r: Row): InstalmentPayment => ({
 });
 const fromDBEFEntry    = (r: Row): EmergencyFundEntry => ({
   id: r.id, amount: Number(r.amount), note: r.note || '', date: r.date,
+  direction: r.direction === 'withdrawal' ? 'withdrawal' : 'deposit',
+  walletId: r.wallet_id ?? null, moveId: r.move_id ?? null,
 });
 const fromDBDebtPerson = (r: Row): DebtPerson => ({
   id: r.id, name: r.name, emoji: r.emoji || '',
@@ -554,7 +569,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     if (ipRes.data) setInstalmentSchedule(ipRes.data.map(fromDBInstalment));
     if (efRes.data) {
       const entries = efRes.data.map(fromDBEFEntry);
-      setEmergencyFund({ entries, currentAmount: entries.reduce((s, e) => s + e.amount, 0) });
+      setEmergencyFund({ entries, currentAmount: fundBalance(entries) });
     }
     if (dpRes.data) setDebtPeople(dpRes.data.map(fromDBDebtPerson));
     if (deRes.data) setDebtEntries(deRes.data.map(fromDBDebtEntry));
@@ -1159,6 +1174,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const found = moneyMoves.find(m => m.id === id);
     if (!found) return false;
     if (found.kind === 'debt_in' || found.kind === 'debt_out') return false;
+    // Likewise a fund movement belongs to the emergency fund entry that made it.
+    if (found.kind === 'fund_deposit' || found.kind === 'fund_withdrawal') return false;
     if (next.amount <= 0) return false;
 
     const date = next.date ?? found.date;
@@ -1598,18 +1615,59 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   };
 
   // ── Emergency Fund ────────────────────────────────────────────────────────
-  const addEmergencyFundEntry = async (e: Omit<EmergencyFundEntry, 'id' | 'date'>) => {
-    if (!userId) return;
-    const { data } = await supabase.from('emergency_fund_entries')
-      .insert({ user_id: userId, amount: e.amount, note: e.note, date: new Date().toISOString() })
-      .select().single();
-    if (data) {
-      const entry = fromDBEFEntry(data);
-      setEmergencyFund(prev => ({
-        entries: [entry, ...prev.entries],
-        currentAmount: prev.currentAmount + entry.amount,
-      }));
+  // Money into or out of the fund. The wallet is optional, as on the debt
+  // board: with one, a movement records the money leaving it or landing in it;
+  // without, the entry only records money set aside, or spent, elsewhere.
+  const recordEmergencyFundEntry = async (e: {
+    direction: FundDirection; amount: number; note: string; walletId: string | null;
+  }): Promise<boolean> => {
+    if (!userId || e.amount <= 0) return false;
+    if (e.direction === 'withdrawal' && !canWithdraw(emergencyFund.currentAmount, e.amount)) return false;
+    const date = new Date().toISOString();
+
+    // The movement goes in first so the entry can reference it. A failure
+    // between the two leaves a visible, deletable movement rather than an entry
+    // claiming one that never happened.
+    let moveId: string | null = null;
+    if (e.walletId) {
+      const kind: MoneyMoveKind = e.direction === 'deposit' ? 'fund_deposit' : 'fund_withdrawal';
+      moveId = await recordMove(
+        {
+          kind, amount: e.amount, walletId: e.walletId, toWalletId: null, source: null,
+          note: e.note || (kind === 'fund_deposit' ? 'To emergency fund' : 'From emergency fund'),
+        },
+        moveDeltas({ kind, amount: e.amount, fee: 0, walletId: e.walletId, toWalletId: null }),
+        date,
+      );
     }
+
+    const { data } = await supabase.from('emergency_fund_entries').insert({
+      user_id: userId, amount: e.amount, note: e.note, date,
+      direction: e.direction, wallet_id: e.walletId, move_id: moveId,
+    }).select().single();
+    if (!data) return false;
+
+    const entry = fromDBEFEntry(data);
+    setEmergencyFund(prev => {
+      const entries = [entry, ...prev.entries];
+      return { entries, currentAmount: fundBalance(entries) };
+    });
+    return true;
+  };
+
+  // Deleting an entry undoes the wallet movement it made, if it made one.
+  // Refused when the fund would be left holding less than nothing.
+  const deleteEmergencyFundEntry = async (id: string): Promise<boolean> => {
+    const entry = emergencyFund.entries.find(x => x.id === id);
+    if (!entry || !canDeleteEntry(emergencyFund.entries, id)) return false;
+
+    setEmergencyFund(prev => {
+      const entries = prev.entries.filter(x => x.id !== id);
+      return { entries, currentAmount: fundBalance(entries) };
+    });
+    await supabase.from('emergency_fund_entries').delete().eq('id', id);
+    if (entry.moveId) await deleteMoneyMove(entry.moveId);
+    return true;
   };
 
   // ── Budget Lines ──────────────────────────────────────────────────────────
@@ -1933,7 +1991,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       updateSettings, setCycleStartDay,
       addInstalmentPayment, updateInstalmentPayment, deleteInstalmentPayment,
       setInstalmentNewPurchaseLock,
-      addEmergencyFundEntry,
+      recordEmergencyFundEntry, deleteEmergencyFundEntry,
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
       toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, markBillPaid, unmarkBillPaid,
       updateBill,

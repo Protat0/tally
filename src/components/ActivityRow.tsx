@@ -19,7 +19,9 @@ export type RowSource =
   | { kind: 'expense'; id: string }
   | { kind: 'move'; id: string }
   | { kind: 'debt'; entryId: string }
-  | { kind: 'settle'; settleMoveId: string };
+  | { kind: 'settle'; settleMoveId: string }
+  // A movement into or out of the emergency fund, owned by its fund entry.
+  | { kind: 'fund'; entryId: string };
 
 export interface FeedItem {
   id: string; date: string; flow: Flow;
@@ -48,7 +50,8 @@ export default function ActivityRow({
   // block the page, and a whole modal for one button is more than this needs.
   const [confirming, setConfirming] = useState(false);
 
-  const editable = item.source.kind !== 'settle';
+  // A fund movement is changed through its fund entry, which has no edit.
+  const editable = item.source.kind !== 'settle' && item.source.kind !== 'fund';
   const destructive = item.source.kind === 'settle' ? 'Reverse' : 'Delete';
 
   const close = () => { setConfirming(false); onOpenChange(false); };

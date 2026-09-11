@@ -31,8 +31,8 @@ function abbrev(n: number): string {
 
 export default function TransactionsPage() {
   const {
-    expenses, moneyMoves, wallets, settings, debtEntries, debtPeople,
-    deleteExpense, deleteMoneyMove, deleteDebtEntry, reverseSettleBatch,
+    expenses, moneyMoves, wallets, settings, debtEntries, debtPeople, emergencyFund,
+    deleteExpense, deleteMoneyMove, deleteDebtEntry, reverseSettleBatch, deleteEmergencyFundEntry,
   } = useApp();
   const { currency } = settings;
 
@@ -68,6 +68,14 @@ export default function TransactionsPage() {
     const created = debtEntries.find(d => d.moveId === moveId);
     if (created) return { kind: 'debt', entryId: created.id };
     return { kind: 'settle', settleMoveId: moveId };
+  };
+
+  // A fund movement is owned by the emergency fund entry that made it, so it is
+  // deleted through that entry and never edited on its own. One whose entry is
+  // gone is an ordinary movement.
+  const fundSource = (moveId: string): RowSource => {
+    const entry = emergencyFund.entries.find(x => x.moveId === moveId);
+    return entry ? { kind: 'fund', entryId: entry.id } : { kind: 'move', id: moveId };
   };
 
   // Join a note and a wallet name into the one-line subtitle, skipping blanks.
@@ -126,6 +134,18 @@ export default function TransactionsPage() {
             source: { kind: 'move', id: mm.id },
           };
         }
+        if (mm.kind === 'fund_deposit' || mm.kind === 'fund_withdrawal') {
+          // flow 'moved' for the same reason as debts: setting money aside, or
+          // taking it back out, is neither spending nor income.
+          return {
+            id: mm.id, date: mm.date, flow: 'moved',
+            icon: 'shield-check', label: 'Emergency fund',
+            sub: subtitle(mm.note, walletName(mm.walletId)),
+            amount: mm.amount,
+            updatedAt: mm.updatedAt,
+            source: fundSource(mm.id),
+          };
+        }
         if (mm.kind === 'debt_out' || mm.kind === 'debt_in') {
           // flow 'moved' keeps these out of both month totals: lending is not
           // consumption and a repayment is not income. The note carries the
@@ -169,7 +189,7 @@ export default function TransactionsPage() {
       monthEarned: items.filter(i => i.flow === 'earned').reduce((s, i) => s + i.amount, 0),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, viewCycle, cycleStartDay]);
+  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, emergencyFund.entries, viewCycle, cycleStartDay]);
 
   // Calendar cells for the viewed CYCLE, not its anchor month: leading blanks
   // then every day from the cycle's start up to the day before it ends. A cycle
@@ -223,6 +243,12 @@ export default function TransactionsPage() {
     }
     if (src.kind === 'move') return deleteMoneyMove(src.id);
     if (src.kind === 'debt') return deleteDebtEntry(src.entryId);
+    if (src.kind === 'fund') {
+      if (!(await deleteEmergencyFundEntry(src.entryId))) {
+        setNotice('Later withdrawals already used that money. Delete them first on the Emergency Fund page.');
+      }
+      return;
+    }
     await reverseSettleBatch(src.settleMoveId);
   };
 

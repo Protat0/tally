@@ -84,3 +84,35 @@ test('a legacy withdrawal with no destination is money leaving, fee included', (
 
   assert.deepEqual(d, { bpi: -515 });
 });
+
+// Guard, not a driven cycle: the fall-through already debits the source wallet.
+// Setting money aside in the emergency fund takes it out of the wallet it left.
+test('a deposit into the emergency fund takes the amount out of its wallet', () => {
+  const d = moveDeltas({
+    kind: 'fund_deposit', amount: 2000, fee: 0,
+    walletId: 'bpi', toWalletId: null,
+  });
+
+  assert.deepEqual(d, { bpi: -2000 });
+});
+
+// The fall-through would debit this too. Money taken out of the fund arrives
+// in the wallet.
+test('a withdrawal from the emergency fund puts the amount into its wallet', () => {
+  const d = moveDeltas({
+    kind: 'fund_withdrawal', amount: 1500, fee: 0,
+    walletId: 'gcash', toWalletId: null,
+  });
+
+  assert.deepEqual(d, { gcash: 1500 });
+});
+
+// Deleting an entry reverses its movement through negate(moveDeltas(...)).
+test('deleting a fund withdrawal takes the money back out of the wallet', () => {
+  const d = negate(moveDeltas({
+    kind: 'fund_withdrawal', amount: 1500, fee: 0,
+    walletId: 'gcash', toWalletId: null,
+  }));
+
+  assert.deepEqual(d, { gcash: -1500 });
+});
