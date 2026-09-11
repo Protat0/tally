@@ -22,6 +22,7 @@ export {
   TrendingUp as TrendingUpIcon,
   Users as UsersIcon,
   Search as SearchIcon,
+  History as HistoryIcon,
   TriangleAlert as AlertIcon,
   Pencil as PencilIcon,
   ArrowUp as ArrowUpIcon,
