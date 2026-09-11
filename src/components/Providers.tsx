@@ -8,12 +8,12 @@ import GlobalFAB from './GlobalFAB';
 
 function Splash() {
   return (
-    <div className="fixed inset-0 bg-[#0b0f1a] flex flex-col items-center justify-center gap-6">
-      <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-xl shadow-blue-900/40">
-        <span className="text-2xl font-bold text-white">T</span>
+    <div className="fixed inset-0 bg-canvas flex flex-col items-center justify-center gap-6">
+      <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center">
+        <span className="text-2xl font-bold text-on-primary">T</span>
       </div>
-      <div className="h-0.5 w-20 rounded-full bg-[#1e2d40] overflow-hidden">
-        <div className="h-full w-1/2 bg-blue-500 rounded-full animate-pulse" />
+      <div className="h-0.5 w-20 rounded-full bg-line overflow-hidden">
+        <div className="h-full w-1/2 bg-primary rounded-full animate-pulse" />
       </div>
     </div>
   );

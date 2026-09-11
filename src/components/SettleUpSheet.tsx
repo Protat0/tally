@@ -91,21 +91,21 @@ export default function SettleUpSheet(props: Props) {
 
   return (
     <BottomSheet onClose={onClose}>
-      <p className="font-semibold text-white text-lg mb-1">{title}</p>
+      <p className="font-semibold text-ink text-lg mb-1">{title}</p>
 
       {full === 0 ? (
-        <p className="text-sm text-slate-500 mb-5">
+        <p className="text-sm text-ink-3 mb-5">
           These cancel out exactly — nothing changes hands. Everything will be
           marked settled.
         </p>
       ) : (
-        <p className="text-sm text-slate-500 mb-5">
+        <p className="text-sm text-ink-3 mb-5">
           {/* A balance the user is about to edit, versus a transaction about to
               happen. The row sheet describes the payment it is confirming. */}
           {partial
             ? (incoming ? `${personName} owes you ` : `You owe ${personName} `)
             : (incoming ? `${personName} pays you ` : `You pay ${personName} `)}
-          <span className={incoming ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+          <span className={incoming ? 'text-growth-text font-semibold' : 'text-danger-text font-semibold'}>
             {fmt(full, currency)}
           </span>
           .
@@ -115,10 +115,10 @@ export default function SettleUpSheet(props: Props) {
       {partial && (
         <>
           <div className="flex items-baseline justify-between mb-1">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-3">
               {incoming ? 'They pay' : 'You pay'}
             </p>
-            <p className="text-[11px] text-slate-600 tabular-nums">
+            <p className="text-[11px] text-ink-4 tabular-nums">
               of {fmt(full, currency)}
             </p>
           </div>
@@ -128,18 +128,18 @@ export default function SettleUpSheet(props: Props) {
             value={amount}
             onChange={e => setAmount(e.target.value)}
             placeholder="0.00"
-            className="w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-500/50"
+            className="w-full rounded-xl bg-canvas border border-line px-4 py-2.5 text-sm text-ink placeholder-ink-5 outline-none focus:border-primary"
           />
           <div className="flex gap-2 mt-2 mb-4">
             <button
               onClick={() => setAmount(String(round2(full / 2)))}
-              className="rounded-lg border border-[#1e2d40] bg-white/5 px-2.5 py-1 text-xs text-slate-400 hover:text-white transition-colors"
+              className="rounded-lg border border-line bg-raised px-2.5 py-1 text-xs text-ink-2 hover:text-ink transition-colors"
             >
               Half
             </button>
             <button
               onClick={() => setAmount(String(full))}
-              className="rounded-lg border border-[#1e2d40] bg-white/5 px-2.5 py-1 text-xs text-slate-400 hover:text-white transition-colors"
+              className="rounded-lg border border-line bg-raised px-2.5 py-1 text-xs text-ink-2 hover:text-ink transition-colors"
             >
               Full
             </button>
@@ -149,11 +149,11 @@ export default function SettleUpSheet(props: Props) {
 
       {full !== 0 && (
         <>
-          <p className="text-xs text-slate-500 mb-2">
+          <p className="text-xs text-ink-3 mb-2">
             {incoming ? 'Received into' : 'Paid from'}
           </p>
           <WalletPicker value={walletId} onChange={setWalletId} />
-          <p className="mt-2 text-[11px] text-slate-600">
+          <p className="mt-2 text-[11px] text-ink-4">
             {walletId === '' || (partial && !valid)
               ? 'Pick the wallet the money moved through.'
               : `${fmt(moving, currency)} ${incoming ? 'enters' : 'leaves'} this wallet.`}
@@ -162,13 +162,13 @@ export default function SettleUpSheet(props: Props) {
       )}
 
       {partial && (
-        <p className="mt-4 text-[11px] text-slate-500">{outcome()}</p>
+        <p className="mt-4 text-[11px] text-ink-3">{outcome()}</p>
       )}
 
       <button
         onClick={handleConfirm}
         disabled={!canConfirm}
-        className="mt-5 w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
+        className="mt-5 w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary disabled:opacity-40"
       >
         {saving
           ? (partial && !isFull ? 'Recording…' : 'Settling…')

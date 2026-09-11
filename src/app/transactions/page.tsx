@@ -96,7 +96,7 @@ export default function TransactionsPage() {
           const src = INCOME_SOURCES.find(s => s.key === mm.source);
           return {
             id: mm.id, date: mm.date, flow: 'earned',
-            icon: src?.icon ?? '✦', label: src?.label ?? 'Income',
+            icon: src?.icon ?? 'sparkles', label: src?.label ?? 'Income',
             sub: subtitle(mm.note, walletName(mm.walletId)),
             amount: mm.amount,
             updatedAt: mm.updatedAt,
@@ -110,7 +110,7 @@ export default function TransactionsPage() {
           if (mm.toWalletId) {
             return {
               id: mm.id, date: mm.date, flow: 'moved',
-              icon: '🏧', label: 'Withdrawal',
+              icon: 'banknote', label: 'Withdrawal',
               sub: withFee(subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId)}`), mm.fee),
               amount: mm.amount, fee: mm.fee,
               updatedAt: mm.updatedAt,
@@ -119,7 +119,7 @@ export default function TransactionsPage() {
           }
           return {
             id: mm.id, date: mm.date, flow: 'spent',
-            icon: '🏧', label: 'Withdrawal',
+            icon: 'banknote', label: 'Withdrawal',
             sub: subtitle(mm.note, walletName(mm.walletId)),
             amount: mm.amount,
             updatedAt: mm.updatedAt,
@@ -132,7 +132,7 @@ export default function TransactionsPage() {
           // specifics ("Spotted Marco", "Marco settled up").
           return {
             id: mm.id, date: mm.date, flow: 'moved',
-            icon: '🤝', label: 'Debt',
+            icon: 'handshake', label: 'Debt',
             sub: subtitle(mm.note, walletName(mm.walletId)),
             amount: mm.amount,
             updatedAt: mm.updatedAt,
@@ -141,7 +141,7 @@ export default function TransactionsPage() {
         }
         return {
           id: mm.id, date: mm.date, flow: 'moved',
-          icon: '🔄', label: 'Transfer',
+          icon: 'arrow-left-right', label: 'Transfer',
           sub: withFee(subtitle(mm.note, `${walletName(mm.walletId)} → ${walletName(mm.toWalletId ?? '')}`), mm.fee),
           amount: mm.amount, fee: mm.fee,
           updatedAt: mm.updatedAt,
@@ -227,7 +227,7 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0f1a]">
+    <div className="min-h-screen bg-canvas">
       <BottomNav />
 
       <div className="md:pl-64">
@@ -236,36 +236,36 @@ export default function TransactionsPage() {
           <PageHeader
             title="Transactions"
             right={
-              <Link href="/expenses/new" className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 transition-colors">
-                <PlusIcon className="w-4 h-4 text-white" />
+              <Link href="/expenses/new" className="flex h-9 w-9 items-center justify-center rounded-full bg-primary hover:bg-primary-hover transition-colors">
+                <PlusIcon className="w-4 h-4 text-on-primary" />
               </Link>
             }
           />
 
           {/* ── Calendar ── */}
-          <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-4 mb-6">
+          <div className="rounded-2xl bg-surface border border-line p-4 mb-6">
             <div className="flex items-center justify-between mb-4">
               <button onClick={() => changeMonth(-1)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-raised text-ink-2 hover:bg-line transition-colors">
                 <ChevronLeftIcon className="w-4 h-4" />
               </button>
               <div className="text-center">
-                <p className="text-sm font-semibold text-white">{monthLabel}</p>
-                <p className="text-[11px] text-slate-500">
-                  <span className="text-emerald-400">+{fmt(monthEarned, currency)}</span>
+                <p className="text-sm font-semibold text-ink">{monthLabel}</p>
+                <p className="text-[11px] text-ink-3">
+                  <span className="text-growth-text">+{fmt(monthEarned, currency)}</span>
                   {' · '}
-                  <span className="text-red-400">-{fmt(monthSpent, currency)}</span>
+                  <span className="text-danger-text">-{fmt(monthSpent, currency)}</span>
                 </p>
               </div>
               <button onClick={() => changeMonth(1)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-slate-300 hover:bg-white/10 transition-colors">
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-raised text-ink-2 hover:bg-line transition-colors">
                 <ChevronRightIcon className="w-4 h-4" />
               </button>
             </div>
 
             <div className="grid grid-cols-7 gap-1 mb-1">
               {WEEKDAYS.map((w, i) => (
-                <div key={i} className="text-center text-[10px] font-medium text-slate-600 py-1">{w}</div>
+                <div key={i} className="text-center text-[10px] font-medium text-ink-4 py-1">{w}</div>
               ))}
             </div>
 
@@ -282,23 +282,23 @@ export default function TransactionsPage() {
                     key={key}
                     onClick={() => active && toggleDay(key)}
                     className={`flex flex-col items-center justify-start rounded-lg py-1.5 min-h-[54px] transition-colors ${
-                      isSelected ? 'bg-blue-600/25 border border-blue-500'
-                      : active ? 'bg-white/5 border border-transparent hover:bg-white/10'
+                      isSelected ? 'bg-primary-tint border border-primary'
+                      : active ? 'bg-raised border border-transparent hover:bg-line'
                       : 'border border-transparent'
                     }`}
                   >
                     <span className={`text-xs leading-none ${
-                      isToday ? 'font-bold text-blue-400' : active ? 'text-white' : 'text-slate-600'
+                      isToday ? 'font-bold text-primary-text' : active ? 'text-ink' : 'text-ink-4'
                     }`}>
                       {d.getDate()}
                     </span>
                     {t && t.earned > 0 ? (
-                      <span className="mt-1 text-[9px] font-medium leading-none text-emerald-400">
+                      <span className="mt-1 text-[9px] font-medium leading-none text-growth-text">
                         +{abbrev(t.earned)}
                       </span>
                     ) : null}
                     {t && t.spent > 0 ? (
-                      <span className="mt-0.5 text-[9px] font-medium leading-none text-red-400">
+                      <span className="mt-0.5 text-[9px] font-medium leading-none text-danger-text">
                         -{abbrev(t.spent)}
                       </span>
                     ) : null}
@@ -310,23 +310,23 @@ export default function TransactionsPage() {
 
           {/* ── Grouped activity list ── */}
           {notice && (
-            <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-              <p className="text-xs text-amber-300">{notice}</p>
+            <div className="mb-3 rounded-xl border border-warning-edge bg-warning-tint px-4 py-3">
+              <p className="text-xs text-warning-text">{notice}</p>
             </div>
           )}
 
           {selectedKey && (
             <button onClick={() => setSelectedKey(null)}
-              className="mb-3 text-xs text-blue-400 hover:text-blue-300">
+              className="mb-3 text-xs text-primary-text hover:text-primary-hover">
               ← Showing one day · view whole cycle
             </button>
           )}
 
           {groups.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-10 text-center">
-              <ReceiptIcon className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-              <p className="text-sm text-slate-500 mb-1">No activity this period.</p>
-              <Link href="/expenses/new" className="text-xs text-blue-400 underline underline-offset-2">
+            <div className="rounded-xl border border-dashed border-line px-4 py-10 text-center">
+              <ReceiptIcon className="w-8 h-8 text-ink-5 mx-auto mb-2" />
+              <p className="text-sm text-ink-3 mb-1">No activity this period.</p>
+              <Link href="/expenses/new" className="text-xs text-primary-text underline underline-offset-2">
                 Log an expense
               </Link>
             </div>
@@ -338,16 +338,16 @@ export default function TransactionsPage() {
                 return (
                   <div key={g.key}>
                     <div className="flex items-center justify-between mb-2 px-1">
-                      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-ink-3">
                         {g.key === todayKey ? 'Today' : label}
                       </p>
                       <p className="text-xs font-medium">
                         {g.earned > 0 && (
-                          <span className="text-emerald-400">+{fmt(g.earned, currency)}</span>
+                          <span className="text-growth-text">+{fmt(g.earned, currency)}</span>
                         )}
-                        {g.earned > 0 && g.spent > 0 && <span className="text-slate-600"> · </span>}
+                        {g.earned > 0 && g.spent > 0 && <span className="text-ink-4"> · </span>}
                         {g.spent > 0 && (
-                          <span className="text-red-400">-{fmt(g.spent, currency)}</span>
+                          <span className="text-danger-text">-{fmt(g.spent, currency)}</span>
                         )}
                       </p>
                     </div>

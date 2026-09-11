@@ -1,15 +1,22 @@
 'use client';
 
 import { fmt } from './AppContext';
-import HalfCircleProgress from './HalfCircleProgress';
-import ProgressBar from './ProgressBar';
+import ProgressBar, { type Tone } from './ProgressBar';
 import { PencilIcon } from './Icons';
+import { IconTile } from './AppIcon';
 
-function paceColor(pct: number): 'green' | 'amber' | 'red' {
-  if (pct <= 80) return 'green';
-  if (pct <= 100) return 'amber';
-  return 'red';
+function paceTone(pct: number): Tone {
+  if (pct <= 80) return 'growth';
+  if (pct <= 100) return 'warning';
+  return 'danger';
 }
+
+const toneText: Record<Tone, string> = {
+  growth:  'text-growth-text',
+  warning: 'text-warning-text',
+  danger:  'text-danger-text',
+  primary: 'text-primary-text',
+};
 
 interface Props {
   icon: string;
@@ -28,6 +35,13 @@ export default function CategoryCard({
   const remaining = budget - spent;
   const pct = hasBudget ? (spent / budget) * 100 : 0;
   const over = hasBudget && spent > budget;
+  const tone = paceTone(pct);
+
+  const border = over
+    ? 'border-danger-edge'
+    : hasBudget
+      ? 'border-line hover:border-line-strong'
+      : 'border-dashed border-line-strong';
 
   return (
     // The pencil is a sibling of the card button, not a child — buttons cannot
@@ -39,7 +53,7 @@ export default function CategoryCard({
         onClick={onEdit}
         title={`Edit ${label} budget`}
         aria-label={`Edit ${label} budget`}
-        className="absolute top-0.5 right-0.5 z-10 flex h-11 w-11 items-center justify-center rounded-full text-slate-500 active:bg-white/10 hover:bg-white/10 hover:text-slate-200 transition-colors"
+        className="absolute top-0.5 right-0.5 z-10 flex h-11 w-11 items-center justify-center rounded-full text-ink-4 hover:bg-raised hover:text-ink active:bg-raised transition-colors"
       >
         <PencilIcon className="w-4 h-4" />
       </button>
@@ -47,60 +61,34 @@ export default function CategoryCard({
       <button
         onClick={onOpen}
         aria-label={`${label} details`}
-        className="flex w-full flex-col rounded-2xl bg-[#111827] border border-[#1e2d40] p-4 text-left hover:border-slate-600 hover:bg-[#141d2e] transition-colors"
+        className={`flex w-full flex-col gap-[9px] rounded-2xl border bg-surface p-3.5 text-left transition-colors hover:bg-raised ${border}`}
       >
-        {/* From sm up the gauge sits alongside the icon/label/spent stack rather
-            than under it, so the card stays short and the dead space to the right
-            is used. Bottom-aligned, which keeps the top-right corner clear for the
-            pencil.
-
-            Below sm there is no dead space: the two-column grid leaves the card
-            ~141px of inner width, and an 88px gauge left ~45px for the amount —
-            enough to truncate every peso figure to a couple of characters. So the
-            arc is dropped there in favour of the flat bar below, which reads the
-            same but costs no width. */}
-        <div className="flex w-full items-end gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-lg mb-2.5 shrink-0">
-              {icon}
-            </div>
-            <p className="w-full text-sm font-medium text-white truncate">{label}</p>
-            <p className="mt-1 text-lg font-bold text-white tabular-nums truncate">
-              {fmt(spent, currency)}
-            </p>
-          </div>
-
-          {hasBudget && (
-            <HalfCircleProgress
-              value={spent}
-              max={budget}
-              color={paceColor(pct)}
-              className="hidden sm:block sm:w-[104px] lg:w-[120px]"
-            />
-          )}
+        {/* Right padding keeps a long name out from under the pencil. */}
+        <div className="flex w-full items-center gap-[9px] pr-8">
+          <IconTile icon={icon} size="sm" />
+          <span className="truncate text-sm font-semibold leading-none">{label}</span>
         </div>
 
-        {hasBudget && (
-          <div className="mt-2 flex w-full items-center gap-2 sm:hidden">
-            <ProgressBar value={spent} max={budget} color={paceColor(pct)} />
-            {/* Clamped, so this reads the same as the arc's own label at sm+ —
-                HalfCircleProgress caps its readout at 100%. Overspend is already
-                spelled out in red on the line below. */}
-            <span className="shrink-0 text-[11px] font-semibold text-white tabular-nums">
-              {Math.min(pct, 100).toFixed(0)}%
-            </span>
-          </div>
+        <p className={`w-full truncate text-xl font-bold leading-none tracking-tight tabular-nums ${over ? 'text-danger-text' : ''}`}>
+          {fmt(spent, currency)}
+        </p>
+
+        {hasBudget ? (
+          <ProgressBar value={spent} max={budget} tone={tone} size="sm" />
+        ) : (
+          // Striped, so "no budget" never reads as "nothing spent".
+          <div className="h-[7px] w-full rounded-full bg-[repeating-linear-gradient(90deg,var(--color-raised)_0_6px,transparent_6px_10px)]" />
         )}
 
         {hasBudget ? (
-          <p className="mt-2 w-full text-[11px] text-slate-500 truncate">
+          <p className="w-full truncate text-[11.5px] leading-snug tabular-nums text-ink-3">
             of {fmt(budget, currency)} ·{' '}
-            <span className={over ? 'text-red-400' : 'text-slate-400'}>
+            <span className={`font-semibold ${toneText[tone]}`}>
               {over ? `${fmt(Math.abs(remaining), currency)} over` : `${fmt(remaining, currency)} left`}
             </span>
           </p>
         ) : (
-          <p className="mt-2 text-[11px] text-slate-600">No budget set</p>
+          <p className="text-[11.5px] leading-snug text-ink-4">No budget set</p>
         )}
       </button>
     </div>

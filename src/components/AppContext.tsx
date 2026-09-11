@@ -7,6 +7,7 @@ import {
   CycleKey, cycleKeyOf, currentCycleKey, cycleRange,
   datesInCycle, daysInCycle, daysElapsedInCycle, rekeyBillTicks,
 } from '@/lib/cycle';
+import type { IconKey } from '@/lib/icons';
 
 // round2 lives with the delta arithmetic it guards, and is re-exported here
 // because SplitPanel, SettleUpSheet and the expense form already import it
@@ -53,12 +54,12 @@ export interface Expense {
 export type MoneyMoveKind = 'earned' | 'withdrawn' | 'moved' | 'debt_out' | 'debt_in';
 export type IncomeSource = 'salary' | 'freelance' | 'gift' | 'refund' | 'other';
 
-export const INCOME_SOURCES: { key: IncomeSource; label: string; icon: string }[] = [
-  { key: 'salary',    label: 'Salary',    icon: '💼' },
-  { key: 'freelance', label: 'Freelance', icon: '💻' },
-  { key: 'gift',      label: 'Gift',      icon: '🎁' },
-  { key: 'refund',    label: 'Refund',    icon: '↩️' },
-  { key: 'other',     label: 'Other',     icon: '✦'  },
+export const INCOME_SOURCES: { key: IncomeSource; label: string; icon: IconKey }[] = [
+  { key: 'salary',    label: 'Salary',    icon: 'briefcase' },
+  { key: 'freelance', label: 'Freelance', icon: 'laptop' },
+  { key: 'gift',      label: 'Gift',      icon: 'gift' },
+  { key: 'refund',    label: 'Refund',    icon: 'undo-2' },
+  { key: 'other',     label: 'Other',     icon: 'sparkles' },
 ];
 
 export interface MoneyMove {
@@ -455,7 +456,7 @@ const fromDBEFEntry    = (r: Row): EmergencyFundEntry => ({
   id: r.id, amount: Number(r.amount), note: r.note || '', date: r.date,
 });
 const fromDBDebtPerson = (r: Row): DebtPerson => ({
-  id: r.id, name: r.name, emoji: r.emoji || '🧑',
+  id: r.id, name: r.name, emoji: r.emoji || '',
 });
 const fromDBDebtEntry  = (r: Row): DebtEntry => ({
   id: r.id, personId: r.person_id,
@@ -486,7 +487,7 @@ const defaultSettings: Settings = {
 };
 
 // The wallet seeded for accounts that have never had one.
-const CASH_WALLET = { name: 'Cash', icon: '💵' };
+const CASH_WALLET = { name: 'Cash', icon: 'banknote' };
 
 // Days of real data before the observed spending rate is trusted on its own.
 // Below this the projection leans on the user's own budgeted rate instead —

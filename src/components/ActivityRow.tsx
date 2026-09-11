@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { fmt } from './AppContext';
 import { useSwipeActions } from './useSwipeActions';
 import { PencilIcon, TrashIcon } from './Icons';
+import { IconTile } from './AppIcon';
 
 //   spent — expenses, and withdrawals from before they landed in cash
 //   earned — wallet top-ups
@@ -68,7 +69,7 @@ export default function ActivityRow({
           <button
             onClick={() => { onEdit(); close(); }}
             aria-label="Edit entry"
-            className="flex-1 flex items-center justify-center bg-slate-700 text-white active:bg-slate-600 hover:bg-slate-600 transition-colors"
+            className="flex-1 flex items-center justify-center bg-raised text-ink active:bg-line-strong hover:bg-line-strong transition-colors"
           >
             <PencilIcon className="w-4 h-4" />
           </button>
@@ -76,8 +77,8 @@ export default function ActivityRow({
         <button
           onClick={() => (confirming ? (onDelete(), close()) : setConfirming(true))}
           aria-label={confirming ? `Confirm ${destructive.toLowerCase()}` : destructive}
-          className={`flex items-center justify-center gap-1.5 px-3 text-white transition-colors ${
-            confirming ? 'bg-red-500 hover:bg-red-400' : 'bg-red-600 hover:bg-red-500'
+          className={`flex items-center justify-center gap-1.5 px-3 text-ink transition-colors ${
+            confirming ? 'bg-danger hover:bg-danger' : 'bg-danger-strong hover:bg-danger'
           } ${editable ? 'flex-1' : 'w-full'}`}
         >
           {confirming
@@ -89,26 +90,26 @@ export default function ActivityRow({
       {/* ── The row itself ──
           Opaque, so at rest it hides the rail behind it. */}
       <div
-        className="relative z-10 flex items-center gap-3 bg-[#111827] border border-[#1e2d40] rounded-xl px-4 py-3"
+        className="relative z-10 flex items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3"
         style={swipe.style}
         {...swipe.handlers}
       >
-        <div className="text-base shrink-0">{item.icon}</div>
+        <IconTile icon={item.icon} tone={item.flow === 'earned' ? 'growth' : 'primary'} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-white capitalize">
+          <p className="text-sm text-ink capitalize">
             {item.label}
             {item.updatedAt && (
-              <span className="ml-1.5 align-middle text-[10px] font-medium text-slate-500 normal-case">
+              <span className="ml-1.5 align-middle text-[10px] font-medium text-ink-3 normal-case">
                 edited
               </span>
             )}
           </p>
-          <p className="text-xs text-slate-500 truncate">{item.sub}</p>
+          <p className="text-xs text-ink-3 truncate">{item.sub}</p>
         </div>
         <p className={`text-sm font-medium shrink-0 ${
-          item.flow === 'earned' ? 'text-emerald-400'
-          : item.flow === 'moved' ? 'text-slate-400'
-          : 'text-red-400'
+          item.flow === 'earned' ? 'text-growth-text'
+          : item.flow === 'moved' ? 'text-ink-2'
+          : 'text-danger-text'
         }`}>
           {item.flow === 'earned' ? '+' : item.flow === 'moved' ? '' : '-'}
           {fmt(item.amount, currency)}

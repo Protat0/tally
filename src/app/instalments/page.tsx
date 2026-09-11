@@ -9,9 +9,9 @@ import { useSwipeToClose } from '@/components/useSwipeToClose';
 import { PlusIcon, BagIcon, AlertIcon, CheckIcon, TrashIcon } from '@/components/Icons';
 
 const STATUS_STYLE: Record<InstalmentPayment['status'], string> = {
-  paid: 'bg-emerald-500/15 text-emerald-400',
-  pending: 'bg-amber-500/15 text-amber-400',
-  upcoming: 'bg-slate-500/15 text-slate-400',
+  paid: 'bg-growth-tint text-growth-text',
+  pending: 'bg-warning-tint text-warning-text',
+  upcoming: 'bg-raised text-ink-2',
 };
 
 function formatMonth(m: string): string {
@@ -43,7 +43,7 @@ export default function InstalmentsPage() {
   const sorted = [...instalmentSchedule].sort((a, b) => a.month.localeCompare(b.month));
 
   return (
-    <div className="min-h-screen bg-[#0b0f1a]">
+    <div className="min-h-screen bg-canvas">
       <BottomNav />
 
       <div className="md:pl-64">
@@ -54,7 +54,7 @@ export default function InstalmentsPage() {
             right={
               <button
                 onClick={() => setShowAdd(true)}
-                className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary"
               >
                 <PlusIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Add</span>
@@ -65,13 +65,13 @@ export default function InstalmentsPage() {
           <div className="space-y-4">
             {/* Lock warning */}
             {instalmentNewPurchaseLock && (
-              <div className="flex items-start gap-3 rounded-2xl bg-red-500/10 border border-red-500/20 px-4 py-3.5">
-                <AlertIcon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 rounded-2xl bg-danger-tint border border-danger-edge px-4 py-3.5">
+                <AlertIcon className="w-5 h-5 text-danger-text shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-red-400">New purchase lock is active</p>
-                  <p className="text-xs text-red-400/70 mt-0.5">Avoid adding new instalment purchases until your balance clears.</p>
+                  <p className="text-sm font-medium text-danger-text">New purchase lock is active</p>
+                  <p className="text-xs text-danger-text/70 mt-0.5">Avoid adding new instalment purchases until your balance clears.</p>
                 </div>
-                <button onClick={() => setInstalmentNewPurchaseLock(false)} className="text-xs text-red-400/60 shrink-0">
+                <button onClick={() => setInstalmentNewPurchaseLock(false)} className="text-xs text-danger-text/60 shrink-0">
                   Dismiss
                 </button>
               </div>
@@ -79,18 +79,18 @@ export default function InstalmentsPage() {
 
             {/* Summary card */}
             {instalmentSchedule.length > 0 ? (
-              <div className="rounded-2xl bg-gradient-to-br from-[#1a1030] to-[#110d28] border border-purple-800/30 p-6 md:p-8">
-                <p className="text-xs text-purple-400/70 uppercase tracking-widest mb-1">Remaining Balance</p>
-                <p className="text-4xl md:text-5xl font-bold text-white mb-1">{fmt(instalmentRemainingBalance, settings.currency)}</p>
+              <div className="rounded-2xl bg-surface border border-line p-6 md:p-8">
+                <p className="text-xs text-primary-text/70 uppercase tracking-widest mb-1">Remaining Balance</p>
+                <p className="text-4xl md:text-5xl font-bold text-ink mb-1">{fmt(instalmentRemainingBalance, settings.currency)}</p>
                 {instalmentDebtFreeDate && (
-                  <p className="text-xs text-slate-500">
-                    Debt-free by <span className="text-purple-400">{formatMonth(instalmentDebtFreeDate)}</span>
+                  <p className="text-xs text-ink-3">
+                    Debt-free by <span className="text-primary-text">{formatMonth(instalmentDebtFreeDate)}</span>
                   </p>
                 )}
                 {!instalmentNewPurchaseLock && instalmentRemainingBalance > 0 && (
                   <button
                     onClick={() => setInstalmentNewPurchaseLock(true)}
-                    className="mt-4 text-xs text-amber-400/80 underline underline-offset-2"
+                    className="mt-4 text-xs text-warning-text/80 underline underline-offset-2"
                   >
                     Enable new purchase lock
                   </button>
@@ -98,14 +98,14 @@ export default function InstalmentsPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white/5 mb-5">
-                  <BagIcon className="w-10 h-10 text-slate-600" />
+                <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-raised mb-5">
+                  <BagIcon className="w-10 h-10 text-ink-4" />
                 </div>
-                <p className="text-white font-semibold text-lg mb-2">No schedule set up</p>
-                <p className="text-sm text-slate-500 max-w-xs mb-6">Add your monthly instalment payments.</p>
+                <p className="text-ink font-semibold text-lg mb-2">No schedule set up</p>
+                <p className="text-sm text-ink-3 max-w-xs mb-6">Add your monthly instalment payments.</p>
                 <button
                   onClick={() => setShowAdd(true)}
-                  className="flex items-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white"
+                  className="flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-on-primary"
                 >
                   <PlusIcon className="w-4 h-4" /> Add Instalment
                 </button>
@@ -115,12 +115,12 @@ export default function InstalmentsPage() {
             {/* Schedule list */}
             {sorted.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs text-slate-500 px-1">Payment Schedule</p>
+                <p className="text-xs text-ink-3 px-1">Payment Schedule</p>
                 {sorted.map(p => (
-                  <div key={p.id} className="flex items-center gap-3 rounded-xl bg-[#111827] border border-[#1e2d40] px-4 py-3.5">
+                  <div key={p.id} className="flex items-center gap-3 rounded-xl bg-surface border border-line px-4 py-3.5">
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-white">{formatMonth(p.month)}</p>
-                      <p className="text-xs text-slate-500">{fmt(p.amount, settings.currency)}</p>
+                      <p className="text-sm font-medium text-ink">{formatMonth(p.month)}</p>
+                      <p className="text-xs text-ink-3">{fmt(p.amount, settings.currency)}</p>
                     </div>
                     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLE[p.status]}`}>
                       {p.status}
@@ -128,16 +128,16 @@ export default function InstalmentsPage() {
                     {p.status !== 'paid' && (
                       <button
                         onClick={() => updateInstalmentPayment(p.id, { status: 'paid' })}
-                        className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10 active:bg-emerald-500/20"
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-growth-tint active:bg-growth-tint"
                       >
-                        <CheckIcon className="w-4 h-4 text-emerald-400" />
+                        <CheckIcon className="w-4 h-4 text-growth-text" />
                       </button>
                     )}
                     <button
                       onClick={() => deleteInstalmentPayment(p.id)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full active:bg-white/10"
+                      className="flex h-8 w-8 items-center justify-center rounded-full active:bg-line"
                     >
-                      <TrashIcon className="w-4 h-4 text-slate-600" />
+                      <TrashIcon className="w-4 h-4 text-ink-4" />
                     </button>
                   </div>
                 ))}
@@ -154,34 +154,34 @@ export default function InstalmentsPage() {
           <ScrollLock />
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-[#111827] border border-[#1e2d40] p-6 pb-10 md:pb-6"
+            className="relative w-full max-w-[430px] md:max-w-md md:rounded-3xl rounded-t-3xl bg-surface border border-line p-6 pb-10 md:pb-6"
             onClick={e => e.stopPropagation()}
             style={swipe.style}
             {...swipe.handlers}
           >
-            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20 md:hidden" />
-            <p className="mb-5 text-center font-semibold text-white text-lg">Add Instalment</p>
-            <p className="mb-2 text-xs text-slate-500">Month</p>
+            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-line md:hidden" />
+            <p className="mb-5 text-center font-semibold text-ink text-lg">Add Instalment</p>
+            <p className="mb-2 text-xs text-ink-3">Month</p>
             <input
               type="month"
               value={newMonth}
               onChange={e => setNewMonth(e.target.value)}
-              className="mb-4 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white outline-none focus:border-blue-500/50 text-sm [color-scheme:dark]"
+              className="mb-4 w-full rounded-xl bg-canvas border border-line px-4 py-3 text-ink outline-none focus:border-primary text-sm [color-scheme:dark]"
               autoFocus
             />
-            <p className="mb-2 text-xs text-slate-500">Amount</p>
+            <p className="mb-2 text-xs text-ink-3">Amount</p>
             <input
               type="number"
               inputMode="decimal"
               value={newAmount}
               onChange={e => setNewAmount(e.target.value)}
               placeholder="0.00"
-              className="mb-5 w-full rounded-xl bg-white/5 border border-[#1e2d40] px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-blue-500/50 text-sm"
+              className="mb-5 w-full rounded-xl bg-canvas border border-line px-4 py-3 text-ink placeholder-ink-4 outline-none focus:border-primary text-sm"
             />
             <button
               onClick={handleAdd}
               disabled={!newMonth || !newAmount}
-              className="w-full rounded-xl bg-blue-600 py-3.5 font-semibold text-white disabled:opacity-40"
+              className="w-full rounded-xl bg-primary py-3.5 font-semibold text-on-primary disabled:opacity-40"
             >
               Add
             </button>

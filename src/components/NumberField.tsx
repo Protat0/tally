@@ -41,23 +41,23 @@ export default function NumberField({
         placeholder={placeholder}
         className={inputClassName}
       />
-      <div className="flex flex-col overflow-hidden rounded-lg border border-[#1e2d40] shrink-0">
+      <div className="flex flex-col overflow-hidden rounded-lg border border-line shrink-0">
         <button
           type="button"
           tabIndex={-1}
           onClick={() => bump(1)}
           aria-label="Increase"
-          className="flex flex-1 items-center justify-center bg-white/5 px-1.5 text-slate-400 hover:bg-white/10 hover:text-white active:bg-white/15 transition-colors"
+          className="flex flex-1 items-center justify-center bg-raised px-1.5 text-ink-2 hover:bg-line hover:text-ink active:bg-line-strong transition-colors"
         >
           <ChevronUpIcon className="w-3.5 h-3.5" />
         </button>
-        <div className="h-px bg-[#1e2d40]" />
+        <div className="h-px bg-line" />
         <button
           type="button"
           tabIndex={-1}
           onClick={() => bump(-1)}
           aria-label="Decrease"
-          className="flex flex-1 items-center justify-center bg-white/5 px-1.5 text-slate-400 hover:bg-white/10 hover:text-white active:bg-white/15 transition-colors"
+          className="flex flex-1 items-center justify-center bg-raised px-1.5 text-ink-2 hover:bg-line hover:text-ink active:bg-line-strong transition-colors"
         >
           <ChevronDownIcon className="w-3.5 h-3.5" />
         </button>

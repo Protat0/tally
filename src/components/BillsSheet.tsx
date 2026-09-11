@@ -7,6 +7,7 @@ import WalletPicker from './WalletPicker';
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon } from './Icons';
 import { visibleCategories } from '@/lib/categories';
 import { dueDateInCycle } from '@/lib/cycle';
+import { IconTile } from './AppIcon';
 
 function uid() { return crypto.randomUUID(); }
 
@@ -98,18 +99,18 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
     <BottomSheet onClose={onClose}>
       <div className="flex items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">💡</span>
-          <p className="font-semibold text-white">Recurring Bills</p>
+          <IconTile icon="receipt-text" />
+          <p className="font-semibold text-ink">Recurring Bills</p>
         </div>
-        <p className="text-sm font-medium text-slate-400 tabular-nums">
+        <p className="text-sm font-medium text-ink-2 tabular-nums">
           {fmt(total, currency)}/mo
         </p>
       </div>
 
       <div className="space-y-2">
         {bills.length === 0 && !addOpen && (
-          <div className="rounded-xl border border-dashed border-[#1e2d40] px-4 py-5 text-center">
-            <p className="text-sm text-slate-500">No recurring bills yet.</p>
+          <div className="rounded-xl border border-dashed border-line px-4 py-5 text-center">
+            <p className="text-sm text-ink-3">No recurring bills yet.</p>
           </div>
         )}
 
@@ -120,23 +121,23 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
             <div
               key={b.id}
               className={`rounded-xl border px-4 py-3 transition-colors ${
-                isPaid ? 'bg-emerald-500/5 border-emerald-500/20'
-                  : isPaying ? 'bg-white/5 border-blue-500/40'
-                    : 'bg-white/5 border-[#1e2d40]'
+                isPaid ? 'bg-growth-tint border-growth-edge'
+                  : isPaying ? 'bg-raised border-primary-edge'
+                    : 'bg-raised border-line'
               }`}
             >
             <div className="flex items-center gap-2">
               <div className="flex-1 min-w-0">
-                <p className={`text-sm truncate ${isPaid ? 'text-slate-500' : 'text-white'}`}>{b.name}</p>
+                <p className={`text-sm truncate ${isPaid ? 'text-ink-3' : 'text-ink'}`}>{b.name}</p>
                 {dueLabel(b) && (
                   <p className={`text-xs ${
-                    isPaid ? 'text-slate-600' : dueLabel(b)!.overdue ? 'text-rose-400' : 'text-slate-500'
+                    isPaid ? 'text-ink-4' : dueLabel(b)!.overdue ? 'text-danger-text' : 'text-ink-3'
                   }`}>
                     {dueLabel(b)!.text}
                   </p>
                 )}
               </div>
-              <p className="text-sm font-medium text-slate-300 shrink-0">{fmt(b.amount, currency)}</p>
+              <p className="text-sm font-medium text-ink-2 shrink-0">{fmt(b.amount, currency)}</p>
               <button
                 onClick={() => {
                   if (isPaid) unmarkBillPaid(b.id);
@@ -146,44 +147,44 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
                 title={isPaid ? 'Mark unpaid' : 'Mark as paid'}
                 className={`flex h-7 w-7 items-center justify-center rounded-full transition-colors shrink-0 ${
                   isPaid
-                    ? 'bg-emerald-500/20 text-emerald-400'
-                    : 'bg-white/5 text-slate-500 hover:text-slate-200 hover:bg-white/10'
+                    ? 'bg-growth-tint text-growth-text'
+                    : 'bg-raised text-ink-3 hover:text-ink hover:bg-line'
                 }`}
               >
                 <CheckIcon className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => onEditBill(b)} title="Edit bill"
-                className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
-                <PencilIcon className="w-3.5 h-3.5 text-slate-500 hover:text-slate-200" />
+                className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-line transition-colors shrink-0">
+                <PencilIcon className="w-3.5 h-3.5 text-ink-3 hover:text-ink" />
               </button>
               <button onClick={() => remove(b.id)} title="Delete bill"
-                className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors shrink-0">
-                <TrashIcon className="w-3.5 h-3.5 text-red-400/60 hover:text-red-400" />
+                className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-line transition-colors shrink-0">
+                <TrashIcon className="w-3.5 h-3.5 text-danger-text/60 hover:text-danger-text" />
               </button>
             </div>
 
             {isPaying && (
-              <div className="mt-3 border-t border-[#1e2d40] pt-3">
+              <div className="mt-3 border-t border-line pt-3">
                 {wallets.length === 0 ? (
-                  <p className="text-xs text-slate-500">No wallets yet — add one before paying a bill.</p>
+                  <p className="text-xs text-ink-3">No wallets yet — add one before paying a bill.</p>
                 ) : (
                   <>
-                    <p className="text-xs text-slate-500 mb-2">Amount paid</p>
+                    <p className="text-xs text-ink-3 mb-2">Amount paid</p>
                     <div className="flex items-center gap-1.5 mb-3">
-                      <span className="text-sm text-slate-500">{currency}</span>
+                      <span className="text-sm text-ink-3">{currency}</span>
                       <input
                         type="number" inputMode="decimal" value={payAmt}
                         onChange={e => setPayAmt(e.target.value)}
                         step="0.01" min="0" autoFocus
-                        className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50"
+                        className="flex-1 rounded-lg bg-canvas border border-line px-3 py-2 text-sm text-ink outline-none focus:border-primary"
                       />
                     </div>
-                    <p className="text-xs text-slate-500 mb-2">Paid from</p>
+                    <p className="text-xs text-ink-3 mb-2">Paid from</p>
                     <WalletPicker value={payWalletId} onChange={setPayWalletId} />
                     <button
                       onClick={confirmPay}
                       disabled={!payWalletId || paying || !(parseFloat(payAmt) > 0)}
-                      className="mt-3 w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white disabled:opacity-40"
+                      className="mt-3 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-on-primary disabled:opacity-40"
                     >
                       Log {fmt(parseFloat(payAmt) || 0, currency)} as paid
                     </button>
@@ -196,17 +197,17 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
         })}
 
         {addOpen ? (
-          <div className="rounded-xl bg-[#1a2332] border border-blue-500/30 p-4 space-y-3">
+          <div className="rounded-xl bg-raised border border-primary-edge p-4 space-y-3">
             <div className="flex gap-2">
               <input
                 type="text" value={name} onChange={e => setName(e.target.value)}
                 placeholder="Bill name" autoFocus
-                className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
+                className="flex-1 rounded-lg bg-canvas border border-line px-3 py-2 text-sm text-ink placeholder-ink-4 outline-none focus:border-primary"
               />
               <input
                 type="number" inputMode="decimal" value={amt} onChange={e => setAmt(e.target.value)}
                 placeholder="Amount"
-                className="w-28 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
+                className="w-28 rounded-lg bg-canvas border border-line px-3 py-2 text-sm text-ink placeholder-ink-4 outline-none focus:border-primary"
               />
             </div>
             <div className="flex gap-2">
@@ -214,32 +215,32 @@ export default function BillsSheet({ onClose, onEditBill }: Props) {
                 type="number" inputMode="numeric" value={dueDay}
                 onChange={e => setDueDay(e.target.value)}
                 placeholder="Due day (e.g. 15)" min="1" max="31"
-                className="flex-1 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500/50"
+                className="flex-1 rounded-lg bg-canvas border border-line px-3 py-2 text-sm text-ink placeholder-ink-4 outline-none focus:border-primary"
               />
               <select
                 value={category}
                 onChange={e => setCategory(e.target.value as Category)}
-                className="w-32 rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50"
+                className="w-32 rounded-lg bg-canvas border border-line px-3 py-2 text-sm text-ink outline-none focus:border-primary"
               >
                 {visibleCategories(settings.customCategories, settings.hiddenCategories).map(c => (
-                  <option key={c.key} value={c.key} className="bg-[#111827]">{c.icon} {c.label}</option>
+                  <option key={c.key} value={c.key} className="bg-surface">{c.label}</option>
                 ))}
               </select>
             </div>
             <div className="flex gap-2">
               <button onClick={handleAdd} disabled={!name.trim() || !amt}
-                className="flex-1 rounded-lg bg-blue-600 py-2 text-sm font-medium text-white disabled:opacity-40">
+                className="flex-1 rounded-lg bg-primary py-2 text-sm font-medium text-on-primary disabled:opacity-40">
                 Save
               </button>
               <button onClick={() => { setAddOpen(false); setName(''); setAmt(''); setDueDay(''); setCategory('bills'); }}
-                className="flex-1 rounded-lg bg-white/5 py-2 text-sm text-slate-400">
+                className="flex-1 rounded-lg bg-raised py-2 text-sm text-ink-2">
                 Cancel
               </button>
             </div>
           </div>
         ) : (
           <button onClick={() => setAddOpen(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#1e2d40] py-3 text-sm text-blue-400 hover:border-blue-500/40 transition-colors">
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-3 text-sm text-primary-text hover:border-primary-edge transition-colors">
             <PlusIcon className="w-4 h-4" /> Add bill
           </button>
         )}

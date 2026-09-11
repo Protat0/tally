@@ -3,17 +3,42 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useApp, fmt } from '@/components/AppContext';
-import { cycleRange, daysElapsedInCycle, daysInCycle } from '@/lib/cycle';
+import { cycleLabel, cycleRange, daysElapsedInCycle, daysInCycle } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
-import ProgressBar from '@/components/ProgressBar';
+import ProgressBar, { type Tone } from '@/components/ProgressBar';
 import PaydaySheet from '@/components/PaydaySheet';
-import { CogIcon, CalendarIcon, ShieldIcon, BoltIcon, TrendingUpIcon, AlertIcon, ChevronRightIcon } from '@/components/Icons';
+import { CogIcon, ChevronRightIcon } from '@/components/Icons';
 
-function paceColor(pct: number): 'green' | 'amber' | 'red' {
-  if (pct <= 80) return 'green';
-  if (pct <= 110) return 'amber';
-  return 'red';
+function paceTone(pct: number): Tone {
+  if (pct <= 80) return 'growth';
+  if (pct <= 110) return 'warning';
+  return 'danger';
 }
+
+function paceLabel(pct: number): string {
+  if (pct <= 80) return 'Under budget — great pace!';
+  if (pct <= 110) return 'On track — keep it up.';
+  return 'Overspending — slow down.';
+}
+
+// A tone as text. The fills are too dim to read as small type on a dark card,
+// and the teal hero needs lighter shades again.
+const toneText: Record<Tone, string> = {
+  growth:  'text-growth-text',
+  warning: 'text-warning-text',
+  danger:  'text-danger-text',
+  primary: 'text-primary-text',
+};
+
+const toneOnHero: Record<Tone, string> = {
+  growth:  'text-green-200',
+  warning: 'text-amber-200',
+  danger:  'text-red-200',
+  primary: 'text-teal-50',
+};
+
+const cardClass = 'rounded-2xl border border-line bg-surface';
+const labelClass = 'text-[11px] font-semibold uppercase leading-none tracking-widest text-ink-3';
 
 // One line of the projection breakdown. The card claims a number; this is where
 // it shows its working.
@@ -22,17 +47,21 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
     <div>
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 flex-1">{label}</span>
-        <span className="shrink-0 tabular-nums text-slate-300">{value}</span>
+        <span className="shrink-0 tabular-nums text-ink-2">{value}</span>
       </div>
-      {hint && <p className="mt-0.5 text-[11px] text-slate-600">{hint}</p>}
+      {hint && <p className="mt-0.5 text-[11px] text-ink-4">{hint}</p>}
     </div>
   );
 }
 
-function paceLabel(pct: number): string {
-  if (pct <= 80) return 'Under budget — great pace!';
-  if (pct <= 110) return 'On track — keep it up.';
-  return 'Overspending — slow down.';
+// One of the hero's desktop figures. On a phone each of these is its own card.
+function HeroStat({ label, value, toneClass }: { label: string; value: string; toneClass: string }) {
+  return (
+    <div className="border-l border-white/20 px-[26px] last:pr-0">
+      <p className="text-xs leading-tight text-teal-100">{label}</p>
+      <p className={`mt-2 text-[22px] font-bold leading-none tabular-nums ${toneClass}`}>{value}</p>
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -42,7 +71,7 @@ export default function Dashboard() {
     untrackedDays, blindSpend, assumedSpending,
     spendingPacePercent, daysUntilPayday, nextPaydayDate,
     electricBillEstimate, emergencyFund, currentCycle,
-    totalSpentThisMonth, toggleAppliance, setAppliancePinned,
+    totalSpentThisMonth, toggleAppliance,
   } = useApp();
 
   // Live ticker — keeps appliance costs fresh every 10 s
@@ -88,6 +117,24 @@ export default function Dashboard() {
   const nextPaydayStr = nextPaydayDate
     ? nextPaydayDate.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
     : '—';
+  const daysLeftStr = daysUntilPayday === 0
+    ? 'Today'
+    : `${daysUntilPayday} day${daysUntilPayday === 1 ? '' : 's'} left`;
+  const paydayPhrase = daysUntilPayday === 0
+    ? 'payday today'
+    : `next payday in ${daysUntilPayday} day${daysUntilPayday === 1 ? '' : 's'}`;
+
+  // The range is half-open, so its end is the day the next cycle opens.
+  const resetsStr = cycleRange(currentCycle, settings.cycleStartDay).end
+    .toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+  const cycleName = cycleLabel(currentCycle, settings.cycleStartDay);
+
+  const pace = paceTone(spendingPacePercent);
+  const savingsTone: Tone = projectedSavings >= 0 ? 'growth' : 'danger';
+
+  const efPct = settings.emergencyFundTarget > 0
+    ? Math.min(100, (ef.currentAmount / settings.emergencyFundTarget) * 100)
+    : 0;
 
   const projectedCompletion = (() => {
     if (settings.emergencyFundTarget <= 0 || ef.currentAmount >= settings.emergencyFundTarget) return null;
@@ -101,55 +148,78 @@ export default function Dashboard() {
     return d.toLocaleDateString('en-PH', { month: 'short', year: 'numeric' });
   })();
 
+  const pinned = settings.appliances.filter(a => a.pinnedToHome);
+  const runningCount = settings.appliances.filter(a => a.enabled).length;
+
   return (
-    <div className="min-h-screen bg-[#0b0f1a]">
+    <div className="min-h-screen bg-canvas">
       <BottomNav />
 
       <div className="md:pl-64">
+        {/* ── Desktop header ── */}
+        <header className="hidden md:flex items-center justify-between gap-6 border-b border-divider px-8 pt-6 pb-[18px]">
+          <div>
+            <h1 className="text-[22px] font-bold leading-tight tracking-tight">Dashboard</h1>
+            <p className="mt-1.5 text-[13px] text-ink-3">
+              {cycleName} cycle{nextPaydayDate && ` · ${paydayPhrase}`}
+            </p>
+          </div>
+          <div className="flex gap-2.5">
+            <Link
+              href="/expenses/new"
+              className="rounded-[10px] border border-line bg-surface px-[15px] py-[11px] text-[13.5px] font-semibold leading-none hover:border-primary-text hover:text-primary-text transition-colors"
+            >
+              Add expense
+            </Link>
+            <Link
+              href="/wallets"
+              className="rounded-[10px] bg-primary px-4 py-[11px] text-[13.5px] font-semibold leading-none text-on-primary hover:bg-primary-hover transition-colors"
+            >
+              Add funds
+            </Link>
+          </div>
+        </header>
+
         <div className="mx-auto max-w-5xl px-4 md:px-8 pb-28 md:pb-12">
 
-          {/* ── Header ── */}
-          <header className="flex items-center justify-between pt-14 pb-5 md:pt-10 md:pb-6">
-            {/* Mobile: logo wordmark */}
-            <div className="flex items-center gap-2 md:hidden">
-              <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
-                <span className="text-xs font-bold text-white">T</span>
+          {/* ── Mobile header ── */}
+          <header className="flex items-center justify-between pt-14 pb-3 md:hidden">
+            <div className="flex items-center gap-[9px]">
+              <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-primary">
+                <span className="text-sm font-bold text-on-primary">T</span>
               </div>
-              <span className="text-lg font-bold tracking-tight text-white">Tally</span>
+              <span className="text-xl font-bold leading-none tracking-tight text-primary-text">Tally</span>
             </div>
-            {/* Desktop: page title */}
-            <h1 className="hidden md:block text-2xl font-bold text-white">Overview</h1>
-
-            <div className="flex items-center gap-2">
-              <Link
-                href="/settings"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 active:bg-white/10 md:hidden"
-              >
-                <CogIcon className="w-5 h-5 text-slate-400" />
-              </Link>
-            </div>
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className="flex h-[34px] w-[34px] items-center justify-center rounded-full border border-line bg-surface text-ink-3 hover:border-primary-text hover:text-primary-text transition-colors"
+            >
+              <CogIcon className="w-[18px] h-[18px]" />
+            </Link>
           </header>
 
           {/* ── Card grid ── */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 md:pt-5">
 
-            {/* Balance — full width on desktop */}
-            <div className="md:col-span-2 relative overflow-hidden rounded-2xl border border-blue-800/30 bg-gradient-to-br from-[#0d1f3c] to-[#0b1628] p-6 md:p-8">
-              <div className="absolute -top-12 -right-12 h-48 w-48 rounded-full bg-blue-600/10 blur-3xl" />
-              <div className="absolute -bottom-8 -left-8 h-36 w-36 rounded-full bg-blue-500/5 blur-2xl" />
-              <div className="md:flex md:items-end md:justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-widest text-blue-400/70 mb-1">Total Balance</p>
-                  <p className="text-4xl md:text-5xl font-bold text-white tabular-nums">
-                    {fmt(totalBalance, currency)}
-                  </p>
-                  <p className="mt-1.5 text-xs text-slate-500">
-                    across {wallets.length} wallet{wallets.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-                <Link href="/wallets" className="hidden md:inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors mt-2 md:mt-0">
-                  Manage wallets →
-                </Link>
+            {/* Balance — the teal hero. On desktop it also carries the three
+                figures that each get their own card on a phone. */}
+            <div className="rounded-2xl bg-primary-deep px-4 pt-5 pb-[18px] elev-hero md:col-span-2 md:flex md:items-end md:justify-between md:px-7 md:py-[26px]">
+              <div>
+                <p className="text-[11px] font-semibold uppercase leading-none tracking-widest text-teal-100">Total balance</p>
+                <p className="mt-2.5 text-[38px] font-bold leading-[1.1] tracking-[-0.035em] tabular-nums text-teal-50 md:mt-3 md:text-[46px]">
+                  {fmt(totalBalance, currency)}
+                </p>
+                <p className="mt-[9px] flex items-center gap-[7px] text-[13px] leading-none text-teal-100">
+                  <span className="h-1.5 w-1.5 rounded-full bg-teal-100" />
+                  across {wallets.length} wallet{wallets.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+
+              <div className="hidden pb-1.5 md:flex">
+                <HeroStat label="Projected savings" value={fmt(projectedSavings, currency)} toneClass={toneOnHero[savingsTone]} />
+                <HeroStat label="Next payday" value={nextPaydayStr} toneClass="text-teal-50" />
+                <HeroStat label="Spending pace" value={`${spendingPacePercent.toFixed(0)}%`} toneClass={toneOnHero[pace]} />
               </div>
             </div>
 
@@ -157,43 +227,47 @@ export default function Dashboard() {
                 this number can be wrong (an unlogged expense, an untracked day,
                 income that never arrived) pushes it up, so the headline is the
                 floor and the ceiling is shown underneath as the stretch. */}
-            <div className="relative overflow-hidden rounded-2xl border border-emerald-800/30 bg-gradient-to-br from-[#0d2a20] to-[#0b1f18] p-6">
-              <div className="absolute -top-12 -right-12 h-40 w-40 rounded-full bg-emerald-600/10 blur-3xl" />
-              <p className="text-xs font-medium uppercase tracking-widest text-emerald-400/70 mb-1">Projected Savings</p>
-              <p className={`text-4xl font-bold tabular-nums ${projectedSavings >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {fmt(projectedSavings, currency)}
-              </p>
-              <p className="mt-1.5 text-xs text-slate-500">realistic — if your pace holds</p>
+            <div className={`${cardClass} flex flex-col gap-2.5 px-4 py-[18px] md:p-[22px]`}>
+              <div className="flex items-center justify-between">
+                <p className={labelClass}>Projected savings</p>
+                <span className={`h-2 w-2 rounded-full ${savingsTone === 'growth' ? 'bg-growth' : 'bg-danger'}`} />
+              </div>
 
-              {optimisticSavings > projectedSavings && (
-                <p className="mt-3 text-xs text-slate-500">
-                  up to <span className="text-emerald-400/80 font-medium tabular-nums">{fmt(optimisticSavings, currency)}</span>
-                  {' '}if you spend nothing more
+              <div>
+                <p className={`text-[30px] font-bold leading-[1.1] tracking-[-0.03em] tabular-nums md:text-[32px] ${toneText[savingsTone]}`}>
+                  {fmt(projectedSavings, currency)}
                 </p>
-              )}
+                <p className="mt-1.5 text-[13px] leading-snug text-ink-2">realistic — if your pace holds</p>
+                {optimisticSavings > projectedSavings && (
+                  <p className="text-[13px] leading-snug text-ink-4">
+                    up to <span className="tabular-nums text-ink-2">{fmt(optimisticSavings, currency)}</span>
+                    {' '}if you spend nothing more
+                  </p>
+                )}
+              </div>
 
               {unconfirmedIncome > 0 && (
                 <button
                   onClick={() => setPaydayOpen(true)}
-                  className="mt-3 flex w-full items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/25 px-3 py-2.5 text-left active:bg-amber-500/20 transition-colors"
+                  className="flex w-full items-start gap-[9px] rounded-[11px] border border-warning-edge bg-warning-tint px-3 py-2.5 text-left transition-colors hover:border-warning/60"
                 >
-                  <AlertIcon className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="flex-1 min-w-0 text-xs text-amber-300">
-                    Excludes {fmt(unconfirmedIncome, currency)} — payday not confirmed
+                  <span className="mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full bg-warning" />
+                  <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-snug text-warning-text">
+                    Excludes <span className="tabular-nums">{fmt(unconfirmedIncome, currency)}</span> — payday not confirmed
                   </span>
-                  <ChevronRightIcon className="w-4 h-4 text-amber-400/70 shrink-0" />
+                  <ChevronRightIcon className="mt-px h-4 w-4 shrink-0 text-warning-text/70" />
                 </button>
               )}
 
               <button
                 onClick={() => setShowBreakdown(v => !v)}
-                className="mt-3 text-xs text-emerald-400/70 hover:text-emerald-300 transition-colors"
+                className="self-start text-xs font-medium text-primary-text hover:text-primary-hover transition-colors"
               >
                 {showBreakdown ? 'Hide maths' : 'How is this worked out?'}
               </button>
 
               {showBreakdown && (
-                <div className="mt-3 space-y-1.5 rounded-xl bg-black/20 px-3 py-3 text-xs text-slate-400">
+                <div className="space-y-1.5 rounded-xl bg-canvas px-3 py-3 text-xs text-ink-3">
                   <Row label="Income counted" value={fmt(projectedSavings + totalBills + assumedSpending, currency)} />
                   <Row label="Bills" value={`− ${fmt(totalBills, currency)}`} />
                   <Row label="Logged so far" value={`− ${fmt(totalSpentThisMonth, currency)}`} />
@@ -204,111 +278,142 @@ export default function Dashboard() {
                       hint="charged at your budget rate, not counted as zero"
                     />
                   )}
-                  <Row label="Rest of month, at your pace" value={`− ${fmt(assumedSpending - totalSpentThisMonth - blindSpend, currency)}`} />
+                  <Row label="Rest of cycle, at your pace" value={`− ${fmt(assumedSpending - totalSpentThisMonth - blindSpend, currency)}`} />
                 </div>
               )}
             </div>
 
-            {/* Payday chip */}
-            <div className="flex items-center gap-4 rounded-2xl bg-[#111827] border border-[#1e2d40] px-6 py-5">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/15 shrink-0">
-                <CalendarIcon className="w-6 h-6 text-amber-400" />
+            {/* Payday — on desktop it rides in the hero instead */}
+            <div className={`${cardClass} flex items-center justify-between p-4 md:hidden`}>
+              <div>
+                <p className={labelClass}>Next payday</p>
+                <p className="mt-2 text-[19px] font-bold leading-none tracking-tight">{nextPaydayStr}</p>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-slate-500">Next payday</p>
-                <p className="text-sm font-semibold text-white mt-0.5">{nextPaydayStr}</p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-3xl font-bold text-amber-400">{daysUntilPayday}</p>
-                <p className="text-[10px] text-slate-500">days left</p>
-              </div>
+              {nextPaydayDate && (
+                <span className="rounded-full border border-line bg-raised px-[11px] py-[7px] text-xs font-medium leading-none text-ink-2">
+                  {daysLeftStr}
+                </span>
+              )}
             </div>
 
-            {/* Spending Pace — full width */}
-            <div className="md:col-span-2 rounded-2xl bg-[#111827] border border-[#1e2d40] p-5 md:p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <TrendingUpIcon className="w-4 h-4 text-slate-400" />
-                  <p className="text-sm font-medium text-white">Spending Pace</p>
-                </div>
-                <span className={`text-sm font-bold ${
-                  paceColor(spendingPacePercent) === 'green' ? 'text-emerald-400'
-                  : paceColor(spendingPacePercent) === 'amber' ? 'text-amber-400'
-                  : 'text-red-400'
-                }`}>
+            {/* Spending Pace */}
+            <div className={`${cardClass} flex flex-col gap-[11px] px-4 py-[18px] md:gap-[13px] md:p-[22px]`}>
+              <div className="flex items-baseline justify-between">
+                <p className={labelClass}>Spending pace</p>
+                <p className={`text-sm font-bold leading-none tabular-nums ${toneText[pace]}`}>
                   {spendingPacePercent.toFixed(0)}%
-                </span>
+                </p>
               </div>
-              <ProgressBar value={spendingPacePercent} max={100} color={paceColor(spendingPacePercent)} />
-              <div className="flex items-center justify-between mt-3">
-                <p className="text-xs text-slate-500">{paceLabel(spendingPacePercent)}</p>
-                <p className="text-xs text-slate-500">
+              <ProgressBar value={spendingPacePercent} max={100} tone={pace} />
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className="text-[13px] font-medium md:text-sm">{paceLabel(spendingPacePercent)}</p>
+                <p className="text-[13px] tabular-nums text-ink-3">
                   {fmt(totalSpentThisMonth, currency)} / {fmt(expectedSoFar, currency)}
                 </p>
               </div>
+              <p className="mt-auto hidden text-[12.5px] text-ink-4 md:block">Resets {resetsStr}</p>
             </div>
 
             {/* Emergency Fund */}
-            <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <ShieldIcon className="w-4 h-4 text-slate-400" />
-                  <p className="text-sm font-medium text-white">Emergency Fund</p>
-                </div>
-                <Link href="/expenses" className="text-xs text-blue-400">Budget →</Link>
+            <div className={`${cardClass} flex flex-col gap-[11px] px-4 py-[18px] md:gap-[13px] md:p-[22px]`}>
+              <div className="flex items-baseline justify-between">
+                <p className={labelClass}>Emergency fund</p>
+                {settings.emergencyFundTarget > 0 && (
+                  <p className="text-sm font-bold leading-none tabular-nums text-growth-text">{efPct.toFixed(0)}%</p>
+                )}
               </div>
               {settings.emergencyFundTarget > 0 ? (
                 <>
-                  <div className="flex items-end justify-between mb-2">
-                    <p className="text-2xl font-bold text-white">{fmt(ef.currentAmount, currency)}</p>
-                    <p className="text-xs text-slate-500">of {fmt(settings.emergencyFundTarget, currency)}</p>
+                  <div className="flex flex-wrap items-baseline gap-x-[7px]">
+                    <p className="text-[26px] font-bold leading-[1.1] tracking-[-0.03em] tabular-nums md:text-3xl">
+                      {fmt(ef.currentAmount, currency)}
+                    </p>
+                    <p className="text-sm tabular-nums text-ink-3 md:text-[15px]">
+                      of {fmt(settings.emergencyFundTarget, currency)}
+                    </p>
                   </div>
-                  <ProgressBar value={ef.currentAmount} max={settings.emergencyFundTarget} color="green" />
+                  <ProgressBar value={ef.currentAmount} max={settings.emergencyFundTarget} tone="growth" />
                   {projectedCompletion && (
-                    <p className="mt-2 text-xs text-slate-500">Projected full by {projectedCompletion}</p>
+                    <p className="text-[13px] text-ink-2 md:text-[13.5px]">Projected full by {projectedCompletion}</p>
                   )}
                 </>
               ) : (
-                <p className="text-sm text-slate-500">Set a target in Settings to start tracking.</p>
+                <p className="text-sm text-ink-3">
+                  <Link href="/settings" className="font-medium text-primary-text hover:text-primary-hover transition-colors">
+                    Set a target
+                  </Link>{' '}
+                  to start tracking.
+                </p>
               )}
             </div>
 
             {/* Electric Estimate */}
-            <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-5">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  <BoltIcon className="w-4 h-4 text-slate-400" />
-                  <p className="text-sm font-medium text-white">Electric Estimate</p>
-                </div>
-                <p className="text-2xl font-bold text-white">{fmt(electricBillEstimate, currency)}</p>
+            <div className={`${cardClass} flex flex-col gap-3.5 px-4 py-[18px] md:p-[22px]`}>
+              <div className="flex items-baseline justify-between">
+                <p className={labelClass}>Electric estimate</p>
+                <p className="text-xs text-ink-4">this cycle</p>
               </div>
-              <p className="mb-3 text-xs text-slate-500">from your appliances this cycle</p>
+              <p className="text-[30px] font-bold leading-[1.1] tracking-[-0.03em] tabular-nums">
+                {fmt(electricBillEstimate, currency)}
+              </p>
 
-              {/* Pinned appliance toggles */}
-              {settings.appliances.filter(a => a.pinnedToHome).length > 0 && (
-                <div className="space-y-2 mb-3">
-                  {settings.appliances.filter(a => a.pinnedToHome).map(a => (
-                    <div key={a.id} className="flex items-center gap-3">
+              {pinned.length > 0 && (
+                <>
+                  {/* Phone: a list of switches */}
+                  <div className="flex flex-col md:hidden">
+                    {pinned.map(a => (
+                      <div key={a.id} className="flex items-center justify-between gap-3 border-t border-divider py-[11px]">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium leading-tight">{a.name}</p>
+                          <p className="mt-[3px] text-xs leading-tight tabular-nums text-ink-4">{a.wattage} W</p>
+                        </div>
+                        <button
+                          role="switch"
+                          aria-checked={a.enabled}
+                          aria-label={a.name}
+                          onClick={() => toggleAppliance(a.id)}
+                          className={`flex h-7 w-12 shrink-0 rounded-full p-[3px] transition-colors duration-200 ${
+                            a.enabled ? 'justify-end bg-primary' : 'justify-start bg-line-strong'
+                          }`}
+                        >
+                          <span className="h-[22px] w-[22px] rounded-full bg-white elev-knob" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: tiles, each one the whole tap target */}
+                  <div className="hidden grid-cols-2 gap-2.5 md:grid">
+                    {pinned.map(a => (
                       <button
+                        key={a.id}
+                        role="switch"
+                        aria-checked={a.enabled}
                         onClick={() => toggleAppliance(a.id)}
-                        className={`relative h-6 w-10 rounded-full shrink-0 transition-colors duration-200 ${a.enabled ? 'bg-amber-500' : 'bg-white/10'}`}
+                        className={`min-w-0 rounded-xl border px-3.5 py-[13px] text-left transition-colors ${
+                          a.enabled ? 'border-primary-edge bg-primary-tint' : 'border-line bg-canvas hover:border-line-strong'
+                        }`}
                       >
-                        <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${a.enabled ? 'left-[18px]' : 'left-0.5'}`} />
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold leading-none">{a.name}</span>
+                          <span className={`text-[11px] font-semibold leading-none ${a.enabled ? 'text-primary-text' : 'text-ink-4'}`}>
+                            {a.enabled ? 'ON' : 'OFF'}
+                          </span>
+                        </span>
+                        <span className="mt-[7px] block text-xs leading-none tabular-nums text-ink-4">{a.wattage} W</span>
                       </button>
-                      <p className="flex-1 text-sm text-white truncate">{a.name}</p>
-                      <p className="text-xs text-slate-500">{a.wattage}W</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </>
               )}
 
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-500">
-                  {settings.appliances.filter(a => a.enabled).length > 0
-                    ? `${settings.appliances.filter(a => a.enabled).length} of ${settings.appliances.length} running`
+              <div className="mt-auto flex items-center justify-between">
+                <p className="text-xs text-ink-4">
+                  {runningCount > 0
+                    ? `${runningCount} of ${settings.appliances.length} running`
                     : 'No appliances running'}
                 </p>
-                <Link href="/expenses#electric" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                <Link href="/expenses#electric" className="text-xs font-medium text-primary-text hover:text-primary-hover transition-colors">
                   Manage →
                 </Link>
               </div>

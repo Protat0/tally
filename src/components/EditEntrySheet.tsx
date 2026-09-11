@@ -7,6 +7,7 @@ import WalletPicker from './WalletPicker';
 import SplitPanel, { SplitResult } from './SplitPanel';
 import { visibleCategories } from '@/lib/categories';
 import type { RowSource } from './ActivityRow';
+import AppIcon from './AppIcon';
 
 // The date input works in calendar days; the rows store instants.
 const toYmd = (iso: string) => {
@@ -18,8 +19,8 @@ const toYmd = (iso: string) => {
 // PH converts to the previous day in UTC, which backdates the entry by one.
 const fromYmd = (ymd: string) => new Date(`${ymd}T12:00:00`).toISOString();
 
-const label = 'text-xs text-slate-500 uppercase tracking-widest mb-1.5';
-const field = 'w-full rounded-lg bg-white/5 border border-[#1e2d40] px-3 py-2 text-sm text-white outline-none focus:border-blue-500/50';
+const label = 'text-xs text-ink-3 uppercase tracking-widest mb-1.5';
+const field = 'w-full rounded-lg bg-canvas border border-line px-3 py-2 text-sm text-ink outline-none focus:border-primary';
 
 interface Props {
   source: RowSource;
@@ -129,7 +130,7 @@ export default function EditEntrySheet({ source, onClose }: Props) {
 
   return (
     <BottomSheet onClose={onClose}>
-      <p className="font-semibold text-white mb-5">
+      <p className="font-semibold text-ink mb-5">
         {source.kind === 'expense' ? 'Edit expense' : source.kind === 'move' ? 'Edit entry' : 'Edit debt'}
       </p>
 
@@ -137,11 +138,11 @@ export default function EditEntrySheet({ source, onClose }: Props) {
       <div className="mb-4">
         <p className={label}>Amount</p>
         <div className="flex items-baseline gap-1.5">
-          <span className="text-2xl font-bold text-slate-500 shrink-0">{settings.currency}</span>
+          <span className="text-2xl font-bold text-ink-3 shrink-0">{settings.currency}</span>
           <input
             type="number" inputMode="decimal" min="0" step="0.01"
             value={amount} onChange={e => setAmount(e.target.value)}
-            className="w-full bg-transparent text-3xl font-bold text-white placeholder-slate-700 tabular-nums outline-none border-0 p-0"
+            className="w-full bg-transparent text-3xl font-bold text-ink placeholder-ink-5 tabular-nums outline-none border-0 p-0"
           />
         </div>
       </div>
@@ -154,9 +155,9 @@ export default function EditEntrySheet({ source, onClose }: Props) {
             {categories.map(c => (
               <button key={c.key} onClick={() => setCategory(c.key)}
                 className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                  category === c.key ? `${c.color} text-white` : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
+                  category === c.key ? `${c.color} text-ink` : 'border-line bg-raised text-ink-2 hover:text-ink'
                 }`}>
-                <span>{c.icon}</span><span>{c.label}</span>
+                <AppIcon icon={c.icon} className="h-3.5 w-3.5 text-primary-text" /><span>{c.label}</span>
               </button>
             ))}
           </div>
@@ -171,9 +172,9 @@ export default function EditEntrySheet({ source, onClose }: Props) {
             {INCOME_SOURCES.map(s => (
               <button key={s.key} onClick={() => setSrcKind(s.key)}
                 className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                  srcKind === s.key ? 'border-emerald-500 bg-emerald-500/15 text-white' : 'border-[#1e2d40] bg-white/5 text-slate-400 hover:text-white'
+                  srcKind === s.key ? 'border-growth bg-growth-tint text-ink' : 'border-line bg-raised text-ink-2 hover:text-ink'
                 }`}>
-                <span>{s.icon}</span><span>{s.label}</span>
+                <AppIcon icon={s.icon} className="h-3.5 w-3.5" /><span>{s.label}</span>
               </button>
             ))}
           </div>
@@ -225,22 +226,22 @@ export default function EditEntrySheet({ source, onClose }: Props) {
       </div>
 
       {source.kind === 'expense' && myShare <= 0 && typed > 0 && (
-        <p className="mb-3 text-xs text-amber-400">
+        <p className="mb-3 text-xs text-warning-text">
           {owedTotal > typed
             ? 'More is owed back to you than was paid out.'
             : 'None of this is yours, so there is no expense left to keep — delete it and log the debt on its own instead.'}
         </p>
       )}
 
-      {error && <p className="mb-3 text-xs text-red-400">{error}</p>}
+      {error && <p className="mb-3 text-xs text-danger-text">{error}</p>}
 
       <div className="flex gap-2">
         <button onClick={onClose}
-          className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors">
+          className="flex-1 rounded-xl bg-raised py-3 text-sm font-medium text-ink-2 hover:bg-line transition-colors">
           Cancel
         </button>
         <button onClick={save} disabled={!canSave || saving}
-          className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 transition-colors">
+          className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-on-primary hover:bg-primary-hover disabled:opacity-40 disabled:hover:bg-primary transition-colors">
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>

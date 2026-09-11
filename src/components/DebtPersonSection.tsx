@@ -7,6 +7,7 @@ import SettleUpSheet from './SettleUpSheet';
 import { ScrollLock } from './ModalLock';
 import { TrashIcon } from './Icons';
 import type { PersonGroup } from '@/app/debts/page';
+import PersonAvatar from './PersonAvatar';
 
 interface Props {
   group: PersonGroup;
@@ -23,31 +24,26 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
   const [settleEntry, setSettleEntry] = useState<DebtEntry | null>(null);
   const [confirmBatch, setConfirmBatch] = useState<string | null>(null);
 
-  const label = net > 0 ? 'owes you' : net < 0 ? 'you owe' : 'settled up';
-  const tone  = net > 0 ? 'text-emerald-400' : net < 0 ? 'text-red-400' : 'text-slate-500';
+  const avatarTone = net > 0 ? 'growth' : net < 0 ? 'danger' : 'neutral';
+  const amountTone = net > 0 ? 'text-growth-text' : net < 0 ? 'text-danger-text' : 'text-ink-4';
+  // The sentence carries the direction, so the amount never needs a sign.
+  const title = net > 0 ? `${person.name} owes you` : net < 0 ? `You owe ${person.name}` : person.name;
 
   return (
-    <div className="rounded-2xl bg-[#111827] border border-[#1e2d40] p-4">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="text-xl shrink-0">{person.emoji}</span>
-          <p className="text-sm font-semibold text-white truncate">{person.name}</p>
-        </div>
-        <div className="text-right shrink-0">
-          <p className={`text-base font-bold tabular-nums ${tone}`}>
-            {net === 0 ? fmt(0, currency) : fmt(Math.abs(net), currency)}
+    <div className="rounded-2xl bg-surface border border-line p-4">
+      {/* Header — who, which way, how much, and the one thing to do about it */}
+      <div className="flex items-center gap-[13px]">
+        <PersonAvatar name={person.name} tone={avatarTone} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold leading-tight">{title}</p>
+          <p className={`mt-1 text-[17px] font-bold leading-tight tabular-nums ${amountTone}`}>
+            {net === 0 ? 'Settled up' : fmt(Math.abs(net), currency)}
           </p>
-          <p className="text-[11px] text-slate-500">{label}</p>
         </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 mb-3">
         {open.length > 0 && (
           <button
             onClick={() => setSettleOpen(true)}
-            className="rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-white/10 transition-colors"
+            className="shrink-0 rounded-full border border-primary px-3.5 py-[9px] text-[13px] font-semibold leading-none text-primary-text hover:bg-primary hover:text-on-primary transition-colors"
           >
             Settle up
           </button>
@@ -56,17 +52,17 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
           onClick={onDeletePerson}
           title={`Delete ${person.name}`}
           aria-label={`Delete ${person.name}`}
-          className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 transition-colors ml-auto"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-4 hover:bg-raised hover:text-danger-text transition-colors"
         >
-          <TrashIcon className="w-3.5 h-3.5 text-slate-600 hover:text-red-400" />
+          <TrashIcon className="w-4 h-4" />
         </button>
       </div>
 
       {/* Open entries */}
       {open.length === 0 ? (
-        <p className="text-xs text-slate-600">Nothing outstanding.</p>
+        <p className="mt-3 text-xs text-ink-4">Nothing outstanding.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="mt-3 space-y-2">
           {open.map(e => (
             <DebtEntryRow
               key={e.id}
@@ -81,10 +77,10 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
 
       {/* Settled history */}
       {settled.length > 0 && (
-        <div className="mt-3 border-t border-[#1e2d40] pt-3">
+        <div className="mt-3 border-t border-line pt-3">
           <button
             onClick={() => setShowSettled(v => !v)}
-            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            className="text-xs text-ink-3 hover:text-ink-2 transition-colors"
           >
             {showSettled ? '▴ Hide' : '▾ Show'} {settled.length} settled
           </button>
@@ -158,11 +154,11 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
             <ScrollLock />
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
             <div
-              className="relative w-full max-w-sm rounded-2xl bg-[#111827] border border-[#1e2d40] p-6 text-center"
+              className="relative w-full max-w-sm rounded-2xl bg-surface border border-line p-6 text-center"
               onClick={ev => ev.stopPropagation()}
             >
-              <p className="font-semibold text-white mb-1">Reopen this settle-up?</p>
-              <p className="text-sm text-slate-500 mb-5">
+              <p className="font-semibold text-ink mb-1">Reopen this settle-up?</p>
+              <p className="text-sm text-ink-3 mb-5">
                 {batch.length === 1
                   ? 'This item was settled as a single payment.'
                   : `This was settled together with ${batch.length - 1} other item${batch.length > 2 ? 's' : ''}. All ${batch.length} will reopen.`}
@@ -171,7 +167,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
               <div className="flex gap-2">
                 <button
                   onClick={() => setConfirmBatch(null)}
-                  className="flex-1 rounded-xl bg-white/5 py-3 text-sm font-medium text-slate-300 hover:bg-white/10 transition-colors"
+                  className="flex-1 rounded-xl bg-raised py-3 text-sm font-medium text-ink-2 hover:bg-line transition-colors"
                 >
                   Cancel
                 </button>
@@ -180,7 +176,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
                     reverseSettleBatch(confirmBatch);
                     setConfirmBatch(null);
                   }}
-                  className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
+                  className="flex-1 rounded-xl bg-primary py-3 text-sm font-semibold text-on-primary hover:bg-primary-hover transition-colors"
                 >
                   Reopen
                 </button>

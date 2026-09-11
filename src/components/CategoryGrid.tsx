@@ -22,7 +22,7 @@ export default function CategoryGrid({
 }: Props) {
   return (
     <div>
-      <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-slate-500">
+      <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-ink-3">
         Categories
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -40,7 +40,7 @@ export default function CategoryGrid({
         ))}
         <button
           onClick={onAdd}
-          className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[#1e2d40] p-4 text-slate-500 hover:border-blue-500/40 hover:text-blue-400 transition-colors"
+          className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line-strong p-4 text-ink-3 hover:border-primary-edge hover:text-primary-text transition-colors"
         >
           <PlusIcon className="w-5 h-5" />
           <span className="text-xs font-medium">Add</span>
