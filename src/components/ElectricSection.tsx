@@ -284,7 +284,7 @@ export default function ElectricSection() {
                     <div className="flex gap-0.5 shrink-0">
                       <button
                         onClick={() => setAppliancePinned(a.id, !a.pinnedToHome)}
-                        title={a.pinnedToHome ? 'Remove from dashboard' : 'Add to dashboard'}
+                        title={a.pinnedToHome ? 'Unpin from the top of the dashboard' : 'Pin to the top of the dashboard'}
                         className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
                           a.pinnedToHome
                             ? 'bg-primary-tint text-primary-text'

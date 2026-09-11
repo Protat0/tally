@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ICON_KEYS, isIconKey, resolveIconKey, initialOf } from './icons.ts';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import {
+  ICON_KEYS, LOGO_KEYS, isIconKey, resolveIconKey, initialOf, logoOf, logoIcon, logoSrc,
+} from './icons.ts';
 
 test('a stored icon key resolves to itself', () => {
   for (const key of ICON_KEYS) assert.equal(resolveIconKey(key, 'shapes'), key);
@@ -34,6 +38,37 @@ test('isIconKey only accepts known keys', () => {
   assert.equal(isIconKey('landmark'), true);
   assert.equal(isIconKey('Landmark'), false);
   assert.equal(isIconKey('🏦'), false);
+});
+
+// A wallet can carry its bank's logo instead of a drawn icon, stored in the
+// same icon column as "logo:<brand>".
+test('a stored logo reads back as its brand', () => {
+  assert.equal(logoOf('logo:bdo'), 'bdo');
+  assert.equal(logoOf(logoIcon('gcash')), 'gcash');
+});
+
+test('plain icons, emoji, blanks and unknown brands are not logos', () => {
+  for (const v of [null, undefined, '', 'landmark', '🏦', 'bdo', 'logo:', 'logo:not-a-bank', 'Logo:bdo']) {
+    assert.equal(logoOf(v), null, `for ${String(v)}`);
+  }
+});
+
+// Anywhere that can only draw a glyph still gets one for a logo wallet.
+test('a logo falls back to the drawn icon where a glyph is needed', () => {
+  assert.equal(resolveIconKey('logo:bdo', 'wallet'), 'wallet');
+});
+
+test('a logo is served from public/logos', () => {
+  assert.equal(logoSrc('bdo'), '/logos/bdo.webp');
+});
+
+// Guards the shipped files: a logo key without its image would show a broken
+// picture instead of a bank.
+test('every logo key has its image file', () => {
+  for (const key of LOGO_KEYS) {
+    const file = fileURLToPath(new URL(`../../public${logoSrc(key)}`, import.meta.url));
+    assert.ok(existsSync(file), `missing ${file}`);
+  }
 });
 
 test('a person shows their initial, uppercased', () => {

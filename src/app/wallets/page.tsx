@@ -8,10 +8,11 @@ import BottomNav from '@/components/BottomNav';
 import BottomSheet from '@/components/BottomSheet';
 import { ScrollLock } from '@/components/ModalLock';
 import WalletCard from '@/components/WalletCard';
-import { WALLET_PRESET_GROUPS, ALL_WALLET_PRESETS } from '@/lib/walletPresets';
-import { PlusIcon, WalletIcon, CogIcon, ChevronDownIcon } from '@/components/Icons';
+import { ALL_WALLET_PRESETS } from '@/lib/walletPresets';
+import { PlusIcon, WalletIcon, CogIcon } from '@/components/Icons';
 import AppIcon from '@/components/AppIcon';
-import type { IconKey } from '@/lib/icons';
+import WalletPresetPicker, { presetIcon } from '@/components/WalletPresetPicker';
+import { logoOf, type IconKey } from '@/lib/icons';
 
 const ICONS: IconKey[] = ['credit-card', 'landmark', 'banknote', 'piggy-bank', 'coins', 'smartphone', 'wallet', 'briefcase'];
 
@@ -25,6 +26,13 @@ export default function WalletsPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const totalBalance = wallets.reduce((s, w) => s + w.balance, 0);
+
+  // Derived, not stored: typing a custom name clears the matched preset on its
+  // own rather than leaving a stale bank shown.
+  const preset = ALL_WALLET_PRESETS.find(p => p.name === newName) ?? null;
+  // The logo offered beside the drawn icons: the matched preset's, or one
+  // already chosen before the name was edited, so it isn't lost silently.
+  const logoChoice = preset?.logo ? presetIcon(preset) : logoOf(newIcon) ? newIcon : null;
 
   const handleAdd = () => {
     if (!newName.trim()) return;
@@ -110,33 +118,25 @@ export default function WalletsPage() {
           <p className="mb-5 text-center font-semibold text-ink text-lg">New Wallet</p>
 
             <p className="mb-2 text-xs text-ink-3">Quick pick</p>
-            <div className="relative mb-4">
-              <select
-                // Derived, not stored: typing a custom name below clears the
-                // selection on its own rather than leaving a stale bank shown.
-                value={ALL_WALLET_PRESETS.some(p => p.name === newName) ? newName : ''}
-                onChange={e => {
-                  const found = ALL_WALLET_PRESETS.find(p => p.name === e.target.value);
-                  if (found) { setNewName(found.name); setNewIcon(found.icon); }
-                }}
-                className="w-full min-h-[52px] appearance-none rounded-xl bg-canvas border border-line px-4 py-3.5 pr-10 text-base text-ink outline-none focus:border-primary"
-              >
-                <option value="" className="bg-surface">Choose a bank or e-wallet…</option>
-                {WALLET_PRESET_GROUPS.map(group => (
-                  <optgroup key={group.label} label={group.label} className="bg-surface">
-                    {group.presets.map(p => (
-                      <option key={p.name} value={p.name} className="bg-surface">
-                        {p.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-              <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-3" />
+            <div className="mb-4">
+              <WalletPresetPicker
+                selected={preset}
+                onPick={p => { setNewName(p.name); setNewIcon(presetIcon(p)); }}
+              />
             </div>
 
             <p className="mb-2 text-xs text-ink-3">Icon</p>
             <div className="mb-4 flex gap-2 flex-wrap">
+              {/* The bank's logo leads, as one more choice beside the drawn icons. */}
+              {logoChoice && (
+                <button
+                  onClick={() => setNewIcon(logoChoice)}
+                  aria-label="Logo"
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl border p-1.5 transition-colors ${newIcon === logoChoice ? 'border-primary bg-primary-tint' : 'border-line bg-raised'}`}
+                >
+                  <AppIcon icon={logoChoice} className="h-full w-full" />
+                </button>
+              )}
               {ICONS.map(ico => (
                 <button
                   key={ico}

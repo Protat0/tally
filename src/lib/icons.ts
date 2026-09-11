@@ -51,6 +51,41 @@ export function resolveIconKey(stored: string | null | undefined, fallback: Icon
   return LEGACY_EMOJI[stored.replace(VARIATION_SELECTOR, '')] ?? fallback;
 }
 
+// Brand logos. A wallet made from a bank or e-wallet preset stores
+// "logo:<brand>" in the same icon column a drawn icon uses, and the picture is
+// public/logos/<brand>.webp. Maya Bank shares Maya's.
+export const LOGO_KEYS = [
+  'gcash', 'maya', 'grabpay', 'shopeepay', 'coins-ph',
+  'bdo', 'bpi', 'metrobank', 'landbank', 'pnb', 'security-bank', 'unionbank', 'china-bank',
+  'rcbc', 'eastwest', 'psbank', 'dbp', 'aub', 'maybank', 'bank-of-commerce', 'hsbc',
+  'gotyme', 'tonik', 'maribank', 'uno-digital', 'netbank', 'cimb',
+] as const;
+
+export type LogoKey = (typeof LOGO_KEYS)[number];
+
+// A template literal type: "logo:" followed by any one LogoKey, so
+// 'logo:bdo' type-checks and 'logo:bdoo' does not.
+export type LogoIcon = `logo:${LogoKey}`;
+
+const LOGO_PREFIX = 'logo:';
+
+export function isLogoKey(value: string): value is LogoKey {
+  return (LOGO_KEYS as readonly string[]).includes(value);
+}
+
+// The value to store for a brand's logo.
+export const logoIcon = (key: LogoKey): LogoIcon => `logo:${key}`;
+
+// The brand a stored icon names — or null for a drawn icon, an emoji, a blank,
+// or a brand this build has no picture for.
+export function logoOf(stored: string | null | undefined): LogoKey | null {
+  if (!stored?.startsWith(LOGO_PREFIX)) return null;
+  const key = stored.slice(LOGO_PREFIX.length);
+  return isLogoKey(key) ? key : null;
+}
+
+export const logoSrc = (key: LogoKey): string => `/logos/${key}.webp`;
+
 // People aren't icons: a debt contact shows their initial. Array.from splits by
 // code point, so a name opening with a character outside the basic plane keeps
 // the whole character rather than half of a surrogate pair.

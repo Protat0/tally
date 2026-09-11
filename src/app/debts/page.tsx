@@ -1,22 +1,18 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useApp, netOf, DebtPerson, DebtEntry } from '@/components/AppContext';
+import { useApp, DebtPerson, DebtEntry } from '@/components/AppContext';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
 import DebtSummary from '@/components/DebtSummary';
 import DebtPersonSection from '@/components/DebtPersonSection';
 import AddDebtSheet from '@/components/AddDebtSheet';
 import { ScrollLock } from '@/components/ModalLock';
-import { UsersIcon } from '@/components/Icons';
+import { ChevronDownIcon, UsersIcon } from '@/components/Icons';
 import PersonAvatar from '@/components/PersonAvatar';
+import { groupDebts, type PersonDebts } from '@/lib/debtGroups';
 
-export interface PersonGroup {
-  person: DebtPerson;
-  open: DebtEntry[];
-  settled: DebtEntry[];
-  net: number;
-}
+export type PersonGroup = PersonDebts<DebtPerson, DebtEntry>;
 
 export default function DebtsPage() {
   const {
@@ -26,27 +22,25 @@ export default function DebtsPage() {
   const { currency } = settings;
 
   const [addOpen, setAddOpen] = useState(false);
+  const [showSettled, setShowSettled] = useState(false);
   const [confirmDeletePerson, setConfirmDeletePerson] = useState<DebtPerson | null>(null);
 
-  // People with an open balance first, most recently active at the top; fully
-  // settled people sink to the bottom.
-  const groups = useMemo<PersonGroup[]>(() => {
-    const byPerson = debtPeople.map(person => {
-      const mine = debtEntries.filter(e => e.personId === person.id);
-      const open = mine.filter(e => !e.settledAt);
-      const settled = mine.filter(e => e.settledAt);
-      return { person, open, settled, net: netOf(open) };
-    });
+  // Only people with something still open are listed. Everyone else — settled
+  // up, or never in a debt — waits under one collapsed row. Worked out from the
+  // entries rather than stored, so a new debt brings a person straight back.
+  const { active, settled } = useMemo(
+    () => groupDebts(debtPeople, debtEntries),
+    [debtPeople, debtEntries],
+  );
 
-    const lastActivity = (g: PersonGroup) =>
-      [...g.open, ...g.settled]
-        .reduce((max, e) => (e.date > max ? e.date : max), '');
-
-    return byPerson.sort((a, b) => {
-      if ((a.open.length > 0) !== (b.open.length > 0)) return a.open.length > 0 ? -1 : 1;
-      return lastActivity(b).localeCompare(lastActivity(a));
-    });
-  }, [debtPeople, debtEntries]);
+  const section = (g: PersonGroup) => (
+    <DebtPersonSection
+      key={g.person.id}
+      group={g}
+      currency={currency}
+      onDeletePerson={() => setConfirmDeletePerson(g.person)}
+    />
+  );
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -76,12 +70,7 @@ export default function DebtsPage() {
           />
 
           <div className="mt-3 space-y-3">
-            {groups.length > 0 && (
-              <p className="px-0.5 pt-2 text-[11px] font-semibold uppercase tracking-widest text-ink-3">
-                By person
-              </p>
-            )}
-            {groups.length === 0 ? (
+            {debtPeople.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-line px-4 py-12 text-center">
                 <UsersIcon className="w-8 h-8 text-ink-5 mx-auto mb-2" />
                 <p className="text-sm text-ink-3 mb-1">No debts tracked yet.</p>
@@ -90,14 +79,36 @@ export default function DebtsPage() {
                 </p>
               </div>
             ) : (
-              groups.map(g => (
-                <DebtPersonSection
-                  key={g.person.id}
-                  group={g}
-                  currency={currency}
-                  onDeletePerson={() => setConfirmDeletePerson(g.person)}
-                />
-              ))
+              <>
+                <p className="px-0.5 pt-2 text-[11px] font-semibold uppercase tracking-widest text-ink-3">
+                  By person
+                </p>
+
+                {active.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-line px-4 py-8 text-center">
+                    <p className="text-sm text-ink-3 mb-1">All settled up.</p>
+                    <p className="text-xs text-ink-4">Nobody owes you, and you owe nobody.</p>
+                  </div>
+                ) : active.map(section)}
+
+                {settled.length > 0 && (
+                  <>
+                    <button
+                      onClick={() => setShowSettled(v => !v)}
+                      aria-expanded={showSettled}
+                      className="flex w-full items-center justify-between rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-ink-2 hover:text-ink transition-colors"
+                    >
+                      <span>
+                        Settled up · {settled.length} {settled.length === 1 ? 'person' : 'people'}
+                      </span>
+                      <ChevronDownIcon
+                        className={`h-4 w-4 text-ink-3 transition-transform ${showSettled ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {showSettled && settled.map(section)}
+                  </>
+                )}
+              </>
             )}
           </div>
 

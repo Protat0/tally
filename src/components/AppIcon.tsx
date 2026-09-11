@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import {
   ArrowLeftRight, Banknote, BookOpen, Briefcase, Car, Coffee, Coins, CreditCard,
   Dumbbell, Gamepad2, Gift, Handshake, House, Landmark, Laptop, Lightbulb, Music,
@@ -6,7 +7,7 @@ import {
   UtensilsCrossed, Wallet, Zap,
   type LucideIcon, type LucideProps,
 } from 'lucide-react';
-import { resolveIconKey, type IconKey } from '@/lib/icons';
+import { resolveIconKey, logoOf, logoSrc, type IconKey, type LogoKey } from '@/lib/icons';
 
 // Record<IconKey, LucideIcon> makes the compiler insist every key has a
 // drawing: add a key to ICON_KEYS and forget it here, and the build fails.
@@ -49,8 +50,25 @@ const ICONS: Record<IconKey, LucideIcon> = {
   'shield-check': ShieldCheck,
 };
 
+// A brand's logo. The files are small and already sized, so they are served
+// as they are rather than through the image optimizer. Decorative, like the
+// icons: the wallet's name beside it is what gets announced.
+function LogoImage({ logo, className }: { logo: LogoKey; className: string }) {
+  return (
+    <Image
+      src={logoSrc(logo)}
+      alt=""
+      aria-hidden
+      width={96}
+      height={96}
+      unoptimized
+      className={`object-cover ${className}`}
+    />
+  );
+}
+
 interface AppIconProps extends Omit<LucideProps, 'ref'> {
-  /** An icon key, or an emoji saved before icons replaced them. */
+  /** An icon key, a brand logo ("logo:bdo"), or an emoji saved before icons replaced them. */
   icon: string;
   /** Drawn when `icon` is empty or not recognised. */
   fallback?: IconKey;
@@ -58,9 +76,12 @@ interface AppIconProps extends Omit<LucideProps, 'ref'> {
 
 // An icon that comes from data — a wallet, a category, an income source. It
 // is decorative: the name beside it is what a screen reader should announce.
-export default function AppIcon({ icon, fallback = 'shapes', ...rest }: AppIconProps) {
+// A logo keeps the glyph's size but not its color, and gets rounded corners.
+export default function AppIcon({ icon, fallback = 'shapes', className = '', ...rest }: AppIconProps) {
+  const logo = logoOf(icon);
+  if (logo) return <LogoImage logo={logo} className={`rounded-[25%] ${className}`} />;
   const Icon = ICONS[resolveIconKey(icon, fallback)];
-  return <Icon aria-hidden {...rest} />;
+  return <Icon aria-hidden className={className} {...rest} />;
 }
 
 type TileSize = 'sm' | 'md' | 'lg';
@@ -88,8 +109,16 @@ interface IconTileProps {
 }
 
 // The icon on its tinted square — how a category, wallet or sheet shows what
-// it is about.
+// it is about. A logo fills the whole tile on its own background instead.
 export function IconTile({ icon, fallback, size = 'md', tone = 'primary', className = '' }: IconTileProps) {
+  const logo = logoOf(icon);
+  if (logo) {
+    return (
+      <span className={`flex shrink-0 overflow-hidden border border-line ${TILE[size].box} ${className}`}>
+        <LogoImage logo={logo} className="h-full w-full" />
+      </span>
+    );
+  }
   return (
     <span className={`flex shrink-0 items-center justify-center border ${TILE[size].box} ${TONE[tone]} ${className}`}>
       <AppIcon icon={icon} fallback={fallback} className={TILE[size].glyph} />

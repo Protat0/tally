@@ -8,6 +8,7 @@ import {
   datesInCycle, daysInCycle, daysElapsedInCycle, rekeyBillTicks,
 } from '@/lib/cycle';
 import type { IconKey } from '@/lib/icons';
+import { netOf } from '@/lib/debtGroups';
 
 // round2 lives with the delta arithmetic it guards, and is re-exported here
 // because SplitPanel, SettleUpSheet and the expense form already import it
@@ -91,15 +92,6 @@ export interface DebtEntry {
   settleMoveId: string | null;   // shared by every entry in one settle-up batch
   expenseId: string | null;      // the expense that produced this row; null = standalone debt
   updatedAt: string | null;      // last edited; null = never
-}
-
-// Positive = they owe you. Caller decides which entries to include; pass only
-// open ones for a live balance.
-export function netOf(entries: DebtEntry[]): number {
-  return entries.reduce(
-    (s, e) => s + (e.direction === 'owed_to_me' ? e.amount : -e.amount),
-    0,
-  );
 }
 
 export interface Bill {

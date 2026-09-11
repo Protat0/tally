@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useApp } from './AppContext';
 import { ScrollLock, useAnyModalOpen } from './ModalLock';
 import { useSwipeToClose } from './useSwipeToClose';
+import AddDebtSheet from './AddDebtSheet';
 import {
   PlusIcon, XIcon, ReceiptIcon, BoltIcon, UsersIcon, ShieldIcon,
   WalletIcon, ArrowDownIcon, TrendingUpIcon,
@@ -15,8 +16,8 @@ import type { LucideIcon } from 'lucide-react';
 const HIDDEN = ['/auth', '/expenses/new'];
 
 // The action sheet's contents. `href` hands off to the page that owns the flow;
-// `opens` raises one of this component's own modals. Ordered by how often the
-// thing gets logged, not by where it lives in the nav.
+// `opens` raises a modal right here instead. Ordered by how often the thing
+// gets logged, not by where it lives in the nav.
 //
 // Every action wears the same teal: they are all things to tap, and green,
 // amber and red are kept for what the money is doing.
@@ -24,13 +25,13 @@ type Action = {
   label: string;
   Icon: LucideIcon;
   href?: string;
-  opens?: 'electric';
+  opens?: 'electric' | 'debt';
 };
 
 const ACTIONS: Action[] = [
   { label: 'Expense',        Icon: ReceiptIcon,    href: '/expenses/new' },
   { label: 'Electric usage', Icon: BoltIcon,       opens: 'electric' },
-  { label: 'Debt',           Icon: UsersIcon,      href: '/debts' },
+  { label: 'Add debt',       Icon: UsersIcon,      opens: 'debt' },
   { label: 'Money in / out', Icon: WalletIcon,     href: '/wallets' },
   { label: 'Instalment',     Icon: ArrowDownIcon,  href: '/instalments' },
   { label: 'Emergency fund', Icon: ShieldIcon,     href: '/emergency-fund' },
@@ -46,6 +47,7 @@ export default function GlobalFAB() {
 
   const [open, setOpen]         = useState(false);
   const [electric, setElectric] = useState(false);
+  const [addDebt, setAddDebt]   = useState(false);
   // Adding and removing appliance time ask for exactly the same two answers, so
   // they are one modal with a direction rather than two near-identical sheets.
   const [refunding, setRefunding] = useState(false);
@@ -137,7 +139,11 @@ export default function GlobalFAB() {
                 ) : (
                   <button
                     key={a.label}
-                    onClick={() => { setOpen(false); setElectric(true); }}
+                    onClick={() => {
+                      setOpen(false);
+                      if (a.opens === 'debt') setAddDebt(true);
+                      else setElectric(true);
+                    }}
                     className={cls}
                   >
                     {body}
@@ -270,6 +276,10 @@ export default function GlobalFAB() {
           </div>
         </div>
       )}
+
+      {/* Add debt — the same sheet the debts page opens, so a debt can be
+          logged from anywhere without leaving the page you are on. */}
+      {addDebt && <AddDebtSheet onClose={() => setAddDebt(false)} />}
     </>
   );
 }

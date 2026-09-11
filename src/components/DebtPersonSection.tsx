@@ -5,7 +5,7 @@ import { useApp, fmt, DebtEntry } from './AppContext';
 import DebtEntryRow from './DebtEntryRow';
 import SettleUpSheet from './SettleUpSheet';
 import { ScrollLock } from './ModalLock';
-import { TrashIcon } from './Icons';
+import { ChevronDownIcon, TrashIcon } from './Icons';
 import type { PersonGroup } from '@/app/debts/page';
 import PersonAvatar from './PersonAvatar';
 
@@ -19,6 +19,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
   const { setDebtEntrySettled, deleteDebtEntry, settleUpPerson, reverseSettleBatch,
           recordDebtPayment } = useApp();
   const { person, open, settled, net } = group;
+  const [expanded, setExpanded] = useState(false);
   const [showSettled, setShowSettled] = useState(false);
   const [settleOpen, setSettleOpen] = useState(false);
   const [settleEntry, setSettleEntry] = useState<DebtEntry | null>(null);
@@ -28,18 +29,36 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
   const amountTone = net > 0 ? 'text-growth-text' : net < 0 ? 'text-danger-text' : 'text-ink-4';
   // The sentence carries the direction, so the amount never needs a sign.
   const title = net > 0 ? `${person.name} owes you` : net < 0 ? `You owe ${person.name}` : person.name;
+  // What the fold hides, so a closed card still says how much sits behind it.
+  const summary = open.length > 0
+    ? `${open.length} open`
+    : settled.length > 0 ? `${settled.length} settled` : '';
 
   return (
     <div className="rounded-2xl bg-surface border border-line p-4">
-      {/* Header — who, which way, how much, and the one thing to do about it */}
+      {/* Header — who, which way, how much, and the one thing to do about it.
+          The entries behind the balance stay folded away until asked for. */}
       <div className="flex items-center gap-[13px]">
-        <PersonAvatar name={person.name} tone={avatarTone} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold leading-tight">{title}</p>
-          <p className={`mt-1 text-[17px] font-bold leading-tight tabular-nums ${amountTone}`}>
-            {net === 0 ? 'Settled up' : fmt(Math.abs(net), currency)}
-          </p>
-        </div>
+        <button
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-center gap-[13px] text-left"
+        >
+          <PersonAvatar name={person.name} tone={avatarTone} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-semibold leading-tight">{title}</p>
+            <p className="mt-1 flex min-w-0 items-baseline gap-1.5 leading-tight">
+              <span className={`shrink-0 text-[17px] font-bold tabular-nums ${amountTone}`}>
+                {net === 0 ? 'Settled up' : fmt(Math.abs(net), currency)}
+              </span>
+              {summary && <span className="truncate text-xs text-ink-4">· {summary}</span>}
+            </p>
+          </div>
+          <ChevronDownIcon
+            aria-hidden
+            className={`h-4 w-4 shrink-0 text-ink-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+        </button>
         {open.length > 0 && (
           <button
             onClick={() => setSettleOpen(true)}
@@ -48,43 +67,48 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
             Settle up
           </button>
         )}
-        <button
-          onClick={onDeletePerson}
-          title={`Delete ${person.name}`}
-          aria-label={`Delete ${person.name}`}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-4 hover:bg-raised hover:text-danger-text transition-colors"
-        >
-          <TrashIcon className="w-4 h-4" />
-        </button>
       </div>
 
-      {/* Open entries */}
-      {open.length === 0 ? (
-        <p className="mt-3 text-xs text-ink-4">Nothing outstanding.</p>
-      ) : (
-        <div className="mt-3 space-y-2">
-          {open.map(e => (
-            <DebtEntryRow
-              key={e.id}
-              entry={e}
-              currency={currency}
-              onToggleSettled={() => setSettleEntry(e)}
-              onDelete={() => deleteDebtEntry(e.id)}
-            />
-          ))}
-        </div>
-      )}
+      {expanded && (
+        <>
+          {/* Open entries */}
+          {open.length === 0 ? (
+            <p className="mt-3 text-xs text-ink-4">Nothing outstanding.</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {open.map(e => (
+                <DebtEntryRow
+                  key={e.id}
+                  entry={e}
+                  currency={currency}
+                  onToggleSettled={() => setSettleEntry(e)}
+                  onDelete={() => deleteDebtEntry(e.id)}
+                />
+              ))}
+            </div>
+          )}
 
-      {/* Settled history */}
-      {settled.length > 0 && (
-        <div className="mt-3 border-t border-line pt-3">
-          <button
-            onClick={() => setShowSettled(v => !v)}
-            className="text-xs text-ink-3 hover:text-ink-2 transition-colors"
-          >
-            {showSettled ? '▴ Hide' : '▾ Show'} {settled.length} settled
-          </button>
-          {showSettled && (
+          {/* Settled history on the left, removing the person on the right:
+              both rarely needed, so they share one quiet row. */}
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
+            {settled.length > 0 ? (
+              <button
+                onClick={() => setShowSettled(v => !v)}
+                className="text-xs text-ink-3 hover:text-ink-2 transition-colors"
+              >
+                {showSettled ? '▴ Hide' : '▾ Show'} {settled.length} settled
+              </button>
+            ) : <span />}
+            <button
+              onClick={onDeletePerson}
+              className="flex items-center gap-1.5 text-xs text-ink-4 hover:text-danger-text transition-colors"
+            >
+              <TrashIcon className="h-3.5 w-3.5" />
+              Delete {person.name}
+            </button>
+          </div>
+
+          {showSettled && settled.length > 0 && (
             <div className="mt-2 space-y-2">
               {/* A row settled through a wallet was netted with the rest of its
                   batch into one movement that belongs to no single row, so it
@@ -113,7 +137,7 @@ export default function DebtPersonSection({ group, currency, onDeletePerson }: P
               ))}
             </div>
           )}
-        </div>
+        </>
       )}
 
       {settleOpen && (
