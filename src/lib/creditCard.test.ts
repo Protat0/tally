@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  addDays, closeDateIn, dueDateAfter, minimumDue, buildStatements, type CardTerms,
+  addDays, closeDateIn, dueDateAfter, minimumDue, buildStatements,
+  summarizeCard, chargesInRange, parseCardForm,
+  type CardTerms, type CardFormFields,
 } from './creditCard.ts';
 
 const terms = (over: Partial<CardTerms> = {}): CardTerms => ({
@@ -127,4 +129,110 @@ test('a due date after the next close posts its charges on the first close on or
   const paid = buildStatements(t, [tx('2026-02-10', 2000)], [tx('2026-03-29', 2000)], '2026-04-30');
   assert.equal(paid[3].charges.interest, 0);
   assert.equal(paid[3].balance, 0);
+});
+
+test('owed now is the last statement, less payments since, plus purchases since', () => {
+  const t = terms({ openingBalance: 2000 });
+  const s = summarizeCard(t, [tx('2026-01-15', 500)], [tx('2026-01-18', 300)], '2026-01-20');
+  assert.equal(s.last.closesOn, '2026-01-05');
+  assert.equal(s.owedNow, 2200);
+  assert.equal(s.unbilled, 500);
+  assert.equal(s.paidSinceClose, 300);
+  assert.equal(s.availableCredit, 47800);
+});
+
+test('available credit never goes below zero', () => {
+  const s = summarizeCard(terms({ creditLimit: 1000, openingBalance: 1500 }), [], [], '2026-01-20');
+  assert.equal(s.availableCredit, 0);
+});
+
+test('a statement with nothing owed has no status to chase', () => {
+  const s = summarizeCard(terms(), [], [], '2026-01-20');
+  assert.deepEqual(s.status, { kind: 'none' });
+  assert.equal(s.remind, false);
+});
+
+test('a statement is due until paid, with the minimum still to pay', () => {
+  const t = terms({ openingBalance: 2000 });
+  assert.deepEqual(summarizeCard(t, [], [tx('2026-01-12', 300)], '2026-01-20').status, {
+    kind: 'due', unpaid: 1700, dueOn: '2026-01-25', minimumLeft: 200, overdue: false,
+  });
+  assert.deepEqual(summarizeCard(t, [], [tx('2026-01-12', 2000)], '2026-01-20').status, { kind: 'paid' });
+});
+
+test('a reminder starts 7 days before the due date and stays once overdue', () => {
+  const t = terms({ openingBalance: 2000 });
+  assert.equal(summarizeCard(t, [], [], '2026-01-17').remind, false);
+  assert.equal(summarizeCard(t, [], [], '2026-01-18').remind, true);
+  const late = summarizeCard(t, [], [], '2026-01-26');
+  assert.equal(late.remind, true);
+  assert.equal(late.status.kind === 'due' && late.status.overdue, true);
+});
+
+// A purchase or payment on the closing day is already inside that statement,
+// so it must not count again as activity since the statement closed.
+test('transactions dated on the closing day are not counted as since', () => {
+  const s = summarizeCard(terms(), [tx('2026-03-05', 500)], [tx('2026-03-05', 300)], '2026-03-10');
+  assert.equal(s.last.closesOn, '2026-03-05');
+  assert.equal(s.unbilled, 0);
+  assert.equal(s.paidSinceClose, 0);
+  assert.equal(s.owedNow, 200);
+});
+
+test('charges count in the range their statement closes in', () => {
+  const { statements } = summarizeCard(terms(), [tx('2026-01-20', 3000)], [tx('2026-02-20', 1000)], '2026-03-10');
+  assert.equal(chargesInRange(statements, '2026-03-01', '2026-04-01'), 60);
+  assert.equal(chargesInRange(statements, '2026-02-01', '2026-03-01'), 0);
+  assert.equal(chargesInRange(statements, '2026-03-05', '2026-03-06'), 60);
+  assert.equal(chargesInRange(statements, '2026-02-06', '2026-03-05'), 0);
+});
+
+const fields = (over: Partial<CardFormFields> = {}): CardFormFields => ({
+  name: 'BPI Gold', creditLimit: '50000', openingBalance: '',
+  statementDay: '5', dueDay: '25',
+  monthlyInterestRate: '3', minPaymentPercent: '3', minPaymentFloor: '',
+  lateFee: '', annualFee: '', annualFeeMonth: '',
+  ...over,
+});
+
+test('a card form with only the required fields reads blanks as zero or none', () => {
+  assert.deepEqual(parseCardForm(fields()), {
+    ok: true,
+    values: {
+      name: 'BPI Gold', creditLimit: 50000, openingBalance: 0,
+      statementDay: 5, dueDay: 25,
+      monthlyInterestRate: 3, minPaymentPercent: 3, minPaymentFloor: 0,
+      lateFee: null, annualFee: null, annualFeeMonth: null,
+    },
+  });
+});
+
+test('optional fees are read when given', () => {
+  const r = parseCardForm(fields({ lateFee: '850', annualFee: '3000', annualFeeMonth: '2' }));
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    assert.equal(r.values.lateFee, 850);
+    assert.equal(r.values.annualFee, 3000);
+    assert.equal(r.values.annualFeeMonth, 2);
+  }
+});
+
+test('a month without an annual fee is ignored', () => {
+  const r = parseCardForm(fields({ annualFeeMonth: '6' }));
+  assert.equal(r.ok && r.values.annualFeeMonth, null);
+});
+
+test('a card form refuses what a card cannot have', () => {
+  const bad: Partial<CardFormFields>[] = [
+    { name: '  ' },
+    { creditLimit: '0' }, { creditLimit: '' }, { creditLimit: 'abc' },
+    { openingBalance: '-1' },
+    { statementDay: '0' }, { statementDay: '32' }, { statementDay: '2.5' }, { dueDay: '' },
+    { monthlyInterestRate: '' }, { monthlyInterestRate: '101' },
+    { minPaymentPercent: '-3' }, { minPaymentFloor: '-1' },
+    { lateFee: '-5' }, { annualFee: '3000' }, { annualFee: '3000', annualFeeMonth: '13' },
+  ];
+  for (const b of bad) {
+    assert.equal(parseCardForm(fields(b)).ok, false, JSON.stringify(b));
+  }
 });
