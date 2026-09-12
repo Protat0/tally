@@ -9,7 +9,7 @@ import { visibleCategories } from '@/lib/categories';
 import AppIcon from '@/components/AppIcon';
 
 function ExpenseForm() {
-  const { wallets, addExpense, settings } = useApp();
+  const { wallets, addExpense, settings, creditCards, cardSummaries } = useApp();
   // Built-in categories plus any user-defined custom ones, minus any the user
   // has removed on the Budget page — the single shared list, not a local copy.
   const categories = visibleCategories(settings.customCategories, settings.hiddenCategories);
@@ -26,17 +26,27 @@ function ExpenseForm() {
   const cashId = settings.cashWalletId;
   const defaultWalletId = cashId && wallets.some(w => w.id === cashId) ? cashId : (wallets[0]?.id ?? '');
   const [walletId, setWalletId] = useState(presetWalletId || defaultWalletId);
+  // Paid from a wallet or a card, so choosing one clears the other.
+  const [cardId,   setCardId]   = useState('');
   const [note,     setNote]     = useState('');
   const [split,     setSplit]     = useState<SplitResult | null>(null);
+
+  // Archived cards take no new purchases.
+  const activeCards = creditCards.filter(c => !c.archivedAt);
+  const selectedCard = activeCards.find(c => c.id === cardId) ?? null;
+  const typedAmount = parseFloat(input) || 0;
+  // Banks do approve charges over the limit, so this warns rather than blocks.
+  const overLimit = Boolean(selectedCard)
+    && typedAmount > (cardSummaries[cardId]?.availableCredit ?? 0);
 
   const owedTotal = split?.mode === 'wallet'
     ? split.owedToMe.reduce((s, o) => s + o.amount, 0)
     : 0;
-  const myShare = round2((parseFloat(input) || 0) - owedTotal);
-  const needsWallet = !split || split.mode === 'wallet';
+  const myShare = round2(typedAmount - owedTotal);
+  const needsFunding = !split || split.mode === 'wallet';
 
-  const canSubmit = parseFloat(input) > 0 && category !== null
-    && (!needsWallet || walletId !== '')
+  const canSubmit = typedAmount > 0 && category !== null
+    && (!needsFunding || walletId !== '' || cardId !== '')
     // Person mode books a debt against the payer instead of moving a wallet
     // balance. With no payer there is no debt to book, and the expense would
     // land with neither a funding wallet nor a debt row.
@@ -49,10 +59,11 @@ function ExpenseForm() {
   const handleSubmit = () => {
     if (!canSubmit || !category) return;
     addExpense({
-      amount: parseFloat(input),
+      amount: typedAmount,
       category,
       note: note.trim(),
-      walletId: split?.mode === 'person' ? null : walletId,
+      walletId: split?.mode === 'person' ? null : (walletId || null),
+      cardId: split?.mode === 'person' ? null : (cardId || null),
       paidByPersonId: split?.mode === 'person' ? split.paidByPersonId : null,
       // A `+ Name` row starts at 0 and stays there until the user types an
       // amount. Booking that as a debt writes a ₱0 entry and a ₱0 money_move.
@@ -102,7 +113,7 @@ function ExpenseForm() {
 
         {/* ── Wallet strip — always visible ── */}
         <div className="px-5 pb-2 shrink-0">
-          {wallets.length === 0 ? (
+          {wallets.length === 0 && activeCards.length === 0 ? (
             <p className="text-xs text-ink-3 text-center py-2">
               No wallets yet — add one in Wallets.
             </p>
@@ -117,7 +128,7 @@ function ExpenseForm() {
                   return (
                     <button
                       key={w.id}
-                      onClick={() => setWalletId(w.id)}
+                      onClick={() => { setWalletId(w.id); setCardId(''); }}
                       className={`flex items-center gap-2 rounded-full shrink-0 pl-2.5 pr-3.5 py-2 border transition-colors ${
                         selected
                           ? 'border-primary bg-primary-tint'
@@ -136,7 +147,41 @@ function ExpenseForm() {
                     </button>
                   );
                 })}
+
+                {/* Cards come after wallets in the same strip, showing what is
+                    left to spend rather than a balance. */}
+                {activeCards.map(c => {
+                  const selected = cardId === c.id && split?.mode !== 'person';
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => { setCardId(c.id); setWalletId(''); }}
+                      className={`flex items-center gap-2 rounded-full shrink-0 pl-2.5 pr-3.5 py-2 border transition-colors ${
+                        selected
+                          ? 'border-primary bg-primary-tint'
+                          : 'border-line bg-raised'
+                      }`}
+                    >
+                      <AppIcon icon={c.icon} fallback="credit-card" className="h-4 w-4 text-primary-text" />
+                      <div className="text-left">
+                        <p className={`text-xs font-medium leading-tight ${selected ? 'text-primary-hover' : 'text-ink'}`}>
+                          {c.name}
+                        </p>
+                        <p className="text-[10px] text-ink-2 leading-tight">
+                          {fmt(cardSummaries[c.id]?.availableCredit ?? 0, settings.currency)} left
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
+
+              {overLimit && (
+                <p className="mt-2 text-[11px] text-warning-text">
+                  That is more than {selectedCard?.name} has left. Banks often allow it
+                  — the card would simply go over its limit.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -198,8 +243,8 @@ function ExpenseForm() {
               : split?.mode === 'person'
                 ? 'Log · someone else paid'
                 : split
-                  ? `Log · ${fmt(myShare, settings.currency)} of ${fmt(parseFloat(input), settings.currency)}`
-                  : `Log · ${selectedWallet ? selectedWallet.name : ''}`}
+                  ? `Log · ${fmt(myShare, settings.currency)} of ${fmt(typedAmount, settings.currency)}`
+                  : `Log · ${selectedWallet?.name ?? selectedCard?.name ?? ''}`}
           </button>
         </div>
       </div>
