@@ -12,7 +12,7 @@ export const shortDay = (ymd: string): string =>
 /** The one line a card shows about its last statement. */
 export function cardStatusText(status: CardStatus, currency: string): string {
   if (status.kind === 'none') return 'No statement due';
-  if (status.kind === 'paid') return 'Paid';
+  if (status.kind === 'paid') return 'Statement paid';
   const when = status.overdue ? `was due ${shortDay(status.dueOn)}` : `due ${shortDay(status.dueOn)}`;
   return `${fmt(status.unpaid, currency)} ${when} · min ${fmt(status.minimumLeft, currency)}`;
 }

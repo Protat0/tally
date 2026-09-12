@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useApp, fmt, type CreditCard } from './AppContext';
+import { useApp, fmt, round2, type CreditCard } from './AppContext';
 import BottomSheet from './BottomSheet';
 import { IconTile } from './AppIcon';
 import { PencilIcon, TrashIcon } from './Icons';
@@ -31,9 +31,9 @@ export default function CreditCardSheet({ card, summary, currency, onClose, onPa
 
   // A purchase charged the card the whole amount paid at the till: your share
   // plus whatever others owe you back on it.
-  const chargedFor = (expenseId: string, amount: number) => amount + debtEntries
+  const chargedFor = (expenseId: string, amount: number) => round2(amount + debtEntries
     .filter(d => d.expenseId === expenseId && d.direction === 'owed_to_me')
-    .reduce((s, d) => s + d.amount, 0);
+    .reduce((s, d) => s + d.amount, 0));
 
   const recent = [
     ...expenses.filter(e => e.cardId === card.id).map(e => ({

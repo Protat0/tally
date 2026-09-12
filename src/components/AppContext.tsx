@@ -287,7 +287,7 @@ interface AppContextValue extends Computed {
     walletId: string | null;                          // null = a card or a person paid
     cardId?: string | null;                           // set instead of walletId when a card paid
     paidByPersonId?: string | null;                   // set when neither paid
-    owedToMe?: { personId: string; amount: number }[];// set when a wallet paid
+    owedToMe?: { personId: string; amount: number }[];// set when a wallet or a card paid
     /** The new expense's id, or null when nothing was written. */
   }) => Promise<string | null>;
   deleteExpense: (id: string) => Promise<boolean>;
@@ -731,7 +731,12 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       const payments: CardTxn[] = moneyMoves
         .filter(m => m.kind === 'card_payment' && m.cardId === card.id)
         .map(m => ({ date: isoDay(new Date(m.date)), amount: m.amount }));
-      out[card.id] = summarizeCard(termsOf(card), purchases, payments, today);
+      // An archived card's statements stop the day it was archived. Its past
+      // charges really happened and still count; what must not happen is a card
+      // that is gone from every list quietly accruing interest for ever, on
+      // rows nobody can pay off or delete.
+      const asOf = card.archivedAt ? isoDay(new Date(card.archivedAt)) : today;
+      out[card.id] = summarizeCard(termsOf(card), purchases, payments, asOf);
     }
     return out;
   }, [creditCards, expenses, moneyMoves, debtEntries]);

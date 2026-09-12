@@ -79,7 +79,7 @@ export default function EditEntrySheet({ source, onClose }: Props) {
     : 0;
   const myShare = round2(typed - owedTotal);
   const isTransfer = Boolean(move && move.toWalletId);
-  const needsWallet = source.kind !== 'expense' || !split || split.mode === 'wallet';
+  const needsFunding = source.kind !== 'expense' || !split || split.mode === 'wallet';
 
   // What a card owed when it was added already covers anything before that day,
   // so a purchase dated earlier would be counted twice. updateExpense refuses
@@ -89,7 +89,7 @@ export default function EditEntrySheet({ source, onClose }: Props) {
 
   const canSave =
     typed > 0
-    && (!needsWallet || walletId !== '' || cardId !== '')
+    && (!needsFunding || walletId !== '' || cardId !== '')
     && !beforeCard
     && (source.kind !== 'expense' || split?.mode !== 'person' || split.paidByPersonId !== null)
     // A share of zero would mean the expense should not exist; updateExpense
@@ -194,7 +194,7 @@ export default function EditEntrySheet({ source, onClose }: Props) {
       )}
 
       {/* ── Where it was paid from ── */}
-      {needsWallet && (
+      {needsFunding && (
         <div className="mb-4">
           <p className={label}>
             {source.kind === 'expense' ? 'Paid from' : isTransfer ? 'From wallet' : 'Wallet'}
