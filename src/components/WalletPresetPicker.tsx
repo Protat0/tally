@@ -14,12 +14,17 @@ interface Props {
   /** The preset the wallet's name currently matches, if any. */
   selected: WalletPreset | null;
   onPick: (preset: WalletPreset) => void;
+  /** Which groups to offer. All of them by default. */
+  groups?: typeof WALLET_PRESET_GROUPS;
+  title?: string;
 }
 
 // Quick pick for a new wallet: one row in the form, and every bank and
 // e-wallet, logo first, in a sheet of its own — a native select can't show
 // pictures in its options.
-export default function WalletPresetPicker({ selected, onPick }: Props) {
+export default function WalletPresetPicker({
+  selected, onPick, groups = WALLET_PRESET_GROUPS, title = 'Bank or e-wallet',
+}: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -42,8 +47,8 @@ export default function WalletPresetPicker({ selected, onPick }: Props) {
 
       {open && (
         <NestedSheet onClose={() => setOpen(false)}>
-          <p className="text-lg font-semibold text-ink">Bank or e-wallet</p>
-          {WALLET_PRESET_GROUPS.map(group => (
+          <p className="text-lg font-semibold text-ink">{title}</p>
+          {groups.map(group => (
             <section key={group.label}>
               <p className="mb-1 mt-4 px-2 text-[11px] font-semibold uppercase tracking-widest text-ink-3">
                 {group.label}

@@ -12,6 +12,7 @@ import { ALL_WALLET_PRESETS } from '@/lib/walletPresets';
 import { PlusIcon, WalletIcon, CogIcon } from '@/components/Icons';
 import AppIcon from '@/components/AppIcon';
 import WalletPresetPicker, { presetIcon } from '@/components/WalletPresetPicker';
+import CreditCardForm from '@/components/CreditCardForm';
 import { logoOf, type IconKey } from '@/lib/icons';
 
 const ICONS: IconKey[] = ['credit-card', 'landmark', 'banknote', 'piggy-bank', 'coins', 'smartphone', 'wallet', 'briefcase'];
@@ -20,6 +21,7 @@ export default function WalletsPage() {
   const { wallets, addWallet, deleteWallet, settings } = useApp();
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
+  const [addKind, setAddKind] = useState<'wallet' | 'card'>('wallet');
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState<string>('credit-card');
   const [newBalance, setNewBalance] = useState('');
@@ -34,10 +36,13 @@ export default function WalletsPage() {
   // already chosen before the name was edited, so it isn't lost silently.
   const logoChoice = preset?.logo ? presetIcon(preset) : logoOf(newIcon) ? newIcon : null;
 
+  // The sheet reopens on Wallet, whichever kind was added last.
+  const closeAdd = () => { setShowAdd(false); setAddKind('wallet'); };
+
   const handleAdd = () => {
     if (!newName.trim()) return;
     addWallet({ name: newName.trim(), icon: newIcon, balance: parseFloat(newBalance) || 0 });
-    setShowAdd(false);
+    closeAdd();
     setNewName('');
     setNewBalance('');
     setNewIcon('credit-card');
@@ -114,9 +119,30 @@ export default function WalletsPage() {
 
       {/* Add Wallet Sheet */}
       {showAdd && (
-        <BottomSheet onClose={() => setShowAdd(false)}>
-          <p className="mb-5 text-center font-semibold text-ink text-lg">New Wallet</p>
+        <BottomSheet onClose={closeAdd}>
+          <p className="mb-4 text-center font-semibold text-ink text-lg">
+            {addKind === 'card' ? 'New Credit Card' : 'New Wallet'}
+          </p>
 
+          {/* Two different things, one sheet: a card is not a wallet, but it is
+              added from the same place. */}
+          <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-canvas p-1">
+            {(['wallet', 'card'] as const).map(k => (
+              <button
+                key={k}
+                onClick={() => setAddKind(k)}
+                aria-pressed={addKind === k}
+                className={`rounded-lg py-2 text-sm font-medium transition-colors ${
+                  addKind === k ? 'bg-surface text-ink elev-knob' : 'text-ink-3 hover:text-ink-2'
+                }`}
+              >
+                {k === 'wallet' ? 'Wallet' : 'Credit card'}
+              </button>
+            ))}
+          </div>
+
+          {addKind === 'card' ? <CreditCardForm onDone={closeAdd} /> : (
+            <>
             <p className="mb-2 text-xs text-ink-3">Quick pick</p>
             <div className="mb-4">
               <WalletPresetPicker
@@ -177,6 +203,8 @@ export default function WalletsPage() {
             >
               Add Wallet
             </button>
+            </>
+          )}
         </BottomSheet>
       )}
 
