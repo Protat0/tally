@@ -10,6 +10,9 @@ import {
 import type { IconKey } from '@/lib/icons';
 import { netOf } from '@/lib/debtGroups';
 import { fundBalance, canWithdraw, canDeleteEntry, type FundDirection } from '@/lib/emergencyFund';
+import {
+  summarizeCard, chargesInRange, type CardSummary, type CardTerms, type CardTxn,
+} from '@/lib/creditCard';
 
 // round2 lives with the delta arithmetic it guards, and is re-exported here
 // because SplitPanel, SettleUpSheet and the expense form already import it
@@ -269,6 +272,10 @@ interface AppContextValue extends Computed {
   instalmentNewPurchaseLock: boolean;
   emergencyFund: EmergencyFund;
   creditCards: CreditCard[];
+  /** Statements and figures per card id, calculated from its rows. */
+  cardSummaries: Record<string, CardSummary>;
+  /** What is owed across active cards. A card in credit counts as zero. */
+  owedOnCards: number;
   dataLoading: boolean;
   addWallet: (w: Omit<Wallet, 'id'>) => Promise<void>;
   updateWallet: (id: string, updates: Partial<Wallet>) => Promise<void>;
@@ -277,8 +284,9 @@ interface AppContextValue extends Computed {
     amount: number;                                   // what the payer paid out
     category: Category;
     note: string;
-    walletId: string | null;                          // null = a person paid
-    paidByPersonId?: string | null;                   // set when walletId is null
+    walletId: string | null;                          // null = a card or a person paid
+    cardId?: string | null;                           // set instead of walletId when a card paid
+    paidByPersonId?: string | null;                   // set when neither paid
     owedToMe?: { personId: string; amount: number }[];// set when a wallet paid
     /** The new expense's id, or null when nothing was written. */
   }) => Promise<string | null>;
@@ -287,7 +295,7 @@ interface AppContextValue extends Computed {
   // the new share is not a positive amount.
   updateExpense: (id: string, next: {
     amount: number; category: Category; note: string;
-    walletId: string | null; date?: string;
+    walletId: string | null; cardId?: string | null; date?: string;
     paidByPersonId?: string | null;
     owedToMe?: { personId: string; amount: number }[];
   }) => Promise<boolean>;
@@ -498,6 +506,22 @@ const toDBCreditCard = (c: Partial<CreditCardInput>): Row => {
   if ('openingBalance'      in c) m.opening_balance       = c.openingBalance;
   return m;
 };
+
+// A card's terms in the shape the statement maths reads. The day it was added
+// is a local calendar day, like every date creditCard.ts works with.
+const termsOf = (c: CreditCard): CardTerms => ({
+  creditLimit: c.creditLimit,
+  statementDay: c.statementDay,
+  dueDay: c.dueDay,
+  monthlyInterestRate: c.monthlyInterestRate,
+  minPaymentPercent: c.minPaymentPercent,
+  minPaymentFloor: c.minPaymentFloor,
+  lateFee: c.lateFee,
+  annualFee: c.annualFee,
+  annualFeeMonth: c.annualFeeMonth,
+  openingBalance: c.openingBalance,
+  addedOn: isoDay(new Date(c.createdAt)),
+});
 const fromDBBill       = (r: Row): Bill       => ({
   id: r.id, name: r.name, amount: Number(r.amount),
   dueDay: r.due_day ?? null,
@@ -687,6 +711,38 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('settings').update({ cash_wallet_id: data.id }).eq('user_id', uid);
   }
 
+  // ── Credit cards ─────────────────────────────────────────────────────────
+  // Rebuilt from each card's terms and its rows; nothing about a statement is
+  // stored. A purchase charged the card the whole amount paid at the till —
+  // your share plus what others owe you back — exactly as a wallet-funded split
+  // takes the whole amount out of the wallet.
+  const cardSummaries = useMemo<Record<string, CardSummary>>(() => {
+    const today = isoDay(new Date());
+    const out: Record<string, CardSummary> = {};
+    for (const card of creditCards) {
+      const purchases: CardTxn[] = expenses
+        .filter(e => e.cardId === card.id)
+        .map(e => ({
+          date: isoDay(new Date(e.date)),
+          amount: round2(e.amount + debtEntries
+            .filter(d => d.expenseId === e.id && d.direction === 'owed_to_me')
+            .reduce((s, d) => s + d.amount, 0)),
+        }));
+      const payments: CardTxn[] = moneyMoves
+        .filter(m => m.kind === 'card_payment' && m.cardId === card.id)
+        .map(m => ({ date: isoDay(new Date(m.date)), amount: m.amount }));
+      out[card.id] = summarizeCard(termsOf(card), purchases, payments, today);
+    }
+    return out;
+  }, [creditCards, expenses, moneyMoves, debtEntries]);
+
+  // A card in credit does not cancel out another card's debt, so only cards
+  // that owe are counted. Archived cards are out of every total.
+  const owedOnCards = useMemo(() => round2(creditCards
+    .filter(c => !c.archivedAt)
+    .reduce((s, c) => s + Math.max(0, cardSummaries[c.id]?.owedNow ?? 0), 0)),
+  [creditCards, cardSummaries]);
+
   // ── Computed ─────────────────────────────────────────────────────────────
   const computed = useMemo<Computed>(() => {
     const today = new Date();
@@ -704,7 +760,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const feesThisMonth = moneyMoves
       .filter(mm => inCycle(mm.date))
       .reduce((s, mm) => s + mm.fee, 0);
-    const totalSpentThisMonth = monthExpenses.reduce((s, e) => s + e.amount, 0) + feesThisMonth;
+    // Card interest and fees are money gone too. They count in the cycle their
+    // statement closes in, as bank fees do. An archived card's past charges
+    // still happened, so every card counts here.
+    const { start: cycleStart, end: cycleEnd } = cycleRange(currentCycle, startDay);
+    const cardChargesThisMonth = Object.values(cardSummaries).reduce(
+      (s, c) => s + chargesInRange(c.statements, isoDay(cycleStart), isoDay(cycleEnd)), 0,
+    );
+    const totalSpentThisMonth = monthExpenses.reduce((s, e) => s + e.amount, 0)
+      + feesThisMonth + cardChargesThisMonth;
     // Actual money received this month. Kept separate from settings.monthlyIncome
     // (the planned figure) — no budget formula below reads this.
     const receivedThisMonth = moneyMoves
@@ -782,7 +846,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       instalmentDebtFreeDate: pending.length > 0 ? pending[pending.length - 1].month : null,
       currentCycle,
     };
-  }, [wallets, expenses, moneyMoves, settings, instalmentSchedule]);
+  }, [wallets, expenses, moneyMoves, settings, instalmentSchedule, cardSummaries]);
 
   // Open entries only — settled debts are history, not balance.
   //
@@ -845,14 +909,23 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const addExpense = async (e: {
     amount: number; category: Category; note: string;
     walletId: string | null;
+    cardId?: string | null;
     paidByPersonId?: string | null;
     owedToMe?: { personId: string; amount: number }[];
     // Returns the new expense's id so a caller that has to remember the
     // expense it caused — a bill being ticked paid — can undo it later.
   }): Promise<string | null> => {
     if (!userId) return null;
-    const owed = e.walletId ? (e.owedToMe ?? []) : [];
-    const myShare = round2(e.walletId
+    const cardId = e.cardId ?? null;
+    // Paid from a wallet or a card, never both, and an archived card takes no
+    // new purchases.
+    if (e.walletId && cardId) return null;
+    if (cardId && !creditCards.some(c => c.id === cardId && !c.archivedAt)) return null;
+
+    // Either way YOU paid the whole amount, so others can owe you their share.
+    const paidByMe = Boolean(e.walletId || cardId);
+    const owed = paidByMe ? (e.owedToMe ?? []) : [];
+    const myShare = round2(paidByMe
       ? e.amount - owed.reduce((s, o) => s + o.amount, 0)
       : e.amount);
 
@@ -875,7 +948,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     let expenseId: string | null = null;
     if (myShare > 0) {
       const { data } = await supabase.from('expenses').insert({
-        user_id: userId, wallet_id: e.walletId, amount: myShare,
+        user_id: userId, wallet_id: e.walletId, card_id: cardId, amount: myShare,
         category: e.category, note: e.note, date: now,
       }).select().single();
 
@@ -891,7 +964,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
     // deferBalance: each of these writes its own money_move but leaves the
     // balance to the single commit below.
-    if (e.walletId) {
+    if (paidByMe) {
       for (const o of owed) {
         await addDebtEntry({
           personId: o.personId, direction: 'owed_to_me',
@@ -1012,6 +1085,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     next: {
       amount: number; category: Category; note: string;
       walletId: string | null;
+      cardId?: string | null;
       date?: string;
       paidByPersonId?: string | null;
       owedToMe?: { personId: string; amount: number }[];
@@ -1027,8 +1101,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // makes. The caller reverses the settle-up first.
     if (linked.some(d => d.settleMoveId)) return false;
 
-    const owed = next.walletId ? (next.owedToMe ?? []) : [];
-    const myShare = round2(next.walletId
+    const cardId = next.cardId ?? null;
+    if (next.walletId && cardId) return false;
+    const card = cardId ? creditCards.find(c => c.id === cardId) : undefined;
+    // An archived card keeps the purchases it has; it takes no new ones.
+    if (cardId && (!card || (card.archivedAt && cardId !== found.cardId))) return false;
+
+    const paidByMe = Boolean(next.walletId || cardId);
+    const owed = paidByMe ? (next.owedToMe ?? []) : [];
+    const myShare = round2(paidByMe
       ? next.amount - owed.reduce((sum, o) => sum + o.amount, 0)
       : next.amount);
 
@@ -1039,6 +1120,9 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     if (myShare <= 0) return false;
 
     const date = next.date ?? found.date;
+    // What was owed when the card was added already covers anything before it,
+    // so a purchase dated earlier would be counted twice.
+    if (card && isoDay(new Date(date)) < isoDay(new Date(card.createdAt))) return false;
     const editedAt = new Date().toISOString();
 
     // What the row does to wallets today, and what it will do once saved. Only
@@ -1061,13 +1145,13 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // so returning leaves the expense exactly as it was.
     const { error: writeFailed } = await supabase.from('expenses').update({
       amount: myShare, category: next.category, note: next.note,
-      wallet_id: next.walletId, date, updated_at: editedAt,
+      wallet_id: next.walletId, card_id: cardId, date, updated_at: editedAt,
     }).eq('id', id);
     if (writeFailed) return false;
 
     setExpenses(prev => prev.map(e => e.id === id ? {
       ...e, amount: myShare, category: next.category, note: next.note,
-      walletId: next.walletId, date, updatedAt: editedAt,
+      walletId: next.walletId, cardId, date, updatedAt: editedAt,
     } : e));
 
     // Now the split is rebuilt wholesale. Deleting before inserting leaves it
@@ -1084,7 +1168,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
     // Then the replacements, dated to the new date so a split never drifts
     // away from its parent.
-    if (next.walletId) {
+    if (paidByMe) {
       for (const o of owed) {
         await addDebtEntry({
           personId: o.personId, direction: 'owed_to_me',
@@ -2130,7 +2214,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       addInstalmentPayment, updateInstalmentPayment, deleteInstalmentPayment,
       setInstalmentNewPurchaseLock,
       recordEmergencyFundEntry, deleteEmergencyFundEntry,
-      creditCards, addCreditCard, updateCreditCard, archiveCreditCard, payCreditCard,
+      creditCards, cardSummaries, owedOnCards,
+      addCreditCard, updateCreditCard, archiveCreditCard, payCreditCard,
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
       toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, markBillPaid, unmarkBillPaid,
       updateBill,
