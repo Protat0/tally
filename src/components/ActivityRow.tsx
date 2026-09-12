@@ -21,7 +21,13 @@ export type RowSource =
   | { kind: 'debt'; entryId: string }
   | { kind: 'settle'; settleMoveId: string }
   // A movement into or out of the emergency fund, owned by its fund entry.
-  | { kind: 'fund'; entryId: string };
+  | { kind: 'fund'; entryId: string }
+  // Paying a credit card bill: deleted like any movement, but never edited on
+  // its own, so it cannot drift from the card it paid.
+  | { kind: 'cardPayment'; id: string }
+  // A card's interest or fees. Calculated from its statements, so there is
+  // nothing to edit and nothing to delete.
+  | { kind: 'charge' };
 
 export interface FeedItem {
   id: string; date: string; flow: Flow;
@@ -50,9 +56,13 @@ export default function ActivityRow({
   // block the page, and a whole modal for one button is more than this needs.
   const [confirming, setConfirming] = useState(false);
 
-  // A fund movement is changed through its fund entry, which has no edit.
-  const editable = item.source.kind !== 'settle' && item.source.kind !== 'fund';
-  const destructive = item.source.kind === 'settle' ? 'Reverse' : 'Delete';
+  // A fund movement is changed through its fund entry and a card payment
+  // through its card; a calculated charge is not changed at all.
+  const kind = item.source.kind;
+  const editable = kind !== 'settle' && kind !== 'fund' && kind !== 'cardPayment' && kind !== 'charge';
+  // With nothing to do to it, a charge gets no action rail and no swipe.
+  const actionable = kind !== 'charge';
+  const destructive = kind === 'settle' ? 'Reverse' : 'Delete';
 
   const close = () => { setConfirming(false); onOpenChange(false); };
 
@@ -63,6 +73,7 @@ export default function ActivityRow({
           Below md it sits behind the row and the swipe uncovers it. At md and
           up there is no swipe, so it floats above the row's right edge and
           appears on hover or keyboard focus instead. */}
+      {actionable && (
       <div
         className="absolute inset-y-0 right-0 z-0 flex md:z-20 md:opacity-0 md:transition-opacity
                    md:group-hover:opacity-100 md:group-focus-within:opacity-100"
@@ -89,13 +100,14 @@ export default function ActivityRow({
             : <TrashIcon className="w-4 h-4" />}
         </button>
       </div>
+      )}
 
       {/* ── The row itself ──
           Opaque, so at rest it hides the rail behind it. */}
       <div
         className="relative z-10 flex items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3"
-        style={swipe.style}
-        {...swipe.handlers}
+        style={actionable ? swipe.style : undefined}
+        {...(actionable ? swipe.handlers : {})}
       >
         <IconTile icon={item.icon} tone={item.flow === 'earned' ? 'growth' : 'primary'} />
         <div className="flex-1 min-w-0">

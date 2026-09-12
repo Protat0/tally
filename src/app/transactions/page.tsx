@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useApp, fmt, INCOME_SOURCES } from '@/components/AppContext';
+import { useApp, fmt, round2, INCOME_SOURCES } from '@/components/AppContext';
 import { currentCycleKey, cycleKeyOf, cycleLabel, cycleRange, shiftCycleKey } from '@/lib/cycle';
 import BottomNav from '@/components/BottomNav';
 import PageHeader from '@/components/PageHeader';
@@ -32,6 +32,7 @@ function abbrev(n: number): string {
 export default function TransactionsPage() {
   const {
     expenses, moneyMoves, wallets, settings, debtEntries, debtPeople, emergencyFund,
+    creditCards, cardSummaries,
     deleteExpense, deleteMoneyMove, deleteDebtEntry, reverseSettleBatch, deleteEmergencyFundEntry,
   } = useApp();
   const { currency } = settings;
@@ -50,10 +51,11 @@ export default function TransactionsPage() {
 
   const walletName = (id: string | null) => wallets.find(w => w.id === id)?.name ?? '';
 
-  // A wallet-less expense was paid by someone else; name them where the wallet
-  // name would otherwise go, so the subtitle is never blank.
-  const fundedBy = (e: { id: string; walletId: string | null }) => {
+  // A wallet-less expense was paid by a card, or by someone else; name whichever
+  // it was where the wallet name would otherwise go, so the subtitle is never blank.
+  const fundedBy = (e: { id: string; walletId: string | null; cardId: string | null }) => {
     if (e.walletId) return walletName(e.walletId);
+    if (e.cardId) return creditCards.find(c => c.id === e.cardId)?.name ?? 'card';
     const link = debtEntries.find(d => d.expenseId === e.id);
     const person = link && debtPeople.find(p => p.id === link.personId);
     return person ? `paid by ${person.name}` : '';
@@ -134,6 +136,18 @@ export default function TransactionsPage() {
             source: { kind: 'move', id: mm.id },
           };
         }
+        if (mm.kind === 'card_payment') {
+          // flow 'moved': the purchases counted as spending when they were made,
+          // so paying the bill is your own money changing place, not spending again.
+          return {
+            id: mm.id, date: mm.date, flow: 'moved',
+            icon: 'credit-card', label: 'Card payment',
+            sub: subtitle(mm.note, walletName(mm.walletId)),
+            amount: mm.amount,
+            updatedAt: mm.updatedAt,
+            source: { kind: 'cardPayment', id: mm.id },
+          };
+        }
         if (mm.kind === 'fund_deposit' || mm.kind === 'fund_withdrawal') {
           // flow 'moved' for the same reason as debts: setting money aside, or
           // taking it back out, is neither spending nor income.
@@ -168,6 +182,29 @@ export default function TransactionsPage() {
           source: { kind: 'move', id: mm.id },
         };
       }),
+      // Interest and fees are calculated from each card's statements, and dated
+      // midday on the statement that charged them — the same instant the rest of
+      // the app gives a hand-entered row, so they land on the right day locally.
+      ...creditCards.flatMap(card => (cardSummaries[card.id]?.statements ?? [])
+        .flatMap((s): FeedItem[] => {
+          const total = round2(s.charges.interest + s.charges.lateFee + s.charges.annualFee);
+          const date = new Date(`${s.closesOn}T12:00:00`).toISOString();
+          if (total <= 0 || !inMonth(date)) return [];
+          const parts = [
+            s.charges.interest  > 0 ? `Interest ${fmt(s.charges.interest, currency)} (estimate)` : '',
+            s.charges.lateFee   > 0 ? `Late fee ${fmt(s.charges.lateFee, currency)}` : '',
+            s.charges.annualFee > 0 ? `Annual fee ${fmt(s.charges.annualFee, currency)}` : '',
+          ].filter(Boolean);
+          return [{
+            id: `charge-${card.id}-${s.closesOn}`,
+            date, flow: 'spent',
+            icon: 'credit-card', label: `${card.name} charges`,
+            sub: parts.join(' · '),
+            amount: total,
+            updatedAt: null,
+            source: { kind: 'charge' },
+          }];
+        })),
     ];
 
     // Per-day spent/earned. Transfers move money between your own wallets, so
@@ -189,7 +226,7 @@ export default function TransactionsPage() {
       monthEarned: items.filter(i => i.flow === 'earned').reduce((s, i) => s + i.amount, 0),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, emergencyFund.entries, viewCycle, cycleStartDay]);
+  }, [expenses, moneyMoves, wallets, settings.customCategories, debtEntries, debtPeople, emergencyFund.entries, creditCards, cardSummaries, viewCycle, cycleStartDay]);
 
   // Calendar cells for the viewed CYCLE, not its anchor month: leading blanks
   // then every day from the cycle's start up to the day before it ends. A cycle
@@ -242,6 +279,9 @@ export default function TransactionsPage() {
       return;
     }
     if (src.kind === 'move') return deleteMoneyMove(src.id);
+    if (src.kind === 'cardPayment') return deleteMoneyMove(src.id);
+    // A charge is calculated from the card's statements: there is no row to delete.
+    if (src.kind === 'charge') return;
     if (src.kind === 'debt') return deleteDebtEntry(src.entryId);
     if (src.kind === 'fund') {
       if (!(await deleteEmergencyFundEntry(src.entryId))) {
