@@ -237,7 +237,9 @@ test('the minimum is the percent or the floor, whichever is higher, capped at th
 test('statements run from the latest close on or before the day the card was added', () => {
   const closes = (t: CardTerms, today: string) => buildStatements(t, [], [], today).map(s => s.closesOn);
   assert.deepEqual(closes(terms(), '2026-03-20'), ['2026-01-05', '2026-02-05', '2026-03-05']);
-  assert.deepEqual(closes(terms({ addedOn: '2026-01-03' }), '2026-01-20'), ['2025-12-05']);
+  // Added Jan 3, so the opening statement is the Dec 5 close before it — and by
+  // Jan 20 the Jan 5 one has closed too.
+  assert.deepEqual(closes(terms({ addedOn: '2026-01-03' }), '2026-01-20'), ['2025-12-05', '2026-01-05']);
   assert.deepEqual(closes(terms({ addedOn: '2026-01-05' }), '2026-01-05'), ['2026-01-05']);
 });
 
