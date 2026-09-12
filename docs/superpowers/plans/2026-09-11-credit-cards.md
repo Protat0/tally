@@ -1770,7 +1770,7 @@ export default function CreditCardForm({ card, onDone }: Props) {
 
       <p className="mb-4 text-[11px] text-ink-4">
         Interest is worked out from these terms, so it is an estimate — your
-        bank's own method can differ by a few pesos.
+        bank’s own method can differ by a few pesos.
       </p>
 
       <button
@@ -2150,7 +2150,7 @@ export default function CreditCardSheet({ card, summary, currency, onClose, onPa
         )}
       </div>
       <p className="mt-2 text-[11px] text-ink-4">
-        Deleting keeps this card's purchases and payments as history. The card
+        Deleting keeps this card’s purchases and payments as history. The card
         itself leaves your lists.
       </p>
     </BottomSheet>
