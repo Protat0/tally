@@ -13,12 +13,15 @@ import { PlusIcon, WalletIcon, CogIcon } from '@/components/Icons';
 import AppIcon from '@/components/AppIcon';
 import WalletPresetPicker, { presetIcon } from '@/components/WalletPresetPicker';
 import CreditCardForm from '@/components/CreditCardForm';
+import CreditCardTile from '@/components/CreditCardTile';
+import CreditCardSheet from '@/components/CreditCardSheet';
+import PayCardSheet from '@/components/PayCardSheet';
 import { logoOf, type IconKey } from '@/lib/icons';
 
 const ICONS: IconKey[] = ['credit-card', 'landmark', 'banknote', 'piggy-bank', 'coins', 'smartphone', 'wallet', 'briefcase'];
 
 export default function WalletsPage() {
-  const { wallets, addWallet, deleteWallet, settings } = useApp();
+  const { wallets, addWallet, deleteWallet, settings, creditCards, cardSummaries, owedOnCards } = useApp();
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
   const [addKind, setAddKind] = useState<'wallet' | 'card'>('wallet');
@@ -26,8 +29,20 @@ export default function WalletsPage() {
   const [newIcon, setNewIcon] = useState<string>('credit-card');
   const [newBalance, setNewBalance] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // Which card's details, pay sheet or edit form is open.
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [payCardId, setPayCardId] = useState<string | null>(null);
+  const [editCardId, setEditCardId] = useState<string | null>(null);
 
   const totalBalance = wallets.reduce((s, w) => s + w.balance, 0);
+
+  // Archived cards are history only: they are gone from every list here.
+  const activeCards = creditCards.filter(c => !c.archivedAt);
+  const cardById = (id: string | null) => activeCards.find(c => c.id === id) ?? null;
+  const openCard = cardById(openCardId);
+  const payCard = cardById(payCardId);
+  const editCard = cardById(editCardId);
+  const owingCount = activeCards.filter(c => (cardSummaries[c.id]?.owedNow ?? 0) > 0).length;
 
   // Derived, not stored: typing a custom name clears the matched preset on its
   // own rather than leaving a stale bank shown.
@@ -59,6 +74,12 @@ export default function WalletsPage() {
             <div>
               <p className="text-xs text-ink-3 uppercase tracking-widest">All Wallets</p>
               <p className="text-2xl font-bold text-ink mt-0.5">{fmt(totalBalance, settings.currency)}</p>
+              {owedOnCards > 0 && (
+                <p className="mt-1 text-xs text-ink-3">
+                  <span className="tabular-nums">{fmt(owedOnCards, settings.currency)}</span>
+                  {' '}owed on {owingCount} card{owingCount !== 1 ? 's' : ''}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -110,6 +131,25 @@ export default function WalletsPage() {
                 />
               ))}
             </div>
+          )}
+
+          {activeCards.length > 0 && (
+            <section className="mt-8">
+              <p className="mb-3 px-0.5 text-[11px] font-semibold uppercase tracking-widest text-ink-3">
+                Credit cards
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                {activeCards.map(card => cardSummaries[card.id] && (
+                  <CreditCardTile
+                    key={card.id}
+                    card={card}
+                    summary={cardSummaries[card.id]}
+                    currency={settings.currency}
+                    onOpen={() => setOpenCardId(card.id)}
+                  />
+                ))}
+              </div>
+            </section>
           )}
 
         </div>
@@ -205,6 +245,35 @@ export default function WalletsPage() {
             </button>
             </>
           )}
+        </BottomSheet>
+      )}
+
+      {/* Details, pay and edit are one at a time: opening one closes the last,
+          so no sheet ever sits on top of another here. */}
+      {openCard && cardSummaries[openCard.id] && (
+        <CreditCardSheet
+          card={openCard}
+          summary={cardSummaries[openCard.id]}
+          currency={settings.currency}
+          onClose={() => setOpenCardId(null)}
+          onPay={() => { setPayCardId(openCard.id); setOpenCardId(null); }}
+          onEdit={() => { setEditCardId(openCard.id); setOpenCardId(null); }}
+        />
+      )}
+
+      {payCard && cardSummaries[payCard.id] && (
+        <PayCardSheet
+          card={payCard}
+          summary={cardSummaries[payCard.id]}
+          currency={settings.currency}
+          onClose={() => setPayCardId(null)}
+        />
+      )}
+
+      {editCard && (
+        <BottomSheet onClose={() => setEditCardId(null)}>
+          <p className="mb-5 text-center font-semibold text-ink text-lg">Edit card</p>
+          <CreditCardForm card={editCard} onDone={() => setEditCardId(null)} />
         </BottomSheet>
       )}
 
