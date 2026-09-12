@@ -888,10 +888,10 @@ test('an expense paid by card moves no wallet', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify the payment ones fail**
+- [ ] **Step 2: Run the tests**
 
 Run: `node --test --experimental-strip-types src/lib/walletDeltas.test.ts`
-Expected: FAIL on "deleting a card payment puts the money back" — without its own branch a card payment falls through to the transfer case, which is right for the debit and wrong for the reversal.
+Expected: PASS, including the two new card payment tests. They are guards, not a driven cycle: a card payment carries no fee and no destination, so the existing fall-through already returns `-amount`, and negating it already returns `+amount`. The branch added in Step 3 states that intent explicitly, next to the fund movements that need their own branches — it does not change today's behaviour.
 
 - [ ] **Step 3: Add the branch to `moveDeltas`**
 
