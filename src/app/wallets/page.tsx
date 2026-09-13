@@ -183,7 +183,7 @@ export default function WalletsPage() {
 
           {addKind === 'card' ? <CreditCardForm onDone={closeAdd} /> : (
             <>
-            <p className="mb-2 text-xs text-ink-3">Quick pick</p>
+            <p className="mb-2 text-xs text-ink-3">Bank or e-wallet</p>
             <div className="mb-4">
               <WalletPresetPicker
                 selected={preset}

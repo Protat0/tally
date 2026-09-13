@@ -85,13 +85,14 @@ export default function CreditCardForm({ card, onDone }: Props) {
 
   return (
     <>
-      <p className={label}>Quick pick</p>
+      <p className={label}>Bank</p>
       <div className="mb-4">
         <WalletPresetPicker
           selected={preset}
           onPick={pickPreset}
           groups={CARD_PRESET_GROUPS}
           title="Which bank?"
+          placeholder="Choose a bank"
         />
       </div>
 
