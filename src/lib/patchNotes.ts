@@ -13,6 +13,19 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: '2026-09-12',
+    date: '2026-09-12',
+    title: 'Credit cards',
+    items: [
+      'Add your credit cards: see what each one owes, when it is due, and pay it from a wallet.',
+      'Pay for an expense with a credit card, and see what is left to spend on it.',
+      'The dashboard shows what you owe on cards and reminds you before a bill is due.',
+      'Card purchases, payments and charges all show in Activity.',
+      'Deleting a credit card stops its interest and fees from that day.',
+      'Each page in the bottom bar has an icon.',
+    ],
+  },
+  {
     version: '2026-09-11-2',
     date: '2026-09-11',
     title: 'Debts, wallets and your emergency fund',
@@ -40,7 +53,7 @@ export const PATCH_NOTES: PatchNote[] = [
   },
 ];
 
-// Patch notes drafted through commit f140c218937ed516f6a2ae26c1c088b83412ce89
+// Patch notes drafted through commit 8f743a1d3b9fc86c0498441035c064bf4057bb1d
 // `npm run patch-notes` drafts from the commit after this one, then moves it forward.
 
 export const SEEN_VERSION_KEY = 'tally-seen-version';

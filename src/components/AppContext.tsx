@@ -10,6 +10,9 @@ import {
 import type { IconKey } from '@/lib/icons';
 import { netOf } from '@/lib/debtGroups';
 import { fundBalance, canWithdraw, canDeleteEntry, type FundDirection } from '@/lib/emergencyFund';
+import {
+  summarizeCard, chargesInRange, type CardSummary, type CardTerms, type CardTxn,
+} from '@/lib/creditCard';
 
 // round2 lives with the delta arithmetic it guards, and is re-exported here
 // because SplitPanel, SettleUpSheet and the expense form already import it
@@ -32,10 +35,40 @@ export interface Wallet {
   id: string; name: string; icon: string; balance: number;
 }
 
+// A credit card. Deliberately NOT a wallet: it is money you owe, not money you
+// have, so it stays out of wallet lists and out of the total balance. Nothing
+// about a statement is stored — lib/creditCard.ts works it out from these terms
+// and the card's purchases and payments.
+export interface CreditCard {
+  id: string; name: string; icon: string;
+  creditLimit: number;
+  /** Day of the month the statement closes, clamped in short months. */
+  statementDay: number;
+  /** Day of the month it is due: the first one after it closes. */
+  dueDay: number;
+  /** Percent per month, charged on what is unpaid by the due date. */
+  monthlyInterestRate: number;
+  minPaymentPercent: number;
+  minPaymentFloor: number;
+  lateFee: number | null;
+  annualFee: number | null;
+  annualFeeMonth: number | null;
+  /** What was owed on the day the card was added. */
+  openingBalance: number;
+  createdAt: string;
+  /** Set instead of deleting: its purchases and payments are real history. */
+  archivedAt: string | null;
+}
+
+export type CreditCardInput = Omit<CreditCard, 'id' | 'createdAt' | 'archivedAt'>;
+
 export interface Expense {
   id: string; amount: number; category: Category;
-  // null means another person paid for this, so no wallet of yours moved.
+  // null means no wallet of yours moved: another person paid, or a card did.
+  // cardId says which of the two it was.
   walletId: string | null; note: string; date: string;
+  /** The card that paid, when one did. Never set together with walletId. */
+  cardId: string | null;
   // When the row was last edited; null means never. Deliberately not defaulted
   // in the database, so existing rows do not claim to have been edited.
   updatedAt: string | null;
@@ -56,8 +89,11 @@ export interface Expense {
 // fund_deposit / fund_withdrawal — money set aside into the emergency fund from
 // a wallet, or taken back out into one. Like debt movements, neither is spending
 // or income: it is your own money changing place.
+// card_payment — paying a credit card bill from a wallet. Not spending either:
+// the purchases counted when they were made.
 export type MoneyMoveKind =
-  | 'earned' | 'withdrawn' | 'moved' | 'debt_out' | 'debt_in' | 'fund_deposit' | 'fund_withdrawal';
+  | 'earned' | 'withdrawn' | 'moved' | 'debt_out' | 'debt_in'
+  | 'fund_deposit' | 'fund_withdrawal' | 'card_payment';
 export type IncomeSource = 'salary' | 'freelance' | 'gift' | 'refund' | 'other';
 
 export const INCOME_SOURCES: { key: IncomeSource; label: string; icon: IconKey }[] = [
@@ -76,6 +112,8 @@ export interface MoneyMove {
   // amount itself this money is gone, so it counts as spending. 0 when free.
   fee: number;
   source: IncomeSource | null; note: string; date: string;
+  /** The card a card_payment paid. Null on every other kind. */
+  cardId: string | null;
   updatedAt: string | null;
 }
 
@@ -233,6 +271,11 @@ interface AppContextValue extends Computed {
   instalmentSchedule: InstalmentPayment[];
   instalmentNewPurchaseLock: boolean;
   emergencyFund: EmergencyFund;
+  creditCards: CreditCard[];
+  /** Statements and figures per card id, calculated from its rows. */
+  cardSummaries: Record<string, CardSummary>;
+  /** What is owed across active cards. A card in credit counts as zero. */
+  owedOnCards: number;
   dataLoading: boolean;
   addWallet: (w: Omit<Wallet, 'id'>) => Promise<void>;
   updateWallet: (id: string, updates: Partial<Wallet>) => Promise<void>;
@@ -241,9 +284,10 @@ interface AppContextValue extends Computed {
     amount: number;                                   // what the payer paid out
     category: Category;
     note: string;
-    walletId: string | null;                          // null = a person paid
-    paidByPersonId?: string | null;                   // set when walletId is null
-    owedToMe?: { personId: string; amount: number }[];// set when a wallet paid
+    walletId: string | null;                          // null = a card or a person paid
+    cardId?: string | null;                           // set instead of walletId when a card paid
+    paidByPersonId?: string | null;                   // set when neither paid
+    owedToMe?: { personId: string; amount: number }[];// set when a wallet or a card paid
     /** The new expense's id, or null when nothing was written. */
   }) => Promise<string | null>;
   deleteExpense: (id: string) => Promise<boolean>;
@@ -251,7 +295,7 @@ interface AppContextValue extends Computed {
   // the new share is not a positive amount.
   updateExpense: (id: string, next: {
     amount: number; category: Category; note: string;
-    walletId: string | null; date?: string;
+    walletId: string | null; cardId?: string | null; date?: string;
     paidByPersonId?: string | null;
     owedToMe?: { personId: string; amount: number }[];
   }) => Promise<boolean>;
@@ -280,6 +324,12 @@ interface AppContextValue extends Computed {
     direction: FundDirection; amount: number; note: string; walletId: string | null;
   }) => Promise<boolean>;
   deleteEmergencyFundEntry: (id: string) => Promise<boolean>;
+  addCreditCard: (c: CreditCardInput) => Promise<boolean>;
+  updateCreditCard: (id: string, updates: Partial<CreditCardInput>) => Promise<boolean>;
+  /** Archives it: its purchases and payments stay as history. */
+  archiveCreditCard: (id: string) => Promise<void>;
+  /** Records a card_payment movement out of `walletId`. */
+  payCreditCard: (cardId: string, amount: number, walletId: string) => Promise<boolean>;
   addBudgetLine: (b: Omit<BudgetLine, 'id'>) => Promise<void>;
   updateBudgetLine: (id: string, updates: Partial<BudgetLine>) => Promise<void>;
   deleteBudgetLine: (id: string) => Promise<void>;
@@ -421,6 +471,57 @@ function toDBSettings(s: Partial<Settings>): Row {
 }
 
 const fromDBWallet     = (r: Row): Wallet     => ({ id: r.id, name: r.name, icon: r.icon, balance: Number(r.balance) });
+const fromDBCreditCard = (r: Row): CreditCard => ({
+  id: r.id, name: r.name, icon: r.icon || 'credit-card',
+  creditLimit: Number(r.credit_limit),
+  statementDay: Number(r.statement_day),
+  dueDay: Number(r.due_day),
+  monthlyInterestRate: Number(r.monthly_interest_rate),
+  minPaymentPercent: Number(r.min_payment_percent),
+  minPaymentFloor: Number(r.min_payment_floor) || 0,
+  // A fee that is not set is null, which Number() would turn into 0 — a real
+  // ₱0 fee — so each is checked before it is converted.
+  lateFee: r.late_fee == null ? null : Number(r.late_fee),
+  annualFee: r.annual_fee == null ? null : Number(r.annual_fee),
+  annualFeeMonth: r.annual_fee_month ?? null,
+  openingBalance: Number(r.opening_balance) || 0,
+  createdAt: r.created_at,
+  archivedAt: r.archived_at ?? null,
+});
+
+// Only the fields present are written, so an edit can send a few of them.
+const toDBCreditCard = (c: Partial<CreditCardInput>): Row => {
+  const m: Row = {};
+  if ('name'                in c) m.name                  = c.name;
+  if ('icon'                in c) m.icon                  = c.icon;
+  if ('creditLimit'         in c) m.credit_limit          = c.creditLimit;
+  if ('statementDay'        in c) m.statement_day         = c.statementDay;
+  if ('dueDay'              in c) m.due_day               = c.dueDay;
+  if ('monthlyInterestRate' in c) m.monthly_interest_rate = c.monthlyInterestRate;
+  if ('minPaymentPercent'   in c) m.min_payment_percent   = c.minPaymentPercent;
+  if ('minPaymentFloor'     in c) m.min_payment_floor     = c.minPaymentFloor;
+  if ('lateFee'             in c) m.late_fee              = c.lateFee;
+  if ('annualFee'           in c) m.annual_fee            = c.annualFee;
+  if ('annualFeeMonth'      in c) m.annual_fee_month      = c.annualFeeMonth;
+  if ('openingBalance'      in c) m.opening_balance       = c.openingBalance;
+  return m;
+};
+
+// A card's terms in the shape the statement maths reads. The day it was added
+// is a local calendar day, like every date creditCard.ts works with.
+const termsOf = (c: CreditCard): CardTerms => ({
+  creditLimit: c.creditLimit,
+  statementDay: c.statementDay,
+  dueDay: c.dueDay,
+  monthlyInterestRate: c.monthlyInterestRate,
+  minPaymentPercent: c.minPaymentPercent,
+  minPaymentFloor: c.minPaymentFloor,
+  lateFee: c.lateFee,
+  annualFee: c.annualFee,
+  annualFeeMonth: c.annualFeeMonth,
+  openingBalance: c.openingBalance,
+  addedOn: isoDay(new Date(c.createdAt)),
+});
 const fromDBBill       = (r: Row): Bill       => ({
   id: r.id, name: r.name, amount: Number(r.amount),
   dueDay: r.due_day ?? null,
@@ -443,6 +544,7 @@ const fromDBAppliance  = (r: Row): Appliance  => ({
 const fromDBExpense    = (r: Row): Expense    => ({
   id: r.id, amount: Number(r.amount), category: r.category as Category,
   walletId: r.wallet_id ?? null, note: r.note || '', date: r.date,
+  cardId: r.card_id ?? null,
   updatedAt: r.updated_at ?? null,
 });
 const fromDBMoneyMove  = (r: Row): MoneyMove  => ({
@@ -451,6 +553,7 @@ const fromDBMoneyMove  = (r: Row): MoneyMove  => ({
   fee: Number(r.fee) || 0,
   source: (r.source ?? null) as IncomeSource | null,
   note: r.note || '', date: r.date,
+  cardId: r.card_id ?? null,
   updatedAt: r.updated_at ?? null,
 });
 const fromDBInstalment = (r: Row): InstalmentPayment => ({
@@ -518,6 +621,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const [dataLoading,          setDataLoading]          = useState(false);
   const [debtPeople,           setDebtPeople]           = useState<DebtPerson[]>([]);
   const [debtEntries,          setDebtEntries]          = useState<DebtEntry[]>([]);
+  const [creditCards,          setCreditCards]          = useState<CreditCard[]>([]);
 
   // ── Load / clear on auth change ──────────────────────────────────────────
   useEffect(() => {
@@ -526,6 +630,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       setInstalmentSchedule([]); setLock(false);
       setEmergencyFund({ entries: [], currentAmount: 0 });
       setDebtPeople([]); setDebtEntries([]);
+      setCreditCards([]);
       return;
     }
     loadAll(userId);
@@ -534,7 +639,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
   async function loadAll(uid: string) {
     setDataLoading(true);
-    const [sRes, wRes, eRes, mmRes, bRes, blRes, aRes, ipRes, efRes, dpRes, deRes] = await Promise.all([
+    const [sRes, wRes, eRes, mmRes, bRes, blRes, aRes, ipRes, efRes, dpRes, deRes, ccRes] = await Promise.all([
       supabase.from('settings').select('*').eq('user_id', uid).single(),
       supabase.from('wallets').select('*').eq('user_id', uid).order('created_at'),
       // No limit, so PostgREST's default 1000-row cap applies. setCycleStartDay
@@ -550,6 +655,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       supabase.from('emergency_fund_entries').select('*').eq('user_id', uid).order('date', { ascending: false }),
       supabase.from('debt_people').select('*').eq('user_id', uid).order('created_at'),
       supabase.from('debt_entries').select('*').eq('user_id', uid).order('date', { ascending: false }),
+      // Archived cards load too, so old rows can still name the card they used.
+      supabase.from('credit_cards').select('*').eq('user_id', uid).order('created_at'),
     ]);
 
     if (sRes.data) {
@@ -573,6 +680,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     }
     if (dpRes.data) setDebtPeople(dpRes.data.map(fromDBDebtPerson));
     if (deRes.data) setDebtEntries(deRes.data.map(fromDBDebtEntry));
+    if (ccRes.data) setCreditCards(ccRes.data.map(fromDBCreditCard));
     setDataLoading(false);
 
     await ensureCashWallet(uid, (wRes.data || []).map(fromDBWallet), sRes.data?.cash_wallet_id ?? null);
@@ -603,6 +711,43 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await supabase.from('settings').update({ cash_wallet_id: data.id }).eq('user_id', uid);
   }
 
+  // ── Credit cards ─────────────────────────────────────────────────────────
+  // Rebuilt from each card's terms and its rows; nothing about a statement is
+  // stored. A purchase charged the card the whole amount paid at the till —
+  // your share plus what others owe you back — exactly as a wallet-funded split
+  // takes the whole amount out of the wallet.
+  const cardSummaries = useMemo<Record<string, CardSummary>>(() => {
+    const today = isoDay(new Date());
+    const out: Record<string, CardSummary> = {};
+    for (const card of creditCards) {
+      const purchases: CardTxn[] = expenses
+        .filter(e => e.cardId === card.id)
+        .map(e => ({
+          date: isoDay(new Date(e.date)),
+          amount: round2(e.amount + debtEntries
+            .filter(d => d.expenseId === e.id && d.direction === 'owed_to_me')
+            .reduce((s, d) => s + d.amount, 0)),
+        }));
+      const payments: CardTxn[] = moneyMoves
+        .filter(m => m.kind === 'card_payment' && m.cardId === card.id)
+        .map(m => ({ date: isoDay(new Date(m.date)), amount: m.amount }));
+      // An archived card's statements stop the day it was archived. Its past
+      // charges really happened and still count; what must not happen is a card
+      // that is gone from every list quietly accruing interest for ever, on
+      // rows nobody can pay off or delete.
+      const asOf = card.archivedAt ? isoDay(new Date(card.archivedAt)) : today;
+      out[card.id] = summarizeCard(termsOf(card), purchases, payments, asOf);
+    }
+    return out;
+  }, [creditCards, expenses, moneyMoves, debtEntries]);
+
+  // A card in credit does not cancel out another card's debt, so only cards
+  // that owe are counted. Archived cards are out of every total.
+  const owedOnCards = useMemo(() => round2(creditCards
+    .filter(c => !c.archivedAt)
+    .reduce((s, c) => s + Math.max(0, cardSummaries[c.id]?.owedNow ?? 0), 0)),
+  [creditCards, cardSummaries]);
+
   // ── Computed ─────────────────────────────────────────────────────────────
   const computed = useMemo<Computed>(() => {
     const today = new Date();
@@ -620,7 +765,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const feesThisMonth = moneyMoves
       .filter(mm => inCycle(mm.date))
       .reduce((s, mm) => s + mm.fee, 0);
-    const totalSpentThisMonth = monthExpenses.reduce((s, e) => s + e.amount, 0) + feesThisMonth;
+    // Card interest and fees are money gone too. They count in the cycle their
+    // statement closes in, as bank fees do. An archived card's past charges
+    // still happened, so every card counts here.
+    const { start: cycleStart, end: cycleEnd } = cycleRange(currentCycle, startDay);
+    const cardChargesThisMonth = Object.values(cardSummaries).reduce(
+      (s, c) => s + chargesInRange(c.statements, isoDay(cycleStart), isoDay(cycleEnd)), 0,
+    );
+    const totalSpentThisMonth = monthExpenses.reduce((s, e) => s + e.amount, 0)
+      + feesThisMonth + cardChargesThisMonth;
     // Actual money received this month. Kept separate from settings.monthlyIncome
     // (the planned figure) — no budget formula below reads this.
     const receivedThisMonth = moneyMoves
@@ -698,7 +851,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       instalmentDebtFreeDate: pending.length > 0 ? pending[pending.length - 1].month : null,
       currentCycle,
     };
-  }, [wallets, expenses, moneyMoves, settings, instalmentSchedule]);
+  }, [wallets, expenses, moneyMoves, settings, instalmentSchedule, cardSummaries]);
 
   // Open entries only — settled debts are history, not balance.
   //
@@ -761,14 +914,23 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   const addExpense = async (e: {
     amount: number; category: Category; note: string;
     walletId: string | null;
+    cardId?: string | null;
     paidByPersonId?: string | null;
     owedToMe?: { personId: string; amount: number }[];
     // Returns the new expense's id so a caller that has to remember the
     // expense it caused — a bill being ticked paid — can undo it later.
   }): Promise<string | null> => {
     if (!userId) return null;
-    const owed = e.walletId ? (e.owedToMe ?? []) : [];
-    const myShare = round2(e.walletId
+    const cardId = e.cardId ?? null;
+    // Paid from a wallet or a card, never both, and an archived card takes no
+    // new purchases.
+    if (e.walletId && cardId) return null;
+    if (cardId && !creditCards.some(c => c.id === cardId && !c.archivedAt)) return null;
+
+    // Either way YOU paid the whole amount, so others can owe you their share.
+    const paidByMe = Boolean(e.walletId || cardId);
+    const owed = paidByMe ? (e.owedToMe ?? []) : [];
+    const myShare = round2(paidByMe
       ? e.amount - owed.reduce((s, o) => s + o.amount, 0)
       : e.amount);
 
@@ -791,7 +953,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     let expenseId: string | null = null;
     if (myShare > 0) {
       const { data } = await supabase.from('expenses').insert({
-        user_id: userId, wallet_id: e.walletId, amount: myShare,
+        user_id: userId, wallet_id: e.walletId, card_id: cardId, amount: myShare,
         category: e.category, note: e.note, date: now,
       }).select().single();
 
@@ -807,7 +969,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
     // deferBalance: each of these writes its own money_move but leaves the
     // balance to the single commit below.
-    if (e.walletId) {
+    if (paidByMe) {
       for (const o of owed) {
         await addDebtEntry({
           personId: o.personId, direction: 'owed_to_me',
@@ -928,6 +1090,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     next: {
       amount: number; category: Category; note: string;
       walletId: string | null;
+      cardId?: string | null;
       date?: string;
       paidByPersonId?: string | null;
       owedToMe?: { personId: string; amount: number }[];
@@ -943,8 +1106,15 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // makes. The caller reverses the settle-up first.
     if (linked.some(d => d.settleMoveId)) return false;
 
-    const owed = next.walletId ? (next.owedToMe ?? []) : [];
-    const myShare = round2(next.walletId
+    const cardId = next.cardId ?? null;
+    if (next.walletId && cardId) return false;
+    const card = cardId ? creditCards.find(c => c.id === cardId) : undefined;
+    // An archived card keeps the purchases it has; it takes no new ones.
+    if (cardId && (!card || (card.archivedAt && cardId !== found.cardId))) return false;
+
+    const paidByMe = Boolean(next.walletId || cardId);
+    const owed = paidByMe ? (next.owedToMe ?? []) : [];
+    const myShare = round2(paidByMe
       ? next.amount - owed.reduce((sum, o) => sum + o.amount, 0)
       : next.amount);
 
@@ -955,6 +1125,9 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     if (myShare <= 0) return false;
 
     const date = next.date ?? found.date;
+    // What was owed when the card was added already covers anything before it,
+    // so a purchase dated earlier would be counted twice.
+    if (card && isoDay(new Date(date)) < isoDay(new Date(card.createdAt))) return false;
     const editedAt = new Date().toISOString();
 
     // What the row does to wallets today, and what it will do once saved. Only
@@ -977,13 +1150,13 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     // so returning leaves the expense exactly as it was.
     const { error: writeFailed } = await supabase.from('expenses').update({
       amount: myShare, category: next.category, note: next.note,
-      wallet_id: next.walletId, date, updated_at: editedAt,
+      wallet_id: next.walletId, card_id: cardId, date, updated_at: editedAt,
     }).eq('id', id);
     if (writeFailed) return false;
 
     setExpenses(prev => prev.map(e => e.id === id ? {
       ...e, amount: myShare, category: next.category, note: next.note,
-      walletId: next.walletId, date, updatedAt: editedAt,
+      walletId: next.walletId, cardId, date, updatedAt: editedAt,
     } : e));
 
     // Now the split is rebuilt wholesale. Deleting before inserting leaves it
@@ -1000,7 +1173,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
 
     // Then the replacements, dated to the new date so a split never drifts
     // away from its parent.
-    if (next.walletId) {
+    if (paidByMe) {
       for (const o of owed) {
         await addDebtEntry({
           personId: o.personId, direction: 'owed_to_me',
@@ -1064,8 +1237,10 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // this and commit one merged delta map at the end; single-movement callers
   // use recordMove below, which does both.
   const insertMove = async (
-    // Only withdrawals and transfers can carry a fee; the rest omit it.
-    move: Omit<MoneyMove, 'id' | 'date' | 'fee' | 'updatedAt'> & { fee?: number },
+    // Only withdrawals and transfers can carry a fee, and only a card payment
+    // names a card; the rest omit both.
+    move: Omit<MoneyMove, 'id' | 'date' | 'fee' | 'updatedAt' | 'cardId'>
+      & { fee?: number; cardId?: string | null },
     date?: string,
   ): Promise<string | null> => {
     if (!userId) return null;
@@ -1074,7 +1249,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     const tempId = crypto.randomUUID();
 
     setMoneyMoves(prev => [
-      { ...move, fee: move.fee ?? 0, id: tempId, date: now, updatedAt: null },
+      { ...move, fee: move.fee ?? 0, cardId: move.cardId ?? null, id: tempId, date: now, updatedAt: null },
       ...prev,
     ]);
 
@@ -1082,6 +1257,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       user_id: userId, kind: move.kind, amount: move.amount,
       wallet_id: move.walletId, to_wallet_id: move.toWalletId,
       fee: move.fee ?? 0, source: move.source, note: move.note, date: now,
+      card_id: move.cardId ?? null,
     }).select().single();
 
     if (!data) return null;
@@ -1093,7 +1269,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
   // a caller needing two movements must use insertMove and commit the merged
   // deltas itself, or the second call recomputes from the first's stale state.
   const recordMove = async (
-    move: Omit<MoneyMove, 'id' | 'date' | 'fee' | 'updatedAt'> & { fee?: number },
+    move: Omit<MoneyMove, 'id' | 'date' | 'fee' | 'updatedAt' | 'cardId'>
+      & { fee?: number; cardId?: string | null },
     deltas: Deltas,
     date?: string,
   ): Promise<string | null> => {
@@ -1176,6 +1353,9 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     if (found.kind === 'debt_in' || found.kind === 'debt_out') return false;
     // Likewise a fund movement belongs to the emergency fund entry that made it.
     if (found.kind === 'fund_deposit' || found.kind === 'fund_withdrawal') return false;
+    // A card payment is deleted and made again rather than edited, so it can
+    // never disagree with the card it paid.
+    if (found.kind === 'card_payment') return false;
     if (next.amount <= 0) return false;
 
     const date = next.date ?? found.date;
@@ -1670,6 +1850,50 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     return true;
   };
 
+  // ── Credit cards ──────────────────────────────────────────────────────────
+  // A card is what you owe, not money you have, so none of this touches the
+  // wallet list. Statements are calculated on read; only the terms are stored.
+
+  const addCreditCard = async (c: CreditCardInput): Promise<boolean> => {
+    if (!userId) return false;
+    const { data } = await supabase.from('credit_cards')
+      .insert({ user_id: userId, ...toDBCreditCard(c) })
+      .select().single();
+    if (!data) return false;
+    setCreditCards(prev => [...prev, fromDBCreditCard(data)]);
+    return true;
+  };
+
+  const updateCreditCard = async (id: string, updates: Partial<CreditCardInput>): Promise<boolean> => {
+    const { error } = await supabase.from('credit_cards').update(toDBCreditCard(updates)).eq('id', id);
+    if (error) return false;
+    setCreditCards(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    return true;
+  };
+
+  // Deleting would take real spending and real payments with it, so a card is
+  // archived: it leaves every list, and its history keeps its name.
+  const archiveCreditCard = async (id: string) => {
+    const archivedAt = new Date().toISOString();
+    setCreditCards(prev => prev.map(c => c.id === id ? { ...c, archivedAt } : c));
+    await supabase.from('credit_cards').update({ archived_at: archivedAt }).eq('id', id);
+  };
+
+  // Paying the bill moves your own money to the bank. The purchases already
+  // counted as spending when they were made, so this is not spending again.
+  const payCreditCard = async (cardId: string, amount: number, walletId: string): Promise<boolean> => {
+    const card = creditCards.find(c => c.id === cardId);
+    if (!card || card.archivedAt || amount <= 0 || !walletId) return false;
+    const id = await recordMove(
+      {
+        kind: 'card_payment', amount, walletId, toWalletId: null, source: null,
+        note: `Paid ${card.name}`, cardId,
+      },
+      moveDeltas({ kind: 'card_payment', amount, fee: 0, walletId, toWalletId: null }),
+    );
+    return id !== null;
+  };
+
   // ── Budget Lines ──────────────────────────────────────────────────────────
   const addBudgetLine = async (b: Omit<BudgetLine, 'id'>) => {
     if (!userId) return;
@@ -1924,6 +2148,7 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     setInstalmentSchedule([]); setLock(false);
     setEmergencyFund({ entries: [], currentAmount: 0 });
     setDebtPeople([]); setDebtEntries([]);
+    setCreditCards([]);
     setSettings(prev => ({
       ...prev,
       monthlyIncome: 0,
@@ -1944,6 +2169,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
     await Promise.all([
       own('debt_people'), own('instalment_payments'), own('emergency_fund_entries'),
       own('bills'), own('budget_lines'), own('appliances'),
+      // Expenses and money_moves reference cards, and both are gone above.
+      own('credit_cards'),
     ]);
     await own('wallets');
 
@@ -1992,6 +2219,8 @@ export function AppProvider({ children, userId }: { children: ReactNode; userId:
       addInstalmentPayment, updateInstalmentPayment, deleteInstalmentPayment,
       setInstalmentNewPurchaseLock,
       recordEmergencyFundEntry, deleteEmergencyFundEntry,
+      creditCards, cardSummaries, owedOnCards,
+      addCreditCard, updateCreditCard, archiveCreditCard, payCreditCard,
       addBudgetLine, updateBudgetLine, deleteBudgetLine,
       toggleAppliance, logApplianceUsage, refundApplianceUsage, setAppliancePinned, markBillPaid, unmarkBillPaid,
       updateBill,

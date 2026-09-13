@@ -116,3 +116,31 @@ test('deleting a fund withdrawal takes the money back out of the wallet', () => 
 
   assert.deepEqual(d, { gcash: -1500 });
 });
+
+// Paying a card bill is money leaving the wallet it is paid from. A card is not
+// a wallet, so nothing lands anywhere.
+test('a card payment takes the amount out of the wallet it is paid from', () => {
+  const d = moveDeltas({
+    kind: 'card_payment', amount: 5000, fee: 0,
+    walletId: 'bpi', toWalletId: null,
+  });
+
+  assert.deepEqual(d, { bpi: -5000 });
+});
+
+test('deleting a card payment puts the money back', () => {
+  const d = negate(moveDeltas({
+    kind: 'card_payment', amount: 5000, fee: 0,
+    walletId: 'bpi', toWalletId: null,
+  }));
+
+  assert.deepEqual(d, { bpi: 5000 });
+});
+
+// Guard, not a driven cycle: a card purchase carries no wallet, and the wallet
+// only moves when the bill is paid. The split's share is owed to you either way.
+test('an expense paid by card moves no wallet', () => {
+  const d = expenseDeltas({ walletId: null, myShare: 1200, owedToMe: [{ amount: 300 }] });
+
+  assert.deepEqual(d, {});
+});

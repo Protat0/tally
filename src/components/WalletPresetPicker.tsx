@@ -14,12 +14,19 @@ interface Props {
   /** The preset the wallet's name currently matches, if any. */
   selected: WalletPreset | null;
   onPick: (preset: WalletPreset) => void;
+  /** Which groups to offer. All of them by default. */
+  groups?: typeof WALLET_PRESET_GROUPS;
+  title?: string;
+  /** The row's empty text. Name only what `groups` actually offers. */
+  placeholder?: string;
 }
 
-// Quick pick for a new wallet: one row in the form, and every bank and
-// e-wallet, logo first, in a sheet of its own — a native select can't show
-// pictures in its options.
-export default function WalletPresetPicker({ selected, onPick }: Props) {
+// One row in the form, and every bank and e-wallet behind it, logo first, in a
+// sheet of its own — a native select can't show pictures in its options.
+export default function WalletPresetPicker({
+  selected, onPick, groups = WALLET_PRESET_GROUPS, title = 'Bank or e-wallet',
+  placeholder = 'Choose a bank or e-wallet',
+}: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -35,15 +42,15 @@ export default function WalletPresetPicker({ selected, onPick }: Props) {
             <span className="min-w-0 flex-1 truncate text-sm text-ink">{selected.name}</span>
           </>
         ) : (
-          <span className="flex-1 text-sm text-ink-4">Choose a bank or e-wallet</span>
+          <span className="flex-1 text-sm text-ink-4">{placeholder}</span>
         )}
         <ChevronRightIcon className="h-4 w-4 shrink-0 text-ink-3" />
       </button>
 
       {open && (
         <NestedSheet onClose={() => setOpen(false)}>
-          <p className="text-lg font-semibold text-ink">Bank or e-wallet</p>
-          {WALLET_PRESET_GROUPS.map(group => (
+          <p className="text-lg font-semibold text-ink">{title}</p>
+          {groups.map(group => (
             <section key={group.label}>
               <p className="mb-1 mt-4 px-2 text-[11px] font-semibold uppercase tracking-widest text-ink-3">
                 {group.label}

@@ -50,6 +50,9 @@ export function moveDeltas(m: {
   // from the fund lands back in it.
   if (m.kind === 'fund_deposit')    return { [m.walletId]: -m.amount };
   if (m.kind === 'fund_withdrawal') return { [m.walletId]:  m.amount };
+  // Paying a credit card bill: money leaves the wallet it is paid from, and a
+  // card is not a wallet, so nothing lands anywhere.
+  if (m.kind === 'card_payment')    return { [m.walletId]: -m.amount };
   if (m.toWalletId) {
     // Transfers, and withdrawals from the point they started landing in cash.
     return mergeDeltas(

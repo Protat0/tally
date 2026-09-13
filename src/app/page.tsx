@@ -7,6 +7,8 @@ import { cycleLabel, cycleRange, daysElapsedInCycle, daysInCycle } from '@/lib/c
 import { homeOrder } from '@/lib/electric';
 import { averageDeposit } from '@/lib/emergencyFund';
 import BottomNav from '@/components/BottomNav';
+import CardDueStrip from '@/components/CardDueStrip';
+import PayCardSheet from '@/components/PayCardSheet';
 import ProgressBar, { type Tone } from '@/components/ProgressBar';
 import PaydaySheet from '@/components/PaydaySheet';
 import { CogIcon, ChevronRightIcon } from '@/components/Icons';
@@ -82,6 +84,7 @@ function LiveDot({ on }: { on: boolean }) {
 export default function Dashboard() {
   const {
     wallets, settings, totalBalance, projectedSavings,
+    creditCards, cardSummaries, owedOnCards,
     optimisticSavings, unconfirmedIncome, pendingPaydays,
     untrackedDays, blindSpend, assumedSpending,
     spendingPacePercent, daysUntilPayday, nextPaydayDate,
@@ -100,7 +103,12 @@ export default function Dashboard() {
   // still open would leave the older gap sitting there unresolved.
   const [paydayOpen, setPaydayOpen] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [payCardId, setPayCardId] = useState<string | null>(null);
   const nextPending = pendingPaydays[0];
+
+  // A statement due within a week, or already past its date.
+  const dueCards = creditCards.filter(c => !c.archivedAt && cardSummaries[c.id]?.remind);
+  const payCard = creditCards.find(c => c.id === payCardId) ?? null;
 
   const { currency } = settings;
   const ef = emergencyFund;
@@ -229,6 +237,12 @@ export default function Dashboard() {
                   <span className="h-1.5 w-1.5 rounded-full bg-teal-100" />
                   across {wallets.length} wallet{wallets.length !== 1 ? 's' : ''}
                 </p>
+                {owedOnCards > 0 && (
+                  <p className="mt-[7px] flex items-center gap-[7px] text-[13px] leading-none text-teal-100/80">
+                    <span className="h-1.5 w-1.5 rounded-full bg-teal-100/60" />
+                    <span className="tabular-nums">{fmt(owedOnCards, currency)}</span> owed on cards
+                  </p>
+                )}
               </div>
 
               <div className="hidden pb-1.5 md:flex">
@@ -237,6 +251,17 @@ export default function Dashboard() {
                 <HeroStat label="Spending pace" value={`${spendingPacePercent.toFixed(0)}%`} toneClass={toneOnHero[pace]} />
               </div>
             </div>
+
+            {/* A card due soon, or already late, gets a strip across the grid. */}
+            {dueCards.map(card => (
+              <CardDueStrip
+                key={card.id}
+                card={card}
+                summary={cardSummaries[card.id]}
+                currency={currency}
+                onPay={() => setPayCardId(card.id)}
+              />
+            ))}
 
             {/* Projected Savings — the conservative end, on purpose. Every way
                 this number can be wrong (an unlogged expense, an untracked day,
@@ -469,6 +494,15 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {payCard && cardSummaries[payCard.id] && (
+        <PayCardSheet
+          card={payCard}
+          summary={cardSummaries[payCard.id]}
+          currency={currency}
+          onClose={() => setPayCardId(null)}
+        />
+      )}
 
       {paydayOpen && nextPending && (
         <PaydaySheet payday={nextPending} onClose={() => setPaydayOpen(false)} />

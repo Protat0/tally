@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useApp, round2, Category, IncomeSource, INCOME_SOURCES } from './AppContext';
 import BottomSheet from './BottomSheet';
 import WalletPicker from './WalletPicker';
+import FundingPicker from './FundingPicker';
 import SplitPanel, { SplitResult } from './SplitPanel';
 import { visibleCategories } from '@/lib/categories';
 import type { RowSource } from './ActivityRow';
@@ -29,7 +30,7 @@ interface Props {
 
 export default function EditEntrySheet({ source, onClose }: Props) {
   const {
-    expenses, moneyMoves, debtEntries, settings,
+    expenses, moneyMoves, debtEntries, settings, creditCards,
     updateExpense, updateMoneyMove, updateDebtEntry,
   } = useApp();
 
@@ -43,12 +44,15 @@ export default function EditEntrySheet({ source, onClose }: Props) {
 
   // What the user originally typed: their share plus everything owed back.
   const originalTotal = expense
-    ? (expense.walletId ? round2(expense.amount + owedRows.reduce((s, d) => s + d.amount, 0)) : expense.amount)
+    ? (expense.walletId || expense.cardId
+        ? round2(expense.amount + owedRows.reduce((s, d) => s + d.amount, 0))
+        : expense.amount)
     : (move?.amount ?? entry?.amount ?? 0);
 
   const [amount,   setAmount]   = useState(String(originalTotal));
   const [category, setCategory] = useState<Category>(expense?.category ?? 'other');
   const [walletId, setWalletId] = useState(expense?.walletId ?? move?.walletId ?? entry?.walletId ?? '');
+  const [cardId,   setCardId]   = useState(expense?.cardId ?? '');
   const [toWallet, setToWallet] = useState(move?.toWalletId ?? '');
   const [fee,      setFee]      = useState(String(move?.fee ?? 0));
   const [srcKind,  setSrcKind]  = useState<IncomeSource>(move?.source ?? 'other');
@@ -75,11 +79,18 @@ export default function EditEntrySheet({ source, onClose }: Props) {
     : 0;
   const myShare = round2(typed - owedTotal);
   const isTransfer = Boolean(move && move.toWalletId);
-  const needsWallet = source.kind !== 'expense' || !split || split.mode === 'wallet';
+  const needsFunding = source.kind !== 'expense' || !split || split.mode === 'wallet';
+
+  // What a card owed when it was added already covers anything before that day,
+  // so a purchase dated earlier would be counted twice. updateExpense refuses
+  // it; the button refuses first, with the reason on screen.
+  const card = cardId ? creditCards.find(c => c.id === cardId) : undefined;
+  const beforeCard = Boolean(card && date < toYmd(card.createdAt));
 
   const canSave =
     typed > 0
-    && (!needsWallet || walletId !== '')
+    && (!needsFunding || walletId !== '' || cardId !== '')
+    && !beforeCard
     && (source.kind !== 'expense' || split?.mode !== 'person' || split.paidByPersonId !== null)
     // A share of zero would mean the expense should not exist; updateExpense
     // refuses it, so the button refuses it first with a reason on screen.
@@ -99,7 +110,8 @@ export default function EditEntrySheet({ source, onClose }: Props) {
     if (source.kind === 'expense') {
       ok = await updateExpense(source.id, {
         amount: typed, category, note: note.trim(),
-        walletId: split?.mode === 'person' ? null : walletId,
+        walletId: split?.mode === 'person' ? null : (walletId || null),
+        cardId: split?.mode === 'person' ? null : (cardId || null),
         paidByPersonId: split?.mode === 'person' ? split.paidByPersonId : null,
         owedToMe: split?.mode === 'wallet' ? split.owedToMe.filter(o => o.amount > 0) : [],
         date: dateArg,
@@ -181,11 +193,21 @@ export default function EditEntrySheet({ source, onClose }: Props) {
         </div>
       )}
 
-      {/* ── Wallet ── */}
-      {needsWallet && (
+      {/* ── Where it was paid from ── */}
+      {needsFunding && (
         <div className="mb-4">
-          <p className={label}>{isTransfer ? 'From wallet' : 'Wallet'}</p>
-          <WalletPicker value={walletId} onChange={setWalletId} />
+          <p className={label}>
+            {source.kind === 'expense' ? 'Paid from' : isTransfer ? 'From wallet' : 'Wallet'}
+          </p>
+          {source.kind === 'expense' ? (
+            <FundingPicker
+              walletId={walletId}
+              cardId={cardId}
+              onChange={next => { setWalletId(next.walletId); setCardId(next.cardId); }}
+            />
+          ) : (
+            <WalletPicker value={walletId} onChange={setWalletId} />
+          )}
         </div>
       )}
 
@@ -230,6 +252,13 @@ export default function EditEntrySheet({ source, onClose }: Props) {
           {owedTotal > typed
             ? 'More is owed back to you than was paid out.'
             : 'None of this is yours, so there is no expense left to keep — delete it and log the debt on its own instead.'}
+        </p>
+      )}
+
+      {beforeCard && card && (
+        <p className="mb-3 text-xs text-warning-text">
+          {card.name} was added on {toYmd(card.createdAt)}. What it owed then already
+          covers anything bought before that day.
         </p>
       )}
 
